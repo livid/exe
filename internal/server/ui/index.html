@@ -505,6 +505,9 @@ td .mono, td.mono { user-select: text; }
 .cs-vm { color: #777; }
 .cs-item.sel { background: var(--hl); }
 .cs-item.sel .cs-title, .cs-item.sel .cs-time, .cs-item.sel .cs-vm { color: #fff; }
+/* a reply is streaming in this session (in the daemon, not necessarily on screen) */
+.cs-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 5px; animation: cs-pulse 1.2s ease-in-out infinite; }
+@keyframes cs-pulse { 50% { opacity: 0.25; } }
 /* the VM the session list is scoped to, with an × back to all sessions */
 .chat-scope { display: flex; align-items: center; gap: 4px; padding: 1px 1px 1px 8px; border: 1px solid #999; background: #e6e6e6; }
 .chat-scope .vm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; font-size: 11px; }
@@ -3499,7 +3502,7 @@ function chatWinLabel(sec) {
 function openChatWin(vm) {
   const scope = vm === undefined ? null : vm;
   if (scope !== chatScope) {
-    if (chatBusy) { toast("Wait for the current reply to finish."); openWin("#win-chat"); return; }
+    chatDetach(); // any streaming reply keeps running in the daemon
     setChatScope(scope);
     // entering a VM's scope starts fresh unless its chat is already up;
     // leaving scope keeps the active session — the pin belongs to it
@@ -3609,6 +3612,7 @@ async function loadChatSessions() {
       loadChatSessions().catch(() => {});
     };
     const title = el("div", { class: "cs-title", title: m.title + (m.vm ? " · " + m.vm : "") }, m.title);
+    if (m.streaming) title.prepend(el("span", { class: "cs-live", title: "a reply is streaming" }));
     // in the all-sessions view, VM-pinned chats carry their VM's name;
     // under a scope every row is that VM's, so the label would be noise
     if (m.vm && !chatScope) title.append(el("span", { class: "cs-vm" }, " · " + m.vm));
@@ -3622,19 +3626,20 @@ async function loadChatSessions() {
   }
 }
 async function selectChat(id) {
-  if (chatBusy) { toast("Wait for the current reply to finish."); return; }
+  chatDetach(); // a streaming reply keeps running in the daemon; just stop watching it
   chatCur = id;
   try {
     const sess = await j("/v1/chat/sessions/" + id);
     renderChatSession(sess);
     chatCurVM = sess.vm || null;
     chatTitle();
+    if (sess.streaming) attachChat(id); // a reply is in flight — rejoin it live
   } catch (e) { toast(e.message); }
   loadChatSessions().catch(() => {});
   chatInput.focus();
 }
 $("#chat-new").onclick = () => {
-  if (chatBusy) { toast("Wait for the current reply to finish."); return; }
+  chatDetach();
   chatCur = null;
   chatCurVM = chatScope;
   chatTitle();
@@ -3642,15 +3647,29 @@ $("#chat-new").onclick = () => {
   loadChatSessions().catch(() => {});
   chatInput.focus();
 };
-async function chatSend() {
-  const text = chatInput.value.trim();
-  if (!text || chatBusy) return;
-  chatBusy = true;
-  $("#chat-send").disabled = true;
-  const hint = chatMsgs.querySelector(".chat-hint");
-  if (hint) hint.remove();
-  addMsg("user", text);
-  chatInput.value = "";
+// One reply may be streaming into this tab at a time; chatAbort cancels
+// only our reader of it — the run itself lives in the daemon (chatrun.go)
+// and keeps going, so switching sessions or closing the browser never
+// interrupts the task. Re-selecting the session re-attaches via /stream.
+let chatAbort = null;
+function chatSendBtn() {
+  $("#chat-send").textContent = chatBusy ? "Stop" : "Send";
+}
+// chatDetach stops watching the current reply without stopping it.
+function chatDetach() {
+  if (chatAbort) { chatAbort.abort(); chatAbort = null; }
+  chatBusy = false;
+  chatSendBtn();
+}
+// chatStop cancels the run in the daemon; everyone attached sees it end.
+async function chatStop() {
+  if (!chatCur) { chatDetach(); return; }
+  try { await api("/v1/chat/sessions/" + chatCur + "/stop", { method: "POST" }); }
+  catch (e) { toast(e.message); }
+}
+// pumpChat renders one NDJSON reply stream (a fresh send or a /stream
+// re-attach) into the transcript until it ends or chatDetach aborts it.
+async function pumpChat(resp, ac) {
   const think = addMsg("think", "working");
   let cur = null, curText = "";
   const handle = ev => {
@@ -3672,7 +3691,6 @@ async function chatSend() {
     if (ev.type !== "done") { chatMsgs.append(think); chatStick(); }
   };
   try {
-    const resp = await api("/v1/chat/send", { method: "POST", json: { session: chatCur || "", message: text, vm: chatCur ? "" : (chatScope || "") } });
     const rd = resp.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
@@ -3687,16 +3705,65 @@ async function chatSend() {
         if (line) handle(JSON.parse(line));
       }
     }
-  } catch (e) { addMsg("err", e.message); }
+  } catch (e) {
+    if (e.name !== "AbortError") addMsg("err", e.message);
+  }
   think.remove();
+  if (chatAbort !== ac) return; // detached — whoever detached owns the UI now
+  chatAbort = null;
   chatBusy = false;
-  $("#chat-send").disabled = false;
+  chatSendBtn();
   loadChatSessions().catch(() => {});
   loadVMs().catch(() => {});
   chatUsage(true);
+}
+// attachChat rejoins a reply still streaming in the daemon — e.g. after a
+// browser restart mid-task — replaying it from its start.
+async function attachChat(id) {
+  const ac = new AbortController();
+  chatAbort = ac;
+  chatBusy = true;
+  chatSendBtn();
+  let resp;
+  try {
+    resp = await api("/v1/chat/sessions/" + id + "/stream", { signal: ac.signal });
+  } catch (e) {
+    if (e.name !== "AbortError") toast(e.message);
+    if (chatAbort === ac) chatDetach();
+    return;
+  }
+  if (resp.status === 204) { // it finished in the meantime — show the result
+    if (chatAbort === ac) chatDetach();
+    if (chatCur === id) selectChat(id);
+    return;
+  }
+  await pumpChat(resp, ac);
   chatInput.focus();
 }
-$("#chat-send").onclick = chatSend;
+async function chatSend() {
+  const text = chatInput.value.trim();
+  if (!text || chatBusy) return;
+  const hint = chatMsgs.querySelector(".chat-hint");
+  if (hint) hint.remove();
+  addMsg("user", text);
+  chatInput.value = "";
+  const ac = new AbortController();
+  chatAbort = ac;
+  chatBusy = true;
+  chatSendBtn();
+  let resp;
+  try {
+    resp = await api("/v1/chat/send", { method: "POST", signal: ac.signal,
+      json: { session: chatCur || "", message: text, vm: chatCur ? "" : (chatScope || "") } });
+  } catch (e) {
+    if (e.name !== "AbortError") addMsg("err", e.message);
+    if (chatAbort === ac) chatDetach();
+    return;
+  }
+  await pumpChat(resp, ac);
+  chatInput.focus();
+}
+$("#chat-send").onclick = () => { chatBusy ? chatStop() : chatSend(); };
 chatInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatSend(); }
 });

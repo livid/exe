@@ -90,7 +90,11 @@ needs one. Then:
   install packages, write code and start services — it has passwordless
   sudo *inside the VM*, and the VM is the sandbox boundary.
 - The **Chat** icon and window appear once a chat backend is usable: a
-  conversation that can see and drive your whole VM cloud.
+  conversation that can see and drive your whole VM cloud. Replies run in
+  the daemon, not in the browser: closing the tab (or losing the network)
+  never interrupts a long task — reopen the chat and select the session,
+  marked with a green dot while streaming, to rejoin it live. The **Stop**
+  button actually cancels the run.
 
 The Chat window can also run on a **ChatGPT subscription** instead of
 Ollama: in **Windows → Configuration → OpenAI**, click **Sign in with

@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"exe/internal/agent"
@@ -173,19 +172,50 @@ func (s *Server) handleChatSessions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	// metas grow a streaming flag so the session list can mark live replies
+	type meta struct {
+		chat.Meta
+		Streaming bool `json:"streaming,omitempty"`
+	}
+	out := make([]meta, len(list))
+	for i, m := range list {
+		_, live := s.chatRuns.Load(m.ID)
+		out[i] = meta{m, live}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleChatSession(w http.ResponseWriter, r *http.Request) {
+	run, live := s.chatRuns.Load(r.PathValue("id"))
 	sess, err := chat.Load(s.chatDir(), r.PathValue("id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, sess)
+	if !live {
+		writeJSON(w, http.StatusOK, sess)
+		return
+	}
+	// While a reply streams, hand back the history as of the run's start
+	// plus streaming:true — the client renders that and replays the run's
+	// events from /stream, so mid-run saves never render twice.
+	cr := run.(*chatRun)
+	if len(sess.Messages) >= cr.base {
+		sess.Messages = sess.Messages[:cr.base]
+	} else { // the run registered before its user-message save hit the disk
+		sess.Messages = append(sess.Messages, agent.Message{Role: "user", Content: cr.userMsg})
+	}
+	writeJSON(w, http.StatusOK, struct {
+		*chat.Session
+		Streaming bool `json:"streaming"`
+	}{sess, true})
 }
 
 func (s *Server) handleChatSessionDelete(w http.ResponseWriter, r *http.Request) {
+	if _, live := s.chatRuns.Load(r.PathValue("id")); live {
+		writeErr(w, http.StatusConflict, errors.New("a reply is streaming in this session — stop it first"))
+		return
+	}
 	if err := chat.Delete(s.chatDir(), r.PathValue("id")); err != nil {
 		writeErr(w, http.StatusNotFound, err)
 		return
@@ -196,9 +226,11 @@ func (s *Server) handleChatSessionDelete(w http.ResponseWriter, r *http.Request)
 // ---- send: the tool loop ----
 
 // handleChatSend appends a user message to a session (creating one when the
-// id is empty) and streams the agent loop back as NDJSON events:
-// session, delta (one per streamed content fragment), tool_call,
-// tool_result, error, done.
+// id is empty), starts the agent loop as a detached run (chatrun.go) and
+// streams it back as NDJSON events: session, delta (one per streamed
+// content fragment), tool_call, tool_result, error, done. The run belongs
+// to the daemon — a dropped connection only detaches this stream, and
+// GET /v1/chat/sessions/{id}/stream re-attaches to it.
 func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Config()
 	var req struct {
@@ -250,89 +282,12 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, err)
 		return
 	}
-	lock, _ := s.chatLocks.LoadOrStore(sess.ID, &sync.Mutex{})
-	mu := lock.(*sync.Mutex)
-	if !mu.TryLock() {
-		writeErr(w, http.StatusConflict, errors.New("a reply is already streaming in this session"))
+	run, err := s.startChatRun(cfg, provider, sess, req.Message)
+	if err != nil {
+		writeErr(w, http.StatusConflict, err)
 		return
 	}
-	defer mu.Unlock()
-
-	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	fl, _ := w.(http.Flusher)
-	enc := json.NewEncoder(w)
-	emit := func(ev map[string]any) {
-		enc.Encode(ev)
-		if fl != nil {
-			fl.Flush()
-		}
-	}
-	emit(map[string]any{"type": "session", "meta": sess.Meta})
-
-	dir := s.chatDir()
-	save := func() {
-		if err := chat.Save(dir, sess); err != nil {
-			emit(map[string]any{"type": "error", "error": "save session: " + err.Error()})
-		}
-	}
-	sess.Messages = append(sess.Messages, agent.Message{Role: "user", Content: req.Message})
-	save()
-
-	acfg := agent.Config{BaseURL: cfg.Ollama.BaseURL, APIKey: cfg.Ollama.APIKey,
-		Model: cfg.Ollama.Model, Effort: cfg.Ollama.Effort}
-	system := agent.Message{Role: "system", Content: chatSystemPrompt(cfg.SSHUser, cfg.Cloudflare.Domain, sess.VM)}
-	tools := chatTools(sess.VM != "")
-	// callModel runs one turn on the configured backend. The ChatGPT path
-	// resolves (and auto-refreshes) the token per turn and retries once
-	// after a 401 in case the token was revoked out from under us.
-	callModel := func(ctx context.Context, msgs []agent.Message, onDelta func(string)) (*agent.Message, error) {
-		if provider != "openai" {
-			return agent.ChatStream(ctx, acfg, msgs, tools, onDelta)
-		}
-		creds, err := s.codexToken(ctx, false)
-		if err != nil {
-			return nil, err
-		}
-		ccfg := codex.ClientConfig{AccessToken: creds.AccessToken, AccountID: creds.AccountID,
-			Model: cfg.OpenAI.Model, Effort: cfg.OpenAI.Effort, SessionKey: sess.ID}
-		msg, err := codex.ChatStream(ctx, ccfg, msgs, tools, onDelta)
-		if errors.Is(err, codex.ErrUnauthorized) {
-			if creds, err = s.codexToken(ctx, true); err != nil {
-				return nil, err
-			}
-			ccfg.AccessToken, ccfg.AccountID = creds.AccessToken, creds.AccountID
-			msg, err = codex.ChatStream(ctx, ccfg, msgs, tools, onDelta)
-		}
-		return msg, err
-	}
-	for turn := 0; turn < chatMaxTurns; turn++ {
-		msg, err := callModel(r.Context(), append([]agent.Message{system}, sess.Messages...),
-			func(d string) { emit(map[string]any{"type": "delta", "text": d}) })
-		if err != nil {
-			emit(map[string]any{"type": "error", "error": err.Error()})
-			break
-		}
-		sess.Messages = append(sess.Messages, *msg)
-		if len(msg.ToolCalls) == 0 {
-			save()
-			break
-		}
-		for _, tc := range msg.ToolCalls {
-			name := tc.Function.Name
-			args := agent.ParseArgs(tc.Function.Arguments)
-			if sess.VM != "" {
-				pinChatArgs(name, args, sess.VM)
-			}
-			emit(map[string]any{"type": "tool_call", "name": name, "summary": chatToolSummary(name, args)})
-			result := s.execChatTool(r.Context(), name, args, sess.VM)
-			emit(map[string]any{"type": "tool_result", "name": name, "output": sshexec.Truncate(result, 4000)})
-			sess.Messages = append(sess.Messages, agent.Message{Role: "tool", ToolName: name, ToolCallID: tc.ID, Content: result})
-		}
-		save()
-	}
-	emit(map[string]any{"type": "done", "meta": sess.Meta})
+	streamChatRun(w, r.Context(), run)
 }
 
 // ---- tools ----

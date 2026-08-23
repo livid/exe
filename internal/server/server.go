@@ -61,13 +61,14 @@ type Server struct {
 	cfHealthKey string
 	cfHealthRes map[string]any
 
-	// Cached chat-backend detection for the Chat window, plus one lock per
-	// chat session so two sends can't interleave a session's history.
+	// Cached chat-backend detection for the Chat window, plus the in-flight
+	// detached reply per chat session (chatrun.go) — one at most, so two
+	// sends can't interleave a session's history.
 	chatStatMu  sync.Mutex
 	chatStatAt  time.Time
 	chatStatKey string
 	chatStatRes map[string]any
-	chatLocks   sync.Map // session id -> *sync.Mutex
+	chatRuns    sync.Map // session id -> *chatRun
 
 	// ChatGPT sign-in state: cached ~/.exe/openai.json credentials and the
 	// pending OAuth flow, if any (see openai.go).
@@ -150,6 +151,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/chat/sessions", s.handleChatSessions)
 	mux.HandleFunc("GET /v1/chat/sessions/{id}", s.handleChatSession)
 	mux.HandleFunc("DELETE /v1/chat/sessions/{id}", s.handleChatSessionDelete)
+	mux.HandleFunc("GET /v1/chat/sessions/{id}/stream", s.handleChatStream)
+	mux.HandleFunc("POST /v1/chat/sessions/{id}/stop", s.handleChatStop)
 	mux.HandleFunc("POST /v1/chat/send", s.handleChatSend)
 	mux.HandleFunc("GET /v1/vms/{name}/publish/scan", s.handlePublishScan)
 	mux.HandleFunc("POST /v1/vms/{name}/publish", s.handlePublish)
