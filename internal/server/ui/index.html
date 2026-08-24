@@ -3235,7 +3235,7 @@ $("#a-run").onclick = () => {
   const prompt = $("#a-prompt").value.trim();
   if (!prompt) { toast("Tell the agent what to do first."); return; }
   if (!chatDetected) { toast("No chat backend configured (Configuration → Ollama / OpenAI)."); return; }
-  if (chatBusy) { toast("Wait for the current chat reply to finish."); return; }
+  chatDetach(); // any streaming reply keeps running in the daemon
   $("#a-prompt").value = "";
   openChatWin(currentVM);
   // every run is its own session, even when this VM's chat is already up
@@ -3502,11 +3502,13 @@ function chatWinLabel(sec) {
 function openChatWin(vm) {
   const scope = vm === undefined ? null : vm;
   if (scope !== chatScope) {
-    chatDetach(); // any streaming reply keeps running in the daemon
     setChatScope(scope);
-    // entering a VM's scope starts fresh unless its chat is already up;
-    // leaving scope keeps the active session — the pin belongs to it
+    // entering a different VM's scope starts fresh (detaching any stream —
+    // the run keeps going in the daemon); leaving scope, or entering the
+    // scope of the session already up, keeps the session and its live
+    // stream — the pin belongs to the session
     if (scope && chatCurVM !== scope) {
+      chatDetach();
       chatCur = null;
       chatCurVM = scope;
       chatTitle();
@@ -3607,7 +3609,12 @@ async function loadChatSessions() {
         setTimeout(() => x.classList.remove("armed"), 3000);
         return;
       }
-      try { await api("/v1/chat/sessions/" + m.id, { method: "DELETE" }); } catch (err) { toast(err.message); }
+      try { await api("/v1/chat/sessions/" + m.id, { method: "DELETE" }); }
+      catch (err) { // e.g. 409 while its reply streams — nothing was deleted
+        toast(err.message);
+        loadChatSessions().catch(() => {});
+        return;
+      }
       if (chatCur === m.id) { chatCur = null; chatCurVM = chatScope; chatTitle(); chatHint(); }
       loadChatSessions().catch(() => {});
     };
@@ -3627,14 +3634,16 @@ async function loadChatSessions() {
 }
 async function selectChat(id) {
   chatDetach(); // a streaming reply keeps running in the daemon; just stop watching it
+  const seq = chatSel; // chatDetach bumped it; any later switch bumps again
   chatCur = id;
   try {
     const sess = await j("/v1/chat/sessions/" + id);
+    if (seq !== chatSel || chatCur !== id) return; // superseded while loading
     renderChatSession(sess);
     chatCurVM = sess.vm || null;
     chatTitle();
     if (sess.streaming) attachChat(id); // a reply is in flight — rejoin it live
-  } catch (e) { toast(e.message); }
+  } catch (e) { if (seq === chatSel) toast(e.message); }
   loadChatSessions().catch(() => {});
   chatInput.focus();
 }
@@ -3651,19 +3660,25 @@ $("#chat-new").onclick = () => {
 // only our reader of it — the run itself lives in the daemon (chatrun.go)
 // and keeps going, so switching sessions or closing the browser never
 // interrupts the task. Re-selecting the session re-attaches via /stream.
-let chatAbort = null;
+// chatSel invalidates in-flight session loads whenever the pane's
+// ownership changes, so a slow response can't render over a newer view.
+let chatAbort = null, chatSel = 0, chatStopWanted = false;
 function chatSendBtn() {
   $("#chat-send").textContent = chatBusy ? "Stop" : "Send";
 }
 // chatDetach stops watching the current reply without stopping it.
 function chatDetach() {
   if (chatAbort) { chatAbort.abort(); chatAbort = null; }
+  chatSel++;
+  chatStopWanted = false;
   chatBusy = false;
   chatSendBtn();
 }
 // chatStop cancels the run in the daemon; everyone attached sees it end.
+// Before the run's session event names it (chatCur still null on a brand
+// new chat) the wish is parked and fired the moment the id arrives.
 async function chatStop() {
-  if (!chatCur) { chatDetach(); return; }
+  if (!chatCur) { chatStopWanted = true; return; }
   try { await api("/v1/chat/sessions/" + chatCur + "/stop", { method: "POST" }); }
   catch (e) { toast(e.message); }
 }
@@ -3671,25 +3686,37 @@ async function chatStop() {
 // re-attach) into the transcript until it ends or chatDetach aborts it.
 async function pumpChat(resp, ac) {
   const think = addMsg("think", "working");
-  let cur = null, curText = "";
+  let cur = null, curText = "", raf = 0;
+  // deltas render at most once a frame: a re-attach replays the whole
+  // backlog in one burst, and re-parsing the full reply per fragment
+  // would freeze the tab
+  const paint = () => { raf = 0; if (cur) { renderMD(cur, curText); chatStick(); } };
+  const flush = () => {
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    if (cur) renderMD(cur, curText);
+  };
   const handle = ev => {
     if (ev.type === "delta") {
-      // grow the streaming assistant bubble in place, re-rendering markdown
+      // grow the streaming assistant bubble in place
       if (!cur) { cur = el("div", { class: "msg asst" }); think.before(cur); curText = ""; }
       curText += ev.text;
-      renderMD(cur, curText);
-      chatStick();
+      if (!raf) raf = requestAnimationFrame(paint);
       return;
     }
+    flush();
     cur = null;
     think.remove();
-    if (ev.type === "session") { chatCur = ev.meta.id; chatCurVM = ev.meta.vm || null; chatTitle(); }
+    if (ev.type === "session") {
+      chatCur = ev.meta.id; chatCurVM = ev.meta.vm || null; chatTitle();
+      if (chatStopWanted) { chatStopWanted = false; chatStop(); }
+    }
     else if (ev.type === "text") addMDMsg(ev.text);
     else if (ev.type === "tool_call") addMsg("tool", "▸ " + ev.summary);
     else if (ev.type === "tool_result") addToolOut(ev.output || "");
     else if (ev.type === "error") addMsg("err", ev.error);
     if (ev.type !== "done") { chatMsgs.append(think); chatStick(); }
   };
+  let dropped = false;
   try {
     const rd = resp.body.getReader();
     const dec = new TextDecoder();
@@ -3706,31 +3733,89 @@ async function pumpChat(resp, ac) {
       }
     }
   } catch (e) {
-    if (e.name !== "AbortError") addMsg("err", e.message);
+    if (e.name !== "AbortError") dropped = true;
   }
+  flush();
   think.remove();
   if (chatAbort !== ac) return; // detached — whoever detached owns the UI now
   chatAbort = null;
+  chatStopWanted = false;
+  if (dropped) {
+    if (chatCur) {
+      // the connection died, not the reply — the run lives on in the
+      // daemon; rebuild the view and rejoin once the daemon answers again
+      chatRejoin(chatCur);
+      return;
+    }
+    addMsg("err", "connection lost");
+  }
   chatBusy = false;
   chatSendBtn();
   loadChatSessions().catch(() => {});
   loadVMs().catch(() => {});
   chatUsage(true);
 }
+// chatRejoin polls until the daemon answers for this session again, then
+// re-renders it and re-attaches to its stream. Any switch away (which
+// bumps chatSel) abandons the loop.
+async function chatRejoin(id) {
+  const seq = chatSel;
+  const note = addMsg("think", "connection lost — rejoining");
+  for (let i = 0; i < 100 && seq === chatSel && chatCur === id; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    if (seq !== chatSel || chatCur !== id) break;
+    let sess;
+    try { sess = await j("/v1/chat/sessions/" + id); }
+    catch (e) {
+      if (e instanceof TypeError) continue; // daemon still unreachable
+      note.remove(); // HTTP-level answer (e.g. session deleted): give up
+      chatBusy = false;
+      chatSendBtn();
+      toast(e.message);
+      return;
+    }
+    if (seq !== chatSel || chatCur !== id) break;
+    note.remove();
+    renderChatSession(sess);
+    chatCurVM = sess.vm || null;
+    chatTitle();
+    if (sess.streaming) attachChat(id);
+    else { chatBusy = false; chatSendBtn(); chatUsage(true); }
+    loadChatSessions().catch(() => {});
+    return;
+  }
+  note.remove();
+  if (seq === chatSel && chatCur === id) {
+    chatBusy = false;
+    chatSendBtn();
+    addMsg("err", "connection lost");
+  }
+}
 // attachChat rejoins a reply still streaming in the daemon — e.g. after a
-// browser restart mid-task — replaying it from its start.
+// browser restart mid-task — replaying it from its start. A network-level
+// failure keeps retrying (the run doesn't care that we can't watch);
+// an HTTP-level error gives up.
 async function attachChat(id) {
   const ac = new AbortController();
   chatAbort = ac;
   chatBusy = true;
   chatSendBtn();
   let resp;
-  try {
-    resp = await api("/v1/chat/sessions/" + id + "/stream", { signal: ac.signal });
-  } catch (e) {
-    if (e.name !== "AbortError") toast(e.message);
-    if (chatAbort === ac) chatDetach();
-    return;
+  for (;;) {
+    try {
+      resp = await api("/v1/chat/sessions/" + id + "/stream", { signal: ac.signal });
+      break;
+    } catch (e) {
+      if (e.name === "AbortError" || chatAbort !== ac) return;
+      if (e instanceof TypeError) { // daemon unreachable — keep trying
+        await new Promise(r => setTimeout(r, 3000));
+        if (chatAbort !== ac) return;
+        continue;
+      }
+      toast(e.message);
+      chatDetach();
+      return;
+    }
   }
   if (resp.status === 204) { // it finished in the meantime — show the result
     if (chatAbort === ac) chatDetach();
@@ -3743,6 +3828,7 @@ async function attachChat(id) {
 async function chatSend() {
   const text = chatInput.value.trim();
   if (!text || chatBusy) return;
+  chatSel++; // a pending session load must not render over this send
   const hint = chatMsgs.querySelector(".chat-hint");
   if (hint) hint.remove();
   addMsg("user", text);

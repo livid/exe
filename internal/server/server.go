@@ -626,6 +626,11 @@ func (s *Server) RestartDaemon(delay time.Duration, running []string) {
 	time.Sleep(delay)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
+	// Let detached chat replies persist what they have and tell their
+	// clients why they ended before the process goes away.
+	dctx, dcancel := context.WithTimeout(ctx, 15*time.Second)
+	s.DrainChatRuns(dctx)
+	dcancel()
 	s.StopVMs(ctx, running)
 	cmd := exec.Command(exePath, os.Args[1:]...)
 	cmd.Env = append(os.Environ(), "EXE_AUTOSTART="+strings.Join(running, ","))

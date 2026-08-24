@@ -80,7 +80,23 @@ func Save(dir string, s *Session) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, append(b, '\n'), 0o600)
+	// Temp file + rename: sessions are re-read while a reply streams (the
+	// session list, re-attaching clients), so a truncate-in-place write
+	// would hand those readers a torn file.
+	tmp, err := os.CreateTemp(dir, s.ID+"-*.tmp")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(append(b, '\n')); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), p)
 }
 
 func Load(dir, id string) (*Session, error) {

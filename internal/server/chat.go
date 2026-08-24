@@ -212,13 +212,29 @@ func (s *Server) handleChatSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChatSessionDelete(w http.ResponseWriter, r *http.Request) {
-	if _, live := s.chatRuns.Load(r.PathValue("id")); live {
+	id := r.PathValue("id")
+	if _, live := s.chatRuns.Load(id); live {
 		writeErr(w, http.StatusConflict, errors.New("a reply is streaming in this session — stop it first"))
 		return
 	}
-	if err := chat.Delete(s.chatDir(), r.PathValue("id")); err != nil {
+	if err := chat.Delete(s.chatDir(), id); err != nil {
 		writeErr(w, http.StatusNotFound, err)
 		return
+	}
+	// A send may have slipped its run registration in between the live
+	// check and the file removal; cancel it and sweep the file again once
+	// it unregisters, so its saves can't resurrect the deleted session.
+	if v, ok := s.chatRuns.Load(id); ok {
+		v.(*chatRun).stop("stopped: the session was deleted")
+		go func() {
+			for range 100 {
+				if _, ok := s.chatRuns.Load(id); !ok {
+					chat.Delete(s.chatDir(), id)
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}()
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -284,7 +300,11 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	run, err := s.startChatRun(cfg, provider, sess, req.Message)
 	if err != nil {
-		writeErr(w, http.StatusConflict, err)
+		code := http.StatusNotFound // the session vanished under us
+		if errors.Is(err, errChatBusy) {
+			code = http.StatusConflict
+		}
+		writeErr(w, code, err)
 		return
 	}
 	streamChatRun(w, r.Context(), run)

@@ -391,5 +391,8 @@ func ParseArgs(raw json.RawMessage) map[string]any {
 			json.Unmarshal([]byte(s), &args)
 		}
 	}
+	if args == nil { // JSON null unmarshals into a nil map with no error
+		args = map[string]any{}
+	}
 	return args
 }
