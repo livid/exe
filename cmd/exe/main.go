@@ -374,7 +374,7 @@ func cmdServe() error {
 	shutdown := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.DrainChatRuns(ctx) // detached replies persist and end cleanly
+		srv.DrainChatRuns(ctx, "stopped: the daemon is shutting down") // detached replies persist and end cleanly
 		if eng != nil {
 			eng.Stop()
 		}

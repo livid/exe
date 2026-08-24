@@ -3643,7 +3643,11 @@ async function selectChat(id) {
     chatCurVM = sess.vm || null;
     chatTitle();
     if (sess.streaming) attachChat(id); // a reply is in flight — rejoin it live
-  } catch (e) { if (seq === chatSel) toast(e.message); }
+  } catch (e) {
+    if (seq !== chatSel || chatCur !== id) return; // superseded while loading
+    if (e instanceof TypeError) { chatRejoin(id); return; } // daemon unreachable — keep polling rather than dead-end
+    toast(e.message);
+  }
   loadChatSessions().catch(() => {});
   chatInput.focus();
 }
@@ -3780,7 +3784,8 @@ async function chatRejoin(id) {
     chatCurVM = sess.vm || null;
     chatTitle();
     if (sess.streaming) attachChat(id);
-    else { chatBusy = false; chatSendBtn(); chatUsage(true); }
+    // the run finished while we were away: refresh what it may have changed
+    else { chatBusy = false; chatSendBtn(); chatUsage(true); loadVMs().catch(() => {}); }
     loadChatSessions().catch(() => {});
     return;
   }
@@ -3820,6 +3825,8 @@ async function attachChat(id) {
   if (resp.status === 204) { // it finished in the meantime — show the result
     if (chatAbort === ac) chatDetach();
     if (chatCur === id) selectChat(id);
+    loadVMs().catch(() => {}); // the finished run may have changed the fleet
+    chatUsage(true);
     return;
   }
   await pumpChat(resp, ac);
@@ -3842,8 +3849,19 @@ async function chatSend() {
     resp = await api("/v1/chat/send", { method: "POST", signal: ac.signal,
       json: { session: chatCur || "", message: text, vm: chatCur ? "" : (chatScope || "") } });
   } catch (e) {
-    if (e.name !== "AbortError") addMsg("err", e.message);
-    if (chatAbort === ac) chatDetach();
+    if (e.name === "AbortError" || chatAbort !== ac) return; // detached — whoever detached owns the UI
+    chatAbort = null;
+    if (e instanceof TypeError && chatCur) {
+      // network-level failure: the daemon may or may not have received the
+      // send (it might be restarting). If it did, the run is streaming
+      // detached — poll the session like a mid-stream drop and rejoin
+      // whatever turns out to be there.
+      chatRejoin(chatCur);
+      return;
+    }
+    addMsg("err", e.message);
+    chatDetach();
+    loadChatSessions().catch(() => {}); // e.g. show a 409's live dot
     return;
   }
   await pumpChat(resp, ac);

@@ -278,12 +278,15 @@ func (s *Server) handleChatStop(w http.ResponseWriter, r *http.Request) {
 // DrainChatRuns cancels every in-flight chat reply and waits (bounded by
 // ctx) for the loops to persist what they have and unregister, so a
 // restart or shutdown doesn't kill detached runs mid-turn with nothing
-// saved and no error event to attached clients.
-func (s *Server) DrainChatRuns(ctx context.Context) {
+// saved and no error event to attached clients. reason is the
+// client-facing stop message ("stopped: …") — it also lands in the saved
+// transcript as the result of any skipped tool, so it must say what
+// actually happened (restart vs shutdown).
+func (s *Server) DrainChatRuns(ctx context.Context, reason string) {
 	n := 0
 	s.chatRuns.Range(func(_, v any) bool {
 		n++
-		v.(*chatRun).stop("stopped: the daemon is restarting")
+		v.(*chatRun).stop(reason)
 		return true
 	})
 	if n == 0 {

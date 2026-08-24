@@ -629,7 +629,7 @@ func (s *Server) RestartDaemon(delay time.Duration, running []string) {
 	// Let detached chat replies persist what they have and tell their
 	// clients why they ended before the process goes away.
 	dctx, dcancel := context.WithTimeout(ctx, 15*time.Second)
-	s.DrainChatRuns(dctx)
+	s.DrainChatRuns(dctx, "stopped: the daemon is restarting")
 	dcancel()
 	s.StopVMs(ctx, running)
 	cmd := exec.Command(exePath, os.Args[1:]...)
