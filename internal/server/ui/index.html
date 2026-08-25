@@ -351,7 +351,7 @@ button.btn:active, button.ghost:active {
 /* Disabled, sampled from OS 9: dead flat — no bevel, 888 border, 777 text */
 button.btn:disabled, button.ghost:disabled { color: #777; border-color: #888;
   background: var(--g300); box-shadow: none; outline-color: #888; }
-button.ghost.danger { color: #7a1010; }
+button.ghost.danger, button.btn.danger { color: #7a1010; }
 button.ghost.armed { background: var(--red); color: #fff;
   box-shadow: inset 1px 1px 0 #e88, inset -1px -1px 0 #911; }
 button.ghost.sm { padding: 1px 8px; font-size: 10px; border-radius: 3px; }
@@ -1302,6 +1302,34 @@ body.mobile th.sorted {
         <div class="row" style="justify-content:flex-end; gap:11px; margin:4px 0 2px">
           <button class="ghost" id="nf-cancel">Cancel</button>
           <button class="btn" id="nf-go">Create</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirm (OS 9 caution alert) for destructive actions without a
+     persistent button to arm — opened via confirmDialog(), which resolves
+     true only on the action button -->
+<div id="cfm-overlay" class="overlay" hidden>
+  <div class="window modal front" style="max-width:360px">
+    <div class="titlebar"><button class="tbox close" id="cfm-x"></button><div class="stripe"></div>
+      <div class="title" id="cfm-title">Confirm</div>
+      <div class="stripe"></div></div>
+    <div class="win-frame">
+      <div class="win-body">
+        <div class="row" style="gap:12px; align-items:flex-start; margin-bottom:12px">
+          <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges" style="flex:none">
+            <path d="M16 2 L30.5 29.5 L1.5 29.5 Z" fill="#FFDD30" stroke="#000"/>
+            <path d="M16 6 L27 27 L5 27 Z" fill="#FFF3A0"/>
+            <rect x="14" y="11" width="4" height="10" fill="#000"/>
+            <rect x="14" y="23" width="4" height="3" fill="#000"/>
+          </svg>
+          <div id="cfm-msg" style="font-size:12px; line-height:1.5; user-select:text"></div>
+        </div>
+        <div class="row" style="justify-content:flex-end; gap:11px; margin:4px 0 2px">
+          <button class="ghost" id="cfm-cancel">Cancel</button>
+          <button class="btn" id="cfm-go">OK</button>
         </div>
       </div>
     </div>
@@ -2396,10 +2424,31 @@ async function loadMyApps() {
       showCtxMenu(e.clientX, e.clientY, [
         { label: "Open", act: () => window.open(url, "_blank") },
         { label: "Copy URL", act: () => copyText(url) },
+        "-",
+        { label: "Unpublish…", act: () => maUnpublish(host) },
       ]);
     });
     box.append(it);
   }
+}
+// Unpublish tears down the Cloudflare DNS record and tunnel route along
+// with the local one, so it rides the modal confirm; the app keeps running
+// in its VM either way. Same call and warning surfacing as the Services
+// tab's Unexpose.
+async function maUnpublish(host) {
+  const ok = await confirmDialog({
+    title: "Unpublish",
+    message: `Unpublish “${host}”? Its Cloudflare DNS record and tunnel route are removed. The app keeps running in its VM and can be exposed again.`,
+    action: "Unpublish", danger: true,
+  });
+  if (!ok) return;
+  try {
+    const res = await j("/v1/routes/" + encodeURIComponent(host), { method: "DELETE" });
+    let msg = host + " unpublished";
+    for (const wmsg of res.warnings || []) msg += " — ⚠ " + wmsg;
+    toast(msg);
+  } catch (e) { toast(e.message); }
+  loadMyApps().catch(() => {});
 }
 // swap the fallback diamond for the app's real icon once it arrives; a 404
 // (the app declares no icon) just leaves the diamond in place
@@ -2506,6 +2555,32 @@ $("#nf-go").onclick = async () => {
   } catch (e) { toast(e.message); }
   $("#nf-go").disabled = false;
 };
+// ---- modal confirm: an OS 9 caution alert, promise-shaped ----
+// Destructive actions triggered from a persistent button use the two-click
+// arm pattern; ones launched from a context menu have no button left to
+// arm, so they get this dialog instead. Resolves true only on the action
+// button — Cancel, the close box and Escape all resolve false.
+let cfmResolve = null;
+function confirmDialog({ title = "Confirm", message = "", action = "OK", danger = false } = {}) {
+  $("#cfm-title").textContent = title;
+  $("#cfm-msg").textContent = message;
+  const go = $("#cfm-go");
+  go.textContent = action;
+  go.classList.toggle("danger", danger);
+  $("#cfm-overlay").hidden = false;
+  go.focus(); // the ringed default button — Enter confirms, Escape cancels
+  return new Promise(res => { cfmResolve = res; });
+}
+function cfmClose(ok) {
+  $("#cfm-overlay").hidden = true;
+  const r = cfmResolve;
+  cfmResolve = null;
+  if (r) r(ok);
+}
+$("#cfm-x").onclick = () => cfmClose(false);
+$("#cfm-cancel").onclick = () => cfmClose(false);
+$("#cfm-go").onclick = () => cfmClose(true);
+
 // Upload… aims a throwaway file input at the window's folder
 const nfUpInput = el("input", { type: "file", multiple: "" });
 nfUpInput.onchange = () => { wsUpload(nfUpInput._dir, [...nfUpInput.files]); nfUpInput.value = ""; };
@@ -4607,6 +4682,7 @@ document.addEventListener("keydown", e => {
   if (!$("#cb-overlay").hidden) $("#cb-overlay").hidden = true;
   if (!$("#nf-overlay").hidden) nfClose();
   if (!$("#pub-overlay").hidden) pubClose();
+  if (!$("#cfm-overlay").hidden) cfmClose(false);
 });
 
 function wizFeedback(kind, text) {
