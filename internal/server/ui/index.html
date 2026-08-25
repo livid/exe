@@ -204,7 +204,10 @@ a { color: #202a87; text-decoration: underline; }
   align-items: center; gap: 2px; }
 .fitem .lbl { max-width: 116px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12px; padding: 0 3px; }
-.fitem.sel svg, .fitem.drop svg { filter: brightness(.55) saturate(1.3); }
+.fitem.sel svg, .fitem.drop svg, .fitem.sel img { filter: brightness(.55) saturate(1.3); }
+/* My Apps tiles: the app's own touch icon in the same 32px box the SVG
+   icons fill; a whisper of rounding, the way home screens treat them */
+.fitem img.ma-icon { width: 32px; height: 32px; border-radius: 6px; }
 .fitem.sel .lbl, .fitem.drop .lbl { background: var(--hl); color: #fff; }
 /* drag-and-drop upload targets */
 .finder-window.drop .finder-icons { box-shadow: inset 0 0 0 2px var(--hl); }
@@ -778,6 +781,7 @@ body.mobile th.sorted {
 </div>
 <div class="dropdown" id="dd-windows" hidden>
   <div class="dd-item" data-act="winvms">Virtual Machines</div>
+  <div class="dd-item" data-act="winmyapps">My Apps</div>
   <div class="dd-item" data-act="winchat" id="dd-chat-item" hidden>Chat</div>
   <div class="dd-item" data-act="winnews">Newsfeed</div>
   <div class="dd-item" data-act="winconfig">Configuration</div>
@@ -1011,6 +1015,25 @@ body.mobile th.sorted {
       </div>
       <div class="statusbar"><span id="news-count">…</span></div>
       <svg id="news-grow" class="grow-box" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
+        <rect width="15" height="15" fill="#ccc"/>
+        <path fill="#000" d="M0 0h15v1H0zM0 1h1v14H0z"/>
+        <path fill="#fff" d="M1 1h14v1H1zM1 2h1v13H1z"/>
+        <path fill="#fff" d="M9 4h2v1H9zM8 5h1v1H8zM7 6h1v1H7zM6 7h1v1H6zM5 8h1v1H5zM4 9h1v1H4zM11 6h2v1h-2zM10 7h1v1h-1zM9 8h1v1H9zM8 9h1v1H8zM7 10h1v1H7zM6 11h1v1H6zM13 8h2v1h-2zM12 9h1v1h-1zM11 10h1v1h-1zM10 11h1v1h-1zM9 12h1v1H9zM8 13h1v1H8z"/>
+        <path fill="#777" d="M10 5h1v1h-1zM9 6h1v1H9zM8 7h1v1H8zM7 8h1v1H7zM6 9h1v1H6zM5 10h1v1H5zM12 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM9 10h1v1H9zM8 11h1v1H8zM7 12h1v1H7zM14 9h1v1h-1zM13 10h1v1h-1zM12 11h1v1h-1zM11 12h1v1h-1zM10 13h1v1h-1zM9 14h1v1H9z"/>
+        <path fill="#aaa" d="M4 10h1v1H4zM6 12h1v1H6zM8 14h1v1H8z"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- My Apps: a Finder window over the published app domains -->
+  <div class="window grow" id="win-myapps" style="left:190px; top:86px; width:560px;" hidden>
+    <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title">My Apps</div>
+      <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
+    <div class="win-frame">
+      <div class="finder-status"><span id="ma-items">…</span></div>
+      <div class="finder-icons doc-scroll" id="ma-icons"></div>
+      <svg id="ma-grow" class="grow-box" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
         <rect width="15" height="15" fill="#ccc"/>
         <path fill="#000" d="M0 0h15v1H0zM0 1h1v14H0z"/>
         <path fill="#fff" d="M1 1h14v1H1zM1 2h1v13H1z"/>
@@ -1466,7 +1489,7 @@ function mobileSwapIn(w) {
 // local only, never mixed into the shared desktop layout snapshot. Live
 // terminals and transient dialogs don't restore; win-detail needs the VM
 // name, carried alongside.
-const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs"]);
+const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps"]);
 const mobRestorable = id => MOB_RESTORE.has(id)
   || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-");
 function mobSave() {
@@ -1678,6 +1701,7 @@ function wireGrow(grip, w, body, minW, opts = {}) {
 }
 wireGrow($("#chat-grow"), $("#win-chat"), $(".chat-wrap"), 560, { minH: 240, stickEl: $("#chat-msgs") });
 wireGrow($("#news-grow"), $("#win-news"), $("#news-list"), 320, { minH: 160 });
+wireGrow($("#ma-grow"), $("#win-myapps"), $("#ma-icons"), 320);
 wireGrow($("#docs-grow"), $("#win-docs"), $("#docs-body"), 420, { minH: 160 });
 // Virtual Machines has no grow corner (its statusbar is full of buttons),
 // but the edges resize it: width, and the list body's height
@@ -1712,8 +1736,8 @@ autoVBar($("#chat-sessions"));
 const WIN_CLIENT = Math.random().toString(36).slice(2) + Date.now().toString(36);
 // windows whose open/closed state is restored and synced; win-detail needs a
 // current VM and the dialogs are transient, so those only keep geometry
-const WIN_SYNC_OPEN = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-docs"]);
-const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin() };
+const WIN_SYNC_OPEN = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-docs", "win-myapps"]);
+const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin(), "win-myapps": () => openMyAppsWin() };
 let winApplying = false; // applying a stored/remote snapshot — don't echo it back
 let winDragging = null;  // window under the local pointer — remote moves lose
 let winRev = 0;
@@ -1792,6 +1816,7 @@ function applyWinState(st) {
       if (id === "win-log" && v.h) $("#log-out").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-news" && v.h) $("#news-list").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-docs" && v.h) $("#docs-body").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
+      if (id === "win-myapps" && v.h) $("#ma-icons").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       // vms/config/detail carry h only once edge-resized — an absent h means
       // natural content height, so clear any leftover pin instead of keeping it
       if (id === "win-vms") $("#win-vms .win-body").style.height = v.h ? Math.max(120, Math.min(window.innerHeight - 170, v.h)) + "px" : "";
@@ -1902,8 +1927,13 @@ const ACTIONS = {
   newvm: () => { openWin("#win-newvm"); $("#c-name").focus(); },
   upload: () => openWin("#win-upload"),
   closewin: closeFrontWindow,
-  refresh: () => { Promise.all([loadVMs(), loadApps()]).then(() => toast("Refreshed")).catch(e => toast(e.message)); },
+  refresh: () => {
+    const jobs = [loadVMs(), loadApps()];
+    if (!$("#win-myapps").hidden) jobs.push(loadMyApps());
+    Promise.all(jobs).then(() => toast("Refreshed")).catch(e => toast(e.message));
+  },
   winvms: () => openWin("#win-vms"),
+  winmyapps: () => openMyAppsWin(),
   winchat: () => openChatWin(),
   winnews: () => openNewsWin(),
   winconfig: openConfigWin,
@@ -1946,18 +1976,19 @@ async function openAboutWin() {
   }
   openWin("#win-about");
 }
-async function copyIP(ip) {
+async function copyText(text, label) {
   let ok = false;
-  try { await navigator.clipboard.writeText(ip); ok = true; }
+  try { await navigator.clipboard.writeText(text); ok = true; }
   catch (e) { // plain-http origins have no clipboard API — fall back to execCommand
     const ta = document.createElement("textarea");
-    ta.value = ip; ta.style.position = "fixed"; ta.style.top = "-1000px";
+    ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
     document.body.appendChild(ta); ta.focus(); ta.select();
     try { ok = document.execCommand("copy"); } catch (e2) {}
     ta.remove();
   }
-  toast(ok ? "Copied IP " + ip : "Copy failed — select and copy " + ip);
+  toast(ok ? "Copied " + (label || text) : "Copy failed — select and copy " + text);
 }
+const copyIP = ip => copyText(ip, "IP " + ip);
 
 // ---- Help → exe Documentation: the manual ships in the binary (docs.md,
 // served at /docs.md the way the skill file is) and is fetched once per
@@ -2323,6 +2354,68 @@ async function openWorkspaceFile(rel) {
     setTimeout(() => URL.revokeObjectURL(u), 60000);
   } catch (e) {}
 }
+
+// ---- My Apps: a Finder window over the published app domains ----
+// The tiles are /v1/routes — the registry expose/unexpose already maintain —
+// so this window can never drift from what is actually published. Icons are
+// each app's own touch icon, fetched and cached by the daemon; the fallback
+// diamond fills the same 32px box, so a late icon swaps in without moving
+// anything.
+function openMyAppsWin() {
+  openWin("#win-myapps");
+  loadMyApps().catch(e => toast(e.message));
+}
+async function loadMyApps() {
+  const items = $("#ma-items"), box = $("#ma-icons");
+  let routes;
+  try { routes = await j("/v1/routes"); }
+  catch (e) { items.textContent = e.message; return; }
+  const hosts = Object.keys(routes).sort();
+  items.textContent = `${hosts.length} app${hosts.length === 1 ? "" : "s"} published`;
+  box.replaceChildren();
+  if (!hosts.length) {
+    box.append(el("div", { class: "muted", style: "padding:10px" },
+      "Nothing published yet — expose a VM port and its domain lands here."));
+    return;
+  }
+  for (const host of hosts) {
+    const url = "https://" + host;
+    const it = el("div", { class: "fitem", title: url });
+    it.innerHTML = APP_FALLBACK_ICON;
+    it.append(el("span", { class: "lbl" }, host));
+    maLoadIcon(it, host);
+    const select = () => {
+      box.querySelectorAll(".fitem").forEach(d => d.classList.remove("sel"));
+      it.classList.add("sel");
+    };
+    it.addEventListener("click", e => { e.stopPropagation(); select(); });
+    tapOpen(it, () => window.open(url, "_blank"));
+    it.addEventListener("contextmenu", e => {
+      e.preventDefault(); e.stopPropagation();
+      select();
+      showCtxMenu(e.clientX, e.clientY, [
+        { label: "Open", act: () => window.open(url, "_blank") },
+        { label: "Copy URL", act: () => copyText(url) },
+      ]);
+    });
+    box.append(it);
+  }
+}
+// swap the fallback diamond for the app's real icon once it arrives; a 404
+// (the app declares no icon) just leaves the diamond in place
+async function maLoadIcon(it, host) {
+  try {
+    const r = await api("/v1/appicons/" + encodeURIComponent(host));
+    const u = URL.createObjectURL(await r.blob());
+    const img = el("img", { class: "ma-icon", alt: "", src: u,
+      onload: () => URL.revokeObjectURL(u), onerror: () => URL.revokeObjectURL(u) });
+    it.firstElementChild.replaceWith(img);
+  } catch (e) {}
+}
+$("#ma-icons").addEventListener("click", e => {
+  if (e.target === e.currentTarget)
+    e.currentTarget.querySelectorAll(".fitem").forEach(d => d.classList.remove("sel"));
+});
 
 // ---- Finder contextual menu, styled from a real OS 9 capture ----
 const ctxMenu = $("#ctx-menu");

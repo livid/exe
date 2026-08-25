@@ -75,6 +75,18 @@ func (p *Proxy) Snapshot() map[string]string {
 	return out
 }
 
+// Transport returns a RoundTripper that reaches backends the way the proxy
+// does — through the custom dialer when one is installed (Windows, where VM
+// IPs only exist inside the daemon process).
+func (p *Proxy) Transport() http.RoundTripper {
+	if p.dial == nil {
+		return http.DefaultTransport
+	}
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.DialContext = p.dial
+	return tr
+}
+
 func (p *Proxy) lookup(hostHeader string) (string, bool) {
 	h := hostHeader
 	if host, _, err := net.SplitHostPort(hostHeader); err == nil {

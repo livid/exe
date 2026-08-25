@@ -100,6 +100,10 @@ type Server struct {
 	// One-writer guard for this node's Newsfeed journal (see newsfeed.go).
 	newsMu  sync.Mutex
 	newsSeq int64
+
+	// Published-app icon cache: one fetch in flight per hostname (see
+	// appicons.go).
+	appIconMu sync.Map // hostname -> *sync.Mutex
 }
 
 func New(cfg *config.Config, vms vmm.Manager, px *proxy.Proxy, keyPath, stateDir string) *Server {
@@ -173,6 +177,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/hostinfo", s.handleHostInfo)
 	mux.HandleFunc("GET /v1/routes", s.handleRoutes)
 	mux.HandleFunc("DELETE /v1/routes/{host}", s.handleRouteDelete)
+	mux.HandleFunc("GET /v1/appicons/{host}", s.handleAppIcon)
 	mux.HandleFunc("GET /v1/logs", s.handleLogs)
 	mux.HandleFunc("GET /v1/ui/state", s.handleUIStateGet)
 	mux.HandleFunc("PUT /v1/ui/state", s.handleUIStatePut)
