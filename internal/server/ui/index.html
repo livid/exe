@@ -120,6 +120,17 @@ a { color: #202a87; text-decoration: underline; }
 .titlebar .title { font-weight: bold; font-size: 12px; line-height: 13px; padding: 0 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;
   background: var(--g400); }
+/* Movable alert box title bar (HIG OS 8 fig. 3-4): nothing but red
+   stripes — no title, no boxes. Colors sampled from the figure: #fcc
+   field, #fff/#f66 stripe rows, #f99 bevel rows. */
+.titlebar.alert-bar { background: #fcc; }
+.titlebar.alert-bar .stripe { background-color: #fcc;
+  background-image: linear-gradient(#fff, #fff 50%, #f66 50%, #f66); }
+.titlebar.alert-bar .stripe::before {
+  background-image: linear-gradient(#fff, #fff 50%, #f99 50%, #f99);
+  border-bottom-color: #f99; }
+.titlebar.alert-bar .stripe::after {
+  background-image: linear-gradient(#f99, #f99 50%, #f66 50%, #f66); }
 .tbox { width: 13px; height: 13px; flex: none; position: relative; border: none; padding: 0;
   background: linear-gradient(135deg, #9a9a9a 0%, #f1f1f1 100%) 50% / 9px 9px;
   box-shadow: inset 1px 1px 0 var(--g700), inset -1px -1px 0 #fff,
@@ -1308,26 +1319,30 @@ body.mobile th.sorted {
   </div>
 </div>
 
-<!-- Modal confirm (OS 9 caution alert) for destructive actions without a
-     persistent button to arm — opened via confirmDialog(), which resolves
-     true only on the action button -->
+<!-- Modal confirm for destructive actions without a persistent button to
+     arm — a movable alert box per HIG OS 8 fig. 3-4: red-striped title bar
+     with no title or close box (alerts hold only icon, text and buttons),
+     bold label top-aligned with the caution icon, plain narrative below.
+     Opened via confirmDialog(), which resolves true only on the action
+     button. -->
 <div id="cfm-overlay" class="overlay" hidden>
-  <div class="window modal front" style="max-width:360px">
-    <div class="titlebar"><button class="tbox close" id="cfm-x"></button><div class="stripe"></div>
-      <div class="title" id="cfm-title">Confirm</div>
-      <div class="stripe"></div></div>
+  <div class="window modal front" style="max-width:380px">
+    <div class="titlebar alert-bar"><div class="stripe"></div></div>
     <div class="win-frame">
-      <div class="win-body">
-        <div class="row" style="gap:12px; align-items:flex-start; margin-bottom:12px">
+      <div class="win-body" style="padding:14px 14px 12px">
+        <div class="row" style="gap:20px; align-items:flex-start; margin-bottom:24px">
           <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges" style="flex:none">
             <path d="M16 2 L30.5 29.5 L1.5 29.5 Z" fill="#FFDD30" stroke="#000"/>
             <path d="M16 6 L27 27 L5 27 Z" fill="#FFF3A0"/>
             <rect x="14" y="11" width="4" height="10" fill="#000"/>
             <rect x="14" y="23" width="4" height="3" fill="#000"/>
           </svg>
-          <div id="cfm-msg" style="font-size:12px; line-height:1.5; user-select:text"></div>
+          <div style="flex:1; min-width:0">
+            <div id="cfm-msg" style="font-weight:bold; font-size:12px; line-height:1.35; user-select:text"></div>
+            <div id="cfm-detail" style="font-size:11px; line-height:1.45; margin-top:7px; user-select:text"></div>
+          </div>
         </div>
-        <div class="row" style="justify-content:flex-end; gap:11px; margin:4px 0 2px">
+        <div class="row" style="justify-content:flex-end; gap:11px; margin:0 0 2px">
           <button class="ghost" id="cfm-cancel">Cancel</button>
           <button class="btn" id="cfm-go">OK</button>
         </div>
@@ -2437,8 +2452,8 @@ async function loadMyApps() {
 // tab's Unexpose.
 async function maUnpublish(host) {
   const ok = await confirmDialog({
-    title: "Unpublish",
-    message: `Unpublish “${host}”? Its Cloudflare DNS record and tunnel route are removed. The app keeps running in its VM and can be exposed again.`,
+    message: `Do you really want to unpublish “${host}”?`,
+    detail: "Its Cloudflare DNS record and tunnel route are removed. The app keeps running in its VM and can be exposed again.",
     action: "Unpublish", danger: true,
   });
   if (!ok) return;
@@ -2555,15 +2570,19 @@ $("#nf-go").onclick = async () => {
   } catch (e) { toast(e.message); }
   $("#nf-go").disabled = false;
 };
-// ---- modal confirm: an OS 9 caution alert, promise-shaped ----
+// ---- modal confirm: a movable alert box, promise-shaped ----
 // Destructive actions triggered from a persistent button use the two-click
 // arm pattern; ones launched from a context menu have no button left to
-// arm, so they get this dialog instead. Resolves true only on the action
-// button — Cancel, the close box and Escape all resolve false.
+// arm, so they get this alert instead. message is the bold label, detail
+// the plain narrative under it (HIG's two-tier alert text). Resolves true
+// only on the action button — Cancel and Escape resolve false; per the
+// HIG an alert box has no close box.
 let cfmResolve = null;
-function confirmDialog({ title = "Confirm", message = "", action = "OK", danger = false } = {}) {
-  $("#cfm-title").textContent = title;
+function confirmDialog({ message = "", detail = "", action = "OK", danger = false } = {}) {
   $("#cfm-msg").textContent = message;
+  const d = $("#cfm-detail");
+  d.textContent = detail;
+  d.hidden = !detail;
   const go = $("#cfm-go");
   go.textContent = action;
   go.classList.toggle("danger", danger);
@@ -2577,7 +2596,6 @@ function cfmClose(ok) {
   cfmResolve = null;
   if (r) r(ok);
 }
-$("#cfm-x").onclick = () => cfmClose(false);
 $("#cfm-cancel").onclick = () => cfmClose(false);
 $("#cfm-go").onclick = () => cfmClose(true);
 
