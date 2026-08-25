@@ -3116,17 +3116,27 @@ async function loadPorts() {
     return;
   }
   const routes = await j("/v1/routes").catch(() => ({}));
-  // one row per service: published routes are merged onto their port by backend
+  // one row per published hostname (a port can be published under several
+  // names), plus a bare row for each unpublished listening port
   const prefix = `http://${d.ip}:`;
-  const hostForPort = {};
+  const hostsForPort = {};
   for (const [host, backend] of Object.entries(routes)) {
-    if (backend.startsWith(prefix)) hostForPort[parseInt(backend.slice(prefix.length), 10)] = host;
+    if (!backend.startsWith(prefix)) continue;
+    const port = parseInt(backend.slice(prefix.length), 10);
+    (hostsForPort[port] = hostsForPort[port] || []).push(host);
   }
-  const svcs = d.ports.map(p => ({ port: p.port, process: p.process || "", host: hostForPort[p.port], local: p.local }));
-  for (const port of Object.keys(hostForPort).map(Number)) {
-    if (!svcs.some(s => s.port === port)) svcs.push({ port, process: "", host: hostForPort[port], dead: true });
+  const svcs = [];
+  for (const p of d.ports) {
+    for (const host of hostsForPort[p.port] || [undefined]) {
+      svcs.push({ port: p.port, process: p.process || "", host, local: p.local });
+    }
   }
-  svcs.sort((a, b) => a.port - b.port);
+  for (const [port, hosts] of Object.entries(hostsForPort)) {
+    if (!d.ports.some(p => p.port === Number(port))) {
+      for (const host of hosts) svcs.push({ port: Number(port), process: "", host, dead: true });
+    }
+  }
+  svcs.sort((a, b) => a.port - b.port || (a.host || "").localeCompare(b.host || ""));
 
   box.replaceChildren();
   if (!svcs.length) {
