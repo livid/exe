@@ -315,13 +315,13 @@ td.actions button + button { margin-left: 8px; }
 /* VM detail: an edge-resized body hands surplus height to the tab panel
    (grow-only — a short window keeps the panel's natural size and scrolls
    the body, as before), and inside each pane the main content stretches
-   with it: the terminal, the agent/transcript logs, the notes textarea */
+   with it: the terminal, the session list, the notes textarea */
 #win-detail .win-body { display: flex; flex-direction: column; }
 #win-detail .tabpanel { flex: 1 0 auto; display: flex; flex-direction: column; }
 #win-detail .pane:not([hidden]) { flex: 1; display: flex; flex-direction: column; }
 #pane-term #term-box { flex: 1 1 auto; min-height: 160px; }
 #pane-notes #n-text { flex: 1 1 auto; }
-#pane-tr #t-log { flex: 1 1 380px; max-height: none; }
+#pane-sess .listbox { flex: 1 1 240px; max-height: none; }
 /* the terminal is the one pane that can adapt its height (xterm refits
    its rows), so when the body runs short — the 100vh cap on a small
    screen, or a short edge-resize — the squeeze flows into the terminal
@@ -477,12 +477,6 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
 .listbox td { white-space: nowrap; }
 a.svc { color: #202a87; text-decoration: none; }
 a.svc:hover { text-decoration: underline; }
-.t-item:last-child { margin-bottom: 0; }
-.t-item { padding: 3px 8px; border: 1px solid var(--g600); background: var(--g200); margin-bottom: 5px;
-  display: flex; gap: 10px; align-items: center; min-height: 27px; box-shadow: inset 1px 1px 0 #fff; }
-.t-item.sel { background: var(--hl); }
-.t-item.sel, .t-item.sel .muted, .t-item.sel .mono { color: #fff; }
-.t-prompt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 /* overflow:clip — xterm's DOM renderer parks absolutely-positioned helpers
    (IME textarea at the cursor, spare rows) below the visible screen; unclipped
    they inflate every ancestor's scrollHeight and typing makes the browser
@@ -885,7 +879,7 @@ body.mobile th.sorted {
           <div class="tab" data-tab="term">Terminal</div>
           <div class="tab" data-tab="vibe">Agent</div>
           <div class="tab" data-tab="expose">Expose</div>
-          <div class="tab" data-tab="tr">Transcripts</div>
+          <div class="tab" data-tab="sess">Sessions</div>
           <div class="tab" data-tab="notes">Notes</div>
         </div>
         <div class="tabpanel">
@@ -929,9 +923,8 @@ body.mobile th.sorted {
             <div id="e-result" class="mono muted" style="margin-top:6px"></div>
           </div>
 
-          <div class="pane" id="pane-tr" hidden>
-            <div id="t-list"><span class="muted">No agent runs yet — each run in this VM is logged here.</span></div>
-            <pre class="out" id="t-log" hidden></pre>
+          <div class="pane" id="pane-sess" hidden>
+            <div class="listbox" id="sess-list"><div class="muted" style="padding:8px">…</div></div>
           </div>
 
           <div class="pane" id="pane-notes" hidden>
@@ -1768,6 +1761,7 @@ function autoVBar(el) {
 }
 autoVBar($("#chat-msgs"));
 autoVBar($("#chat-sessions"));
+autoVBar($("#sess-list"));
 
 // ---- window layout: persist + cross-browser sync ----
 // The whole desktop layout (per-window geometry, stacking, shade, and which
@@ -3095,6 +3089,8 @@ function showPane(key) {
     if (dead && $("#d-state").textContent === "running") $("#term-open").click();
     termResize();
   }
+  // chats happen while the detail window sits open — refresh on tab click
+  if (key === "sess") loadVMSessions().catch(() => {});
 }
 document.querySelectorAll("#win-detail .tab").forEach(t =>
   t.addEventListener("click", () => showPane(t.dataset.tab)));
@@ -3103,7 +3099,6 @@ async function openVM(name, tab) {
   flushNotes();
   currentVM = name;
   $("#d-title").textContent = name;
-  $("#t-log").hidden = true;
   $("#e-result").textContent = "";
   showPane("svc");
   openWin("#win-detail");
@@ -3113,7 +3108,7 @@ async function openVM(name, tab) {
   // reads #d-state, which still shows the previous VM until here
   if (tab) showPane(tab);
   loadPorts().catch(() => {});
-  loadTranscripts().catch(e => toast(e.message));
+  loadVMSessions().catch(e => toast(e.message));
 }
 async function refreshDetailHead() {
   try {
@@ -3479,31 +3474,25 @@ $("#e-go").onclick = async () => {
   $("#e-go").disabled = false;
 };
 
-// ---- transcripts ----
-async function loadTranscripts() {
-  const list = await j(`/v1/vms/${currentVM}/transcripts`);
-  const box = $("#t-list");
+// ---- sessions: the chats pinned to this VM (agent runs included), same
+// rows as the Chat window's list; clicking one opens it there ----
+async function loadVMSessions() {
+  const list = (await j("/v1/chat/sessions")).filter(m => m.vm === currentVM);
+  const box = $("#sess-list");
   box.replaceChildren();
   if (!list.length) {
-    box.append(el("span", { class: "muted" }, "No agent runs yet — each run in this VM is logged here."));
+    box.append(el("div", { class: "muted", style: "padding:8px" },
+      "No chats with this VM yet — the Agent tab starts one."));
     return;
   }
-  for (const t of list) {
-    const item = el("div", { class: "t-item" },
-      el("span", { class: "muted mono", style: "font-size:11px" }, fmtTime(t.started_at)),
-      chip(t.status),
-      el("span", { class: "t-prompt", title: t.prompt }, t.prompt));
-    item.onclick = async () => {
-      for (const n of box.children) n.classList.remove("sel");
-      item.classList.add("sel");
-      try {
-        const d = await j(`/v1/vms/${currentVM}/transcripts/${t.id}`);
-        const log = $("#t-log");
-        log.hidden = false;
-        log.textContent = `# ${d.meta.model} · ${fmtTime(d.meta.started_at)} · ${d.meta.status}` +
-          (d.meta.error ? " — " + d.meta.error : "") + "\n# " + d.meta.prompt + "\n\n" + d.log;
-      } catch (e) { toast(e.message); }
-    };
+  for (const m of list) {
+    const title = el("div", { class: "cs-title", title: m.title }, m.title);
+    if (m.streaming) title.prepend(el("span", { class: "cs-live", title: "a reply is streaming" }));
+    const item = el("div", { class: "cs-item" + (m.id === chatCur ? " sel" : "") },
+      el("div", { style: "flex:1; min-width:0" },
+        title,
+        el("div", { class: "cs-time" }, fmtTime(m.updated_at))));
+    item.onclick = () => { openChatWin(currentVM); selectChat(m.id); };
     box.append(item);
   }
 }

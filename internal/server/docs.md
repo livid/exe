@@ -52,8 +52,8 @@ Double-click a VM in the list to open its window. The tabs:
 - **Agent** — tell the built-in coding agent what to build; it gets a shell
   in this VM and streams its work live.
 - **Expose** — publish a VM port to an HTTPS subdomain (see below).
-- **Transcripts** — every agent run is recorded and replayable, including
-  runs started from the command line.
+- **Sessions** — every chat pinned to this VM, agent runs included; click
+  one to reopen it in the Chat window.
 - **Notes** — free-form notes about the VM, saved automatically. Agents are
   told to read these before working in an unfamiliar VM, so write down what
   runs where.
