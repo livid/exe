@@ -50,9 +50,9 @@ a { color: #202a87; text-decoration: underline; }
 .menu.appl { padding: 0 12px; }
 .menu.open { background: var(--hl); color: #fff; }
 .mb-right { margin-left: auto; display: flex; align-items: stretch; }
-#cf-dot { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
+#cf-dot, #search-btn { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
   background: none; font: inherit; color: inherit; }
-#cf-dot:active { background: var(--hl); color: #fff; }
+#cf-dot:active, #search-btn:active { background: var(--hl); color: #fff; }
 .dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0,0,0,.55);
   background: radial-gradient(circle at 30% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 55%), var(--gray);
   display: inline-block; }
@@ -74,6 +74,26 @@ a { color: #202a87; text-decoration: underline; }
    (menubar menus are lighter), same groove separators and hard shadow */
 #ctx-menu { top: auto; background: var(--g300); min-width: 170px; z-index: 5000;
   border-top: 1px solid var(--black); /* floats at the cursor, away from the menubar line */ }
+
+/* ---------- global search (the menubar magnifier) ---------- */
+/* platinum query bar over a fixed-height white result list — fixed so the
+   window doesn't change height on every keystroke as matches come and go */
+#win-search .win-body { padding: 0; }
+#search-bar { padding: 8px; background: var(--g300);
+  border-bottom: 1px solid var(--black); /* single seam over the list — rows draw no top line */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
+#search-bar input { width: 100%; }
+#search-results { height: 320px; overflow-y: auto; background: #fff; }
+.sr-item { display: flex; align-items: center; gap: 7px; padding: 4px 8px;
+  border-bottom: 1px solid #efefef; cursor: pointer; }
+.sr-item:not(.sel):hover { background: #eaf2fc; }
+.sr-item svg { flex: none; }
+.sr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-sub { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 10px; color: #777; }
+.sr-item.sel { background: var(--hl); }
+.sr-item.sel .sr-title, .sr-item.sel .sr-sub { color: #fff; }
+.sr-hint { padding: 10px; }
 
 /* ---------- desktop icons ---------- */
 #desktop { position: fixed; inset: 20px 0 0 0; }
@@ -743,6 +763,10 @@ body.mobile .chat-side { width: auto; }
 body.mobile .chat-sessions { flex: none; max-height: 88px; }
 /* six trapezoid tabs overflow a phone — let them wrap */
 body.mobile .tabbar { flex-wrap: wrap; }
+/* fullscreen search: the result list gives up its fixed height and fills
+   the space under the query bar */
+body.mobile #win-search .win-body { display: flex; flex-direction: column; }
+body.mobile #search-results { height: auto; flex: 1; min-height: 0; }
 /* the About window floats like the Cloudflare status modal instead of
    going fullscreen: centered, content-sized, dimming what's below */
 body.mobile #desktop #win-about { inset: auto !important;
@@ -771,6 +795,10 @@ body.mobile th.sorted {
   <div class="menu" data-m="special">Special</div>
   <div class="menu" data-m="help">Help</div>
   <div class="mb-right">
+    <!-- pixel magnifier; fill follows the text color so :active inverts it -->
+    <button id="search-btn" title="Search VMs, chats, notes and todos">
+      <svg width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges" fill="currentColor"><path d="M4 1h4v1H4zM3 2h1v1H3zM8 2h1v1H8zM2 3h1v4H2zM9 3h1v4H9zM3 7h1v1H3zM8 7h1v1H8zM4 8h4v1H4zM8 8h1v1H8zM9 9h2v2H9zM10 10h2v2h-2zM11 11h2v2h-2z"/></svg>
+    </button>
     <button id="cf-dot" title="Cloudflare status — checking…">
       <span id="cf-dot-circle" class="dot"></span><span>Cloudflare</span>
     </button>
@@ -1237,6 +1265,22 @@ body.mobile th.sorted {
     <div class="win-frame">
       <div class="win-body" style="text-align:center; padding:26px">
         <span class="muted">The Trash is empty.<br>(Deleted VMs skip the Trash — sorry.)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Search: the menubar magnifier. One box searches VMs, chat
+       sessions, Notes and Todo; each row's 16×16 pixel icon names its type. -->
+  <div class="window" id="win-search" style="left:250px; top:46px; width:440px;" hidden>
+    <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title">Search</div>
+      <div class="stripe"></div></div>
+    <div class="win-frame">
+      <div class="win-body">
+        <div id="search-bar">
+          <input id="search-input" placeholder="Search VMs, chats, notes and todos" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="search-results"></div>
       </div>
     </div>
   </div>
@@ -2086,6 +2130,125 @@ function tickClock() {
 }
 tickClock();
 setInterval(tickClock, 10000);
+
+// ---- global search (the menubar magnifier) ----
+// One window searches everything: VMs, chat sessions, and the Notes and
+// Todo apps' data files. Picking a result closes the window and opens the
+// thing itself — the VM detail, the chat session, or the app.
+const MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
+  <path d="M4.5 10.5 v3 l3 -3 z" fill="#DAD5CA" stroke="#000"/>
+  <rect x="4" y="5" width="8" height="1" fill="#55524B"/>
+  <rect x="4" y="7" width="5" height="1" fill="#55524B"/>
+</svg>`;
+const MINI_NOTE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#ffff99" stroke="#000" d="M2.5 1.5h8l3 3v10h-11z"/>
+  <path fill="#cc9933" stroke="#000" d="M10.5 1.5v3h3z"/>
+  <path fill="#ddbb55" d="M4 7h8v1H4zM4 10h8v1H4z"/>
+  <path fill="#ff8888" d="M5 2h1v12H5z"/>
+</svg>`;
+const MINI_TODO_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect x="2.5" y="0.5" width="11" height="15" fill="#fff" stroke="#000"/>
+  <rect x="3" y="1" width="10" height="1" fill="#DAD5CA"/>
+  <rect x="4.5" y="3.5" width="4" height="4" fill="#fff" stroke="#000"/>
+  <path d="M5.5 5.5 l1 1 l1.5 -2.5" fill="none" stroke="#1f9e33"/>
+  <rect x="10" y="5" width="2" height="1" fill="#55524B"/>
+  <rect x="4.5" y="9.5" width="4" height="4" fill="#fff" stroke="#000"/>
+  <rect x="10" y="11" width="2" height="1" fill="#55524B"/>
+</svg>`;
+// the desktop's compact Mac at 16px, screen tinted by VM state
+function miniMacIcon(state) {
+  return `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+    <rect x="3.5" y="0.5" width="9" height="12" fill="#DAD5CA" stroke="#000"/>
+    <rect x="5.5" y="2.5" width="5" height="5" fill="${SCREEN_COLORS[state] || "#3A3F46"}" stroke="#000"/>
+    <rect x="6" y="9" width="4" height="1" fill="#55524B"/>
+    <rect x="5.5" y="12.5" width="5" height="2" fill="#C8C3B8" stroke="#000"/>
+  </svg>`;
+}
+let searchData = null; // the four lists, fetched fresh each time the window opens
+let searchHits = [], searchSel = 0;
+function openSearchWin() {
+  openWin("#win-search");
+  const inp = $("#search-input");
+  inp.focus();
+  inp.select();
+  searchData = null;
+  searchSel = 0;
+  renderSearch();
+  // a missing source (Ollama off, app not installed) searches as empty
+  const grab = (p, pick) => j(p).then(pick).catch(() => []);
+  Promise.all([
+    grab("/v1/vms", r => r),
+    grab("/v1/chat/sessions", r => r),
+    grab("/v1/apps/Notes/data/notes.json", r => r.notes || []),
+    grab("/v1/apps/Todo/data/todos.json", r => r.items || []),
+  ]).then(([vms, chats, notes, todos]) => {
+    if ($("#win-search").hidden) return;
+    searchData = { vms, chats, notes, todos };
+    renderSearch();
+  });
+}
+const srFirstLine = t => ((t || "").split("\n")[0] || "").trim() || "untitled";
+function searchMatches(q) {
+  const has = s => (s || "").toLowerCase().includes(q);
+  const out = [];
+  for (const vm of searchData.vms) if (has(vm.name) || has(vm.ip)) out.push({
+    icon: miniMacIcon(vm.state), title: vm.name,
+    sub: vm.state + (vm.ip ? " · " + vm.ip : ""),
+    open: () => openVM(vm.name),
+  });
+  for (const m of searchData.chats) if (has(m.title) || has(m.summary)) out.push({
+    icon: MINI_CHAT_ICON, title: m.title, sub: m.vm || "",
+    open: () => { openChatWin(); selectChat(m.id); },
+  });
+  for (const n of searchData.notes) if (has(n.text)) out.push({
+    icon: MINI_NOTE_ICON, title: srFirstLine(n.text),
+    // the matched body line, when the title alone doesn't say why this hit
+    sub: has(srFirstLine(n.text)) ? "" : (n.text.split("\n").find(l => has(l)) || "").trim(),
+    open: () => openAppWin("Notes"),
+  });
+  for (const t of searchData.todos) if (has(t.text)) out.push({
+    icon: MINI_TODO_ICON, title: t.text, sub: t.done ? "done" : "",
+    open: () => openAppWin("Todo"),
+  });
+  return out;
+}
+function renderSearch() {
+  const box = $("#search-results");
+  const q = $("#search-input").value.trim().toLowerCase();
+  const hint = t => box.replaceChildren(el("div", { class: "muted sr-hint" }, t));
+  searchHits = [];
+  if (!q) return hint("Type to search VMs, chat sessions, notes and todos.");
+  if (!searchData) return hint("Searching…");
+  searchHits = searchMatches(q);
+  if (!searchHits.length) return hint("Nothing matches “" + $("#search-input").value.trim() + "”.");
+  box.replaceChildren();
+  searchSel = Math.min(searchSel, searchHits.length - 1);
+  searchHits.forEach((r, i) => {
+    const it = el("div", { class: "sr-item" + (i === searchSel ? " sel" : "") });
+    it.innerHTML = r.icon;
+    it.append(el("div", { class: "sr-title" }, r.title));
+    if (r.sub) it.append(el("div", { class: "sr-sub" }, r.sub));
+    it.onclick = () => { closeWin($("#win-search")); r.open(); };
+    box.append(it);
+  });
+}
+$("#search-btn").onclick = () => openSearchWin();
+$("#search-input").addEventListener("input", () => { searchSel = 0; renderSearch(); });
+$("#search-input").addEventListener("keydown", e => {
+  if (e.key === "Escape") closeWin($("#win-search"));
+  else if (e.key === "Enter") {
+    const r = searchHits[searchSel];
+    if (r) { closeWin($("#win-search")); r.open(); }
+  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!searchHits.length) return;
+    searchSel = Math.max(0, Math.min(searchHits.length - 1, searchSel + (e.key === "ArrowDown" ? 1 : -1)));
+    renderSearch();
+    const sel = $("#search-results .sr-item.sel");
+    if (sel) sel.scrollIntoView({ block: "nearest" });
+  }
+});
 
 // ---- desktop icons ----
 const SCREEN_COLORS = { running: "#7FD67F", starting: "#E8B34B", stopping: "#E8B34B", stopped: "#3A3F46", error: "#D66A6A" };
