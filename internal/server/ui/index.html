@@ -3490,10 +3490,11 @@ async function loadVMSessions() {
     return;
   }
   for (const m of list) {
-    const title = el("div", { class: "cs-title", title: m.title }, m.title);
+    // no tooltips here — the wide rows already show the text
+    const title = el("div", { class: "cs-title" }, m.title);
     if (m.streaming) title.prepend(el("span", { class: "cs-live", title: "a reply is streaming" }));
     const body = el("div", { style: "flex:1; min-width:0" }, title);
-    if (m.summary) body.append(el("div", { class: "cs-sum", title: m.summary }, m.summary));
+    if (m.summary) body.append(el("div", { class: "cs-sum" }, m.summary));
     body.append(el("div", { class: "cs-time" }, fmtTime(m.updated_at)));
     // no .sel here: this list launches chats, it doesn't track the Chat
     // window's current session — a lone highlighted row reads as stray state
