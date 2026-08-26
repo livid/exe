@@ -436,6 +436,13 @@ input, textarea, select {
     1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff;
 }
 input:focus, textarea:focus, select:focus { outline: 2px solid #9999fe; outline-offset: 0; }
+/* radios and checkboxes are circles/squares of their own — the sunken
+   text-field frame would draw a second box around them */
+input[type=radio], input[type=checkbox] {
+  background: none; border: 0; padding: 0; box-shadow: none; accent-color: #333;
+}
+input[type=radio]:focus, input[type=checkbox]:focus { outline: none; }
+input[type=radio]:focus-visible, input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
 textarea { width: 100%; min-height: 64px; resize: vertical; font-family: var(--mono); font-size: 11px; }
 select { padding: 2px 4px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
