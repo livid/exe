@@ -3045,8 +3045,8 @@ function icxLoad(w) {
     icxPaint(st);
   });
 }
-// fat bits: each cell painted over a 2×2 checker that shows through
-// transparency; sizes snapped to device pixels so the grid stays crisp at
+// fat bits: transparent cells show a checker of whole cells (one square per
+// pixel); sizes snapped to device pixels so the grid stays crisp at
 // fractional display scales
 function icxPaint(st) {
   const { canvas, grid, n, zoom } = st;
@@ -3056,12 +3056,11 @@ function icxPaint(st) {
   const g = canvas.getContext("2d");
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
     const x0 = px(x), y0 = px(y), wp = px(x + 1) - x0, hp = px(y + 1) - y0;
-    g.fillStyle = "#fff";
-    g.fillRect(x0, y0, wp, hp);
-    g.fillStyle = "#ddd";
-    g.fillRect(x0, y0, wp >> 1, hp >> 1);
-    g.fillRect(x0 + (wp >> 1), y0 + (hp >> 1), wp - (wp >> 1), hp - (hp >> 1));
     const c = grid[y * n + x];
+    if (!c || c.includes("@")) {
+      g.fillStyle = (x + y) & 1 ? "#ddd" : "#fff";
+      g.fillRect(x0, y0, wp, hp);
+    }
     if (c) { g.fillStyle = icxCss(c); g.fillRect(x0, y0, wp, hp); }
   }
   const svg = gridToSvg(grid, n);
