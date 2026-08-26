@@ -3494,7 +3494,9 @@ async function loadVMSessions() {
     const body = el("div", { style: "flex:1; min-width:0" }, title);
     if (m.summary) body.append(el("div", { class: "cs-sum", title: m.summary }, m.summary));
     body.append(el("div", { class: "cs-time" }, fmtTime(m.updated_at)));
-    const item = el("div", { class: "cs-item" + (m.id === chatCur ? " sel" : "") }, body);
+    // no .sel here: this list launches chats, it doesn't track the Chat
+    // window's current session — a lone highlighted row reads as stray state
+    const item = el("div", { class: "cs-item" }, body);
     item.onclick = () => { openChatWin(currentVM); selectChat(m.id); };
     box.append(item);
   }
