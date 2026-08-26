@@ -13,7 +13,7 @@ The menu bar works like the classic Mac it resembles:
 
 - **File** — New VM…, Upload to Workspace…, Close Window, Refresh.
 - **Windows** — reopen the core windows: Virtual Machines, Chat, Newsfeed,
-  Configuration, Daemon Log.
+  Icon Editor, Configuration, Daemon Log.
 - **Special** — Join… (pair another exe machine), Cloudflare Status and
   Setup Wizard, Set API Token….
 - **Help** — this page, and the Agent Skill Guide for handing exe to a
@@ -34,6 +34,16 @@ a window here moves it on your other screens too.
 On a phone the desktop becomes a home screen of icons and windows go
 fullscreen, one at a time; closing a window walks back through the stack
 like a phone's back button.
+
+Every system icon is hand-plotted pixel art, and **Windows → Icon Editor**
+lets you repaint it: the gallery lists each one (the VM Mac, folders,
+documents, the Trash, the minis in search results, even the Apple menu),
+and double-clicking opens a fat-bits editor — pencil, eraser, eyedropper,
+fill, undo, the Platinum palette plus a custom color well. Save applies the
+art everywhere at once, follows the desk into every browser and joined
+node, and survives restarts; Revert brings the factory icon back. On a VM
+icon, pixels painted the factory screen-green keep changing color with the
+VM's state.
 
 ## Virtual machines
 

@@ -279,6 +279,49 @@ a { color: #202a87; text-decoration: underline; }
   display: flex; align-items: center; justify-content: center; }
 .iv-box img { display: block; max-width: 100%; max-height: 100%; }
 
+/* ---------- Icon Editor ----------
+   A system app over the UI's own pixel icons: a Finder-style gallery of
+   every built-in crispEdges SVG, and a fat-bits editor window per icon.
+   Custom art is stored in the daemon's System app-data (icons.json). */
+/* gallery tiles: small icons (15/16px minis) center in the same 32px box
+   the full-size SVGs fill, so the grid keeps one rhythm */
+.ic-box { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+.icx-body { display: flex; gap: 10px; padding: 10px; }
+.icx-canvas-box { align-self: flex-start; line-height: 0; background: #fff;
+  border: 1px solid var(--black);
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+.icx-canvas-box canvas { cursor: crosshair; touch-action: none; }
+.icx-side { width: 148px; flex: none; display: flex; flex-direction: column; gap: 8px; }
+.icx-tools { display: flex; gap: 4px; }
+/* doubled class outweighs the later button.ghost padding rule */
+button.ghost.icx-tool { width: 25px; height: 25px; padding: 0;
+  display: flex; align-items: center; justify-content: center; }
+/* the armed tool stays pressed, same rows as a held-down Platinum button */
+button.ghost.icx-tool.sel { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+.icx-pal { display: flex; flex-wrap: wrap; gap: 2px; align-content: flex-start; }
+.icx-sw { width: 16px; height: 16px; flex: none; border: 1px solid var(--black);
+  background-color: #fff; }
+/* the transparent swatch: checker under a red slash */
+.icx-sw.none { background-image:
+  linear-gradient(45deg, transparent 44%, #c33 44%, #c33 56%, transparent 56%),
+  conic-gradient(#fff 25%, #ddd 0 50%, #fff 0 75%, #ddd 0); }
+.icx-sw.sel { outline: 2px solid var(--hl); outline-offset: 0; position: relative; z-index: 1; }
+input.icx-custom { width: 34px; height: 18px; padding: 1px; }
+/* live previews at natural size: on paper, and on the desktop (where icons
+   carry the 1px drop shadow) */
+.icx-prevs { display: flex; gap: 6px; align-items: center; margin-top: auto; }
+.icx-prev { width: 44px; height: 44px; flex: none; background: #fff; border: 1px solid var(--black);
+  display: flex; align-items: center; justify-content: center; }
+.icx-prev-desk { background: #6b6b9f; }
+.icx-prev-desk svg { filter: drop-shadow(1px 1px 0 rgba(0,0,0,.4)); }
+.icx-note { font-size: 10px; color: #555; }
+/* phones: the fullscreen window is narrower than canvas + side panel, so
+   the panel wraps below the canvas */
+body.mobile .icx-body { flex-wrap: wrap; }
+
 /* sunken content frame, inset 4px into the platinum chrome */
 .win-frame { margin: 0 4px 4px; border: 1px solid var(--black); background: var(--g300);
   position: relative;
@@ -821,6 +864,7 @@ body.mobile th.sorted {
   <div class="dd-item" data-act="winmyapps">My Apps</div>
   <div class="dd-item" data-act="winchat" id="dd-chat-item" hidden>Chat</div>
   <div class="dd-item" data-act="winnews">Newsfeed</div>
+  <div class="dd-item" data-act="winicons">Icon Editor</div>
   <div class="dd-item" data-act="winconfig">Configuration</div>
   <div class="dd-item" data-act="winlog">Daemon Log</div>
 </div>
@@ -1269,6 +1313,26 @@ body.mobile th.sorted {
     </div>
   </div>
 
+  <!-- Icon Editor: a Finder-style gallery of the system's pixel icons;
+       double-click one to repaint it in a fat-bits editor window -->
+  <div class="window grow" id="win-icons" style="left:210px; top:96px; width:560px;" hidden>
+    <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title">Icon Editor</div>
+      <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
+    <div class="win-frame">
+      <div class="finder-status"><span id="ic-items">…</span></div>
+      <div class="finder-icons doc-scroll" id="ic-gallery"></div>
+      <svg id="ic-grow" class="grow-box" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
+        <rect width="15" height="15" fill="#ccc"/>
+        <path fill="#000" d="M0 0h15v1H0zM0 1h1v14H0z"/>
+        <path fill="#fff" d="M1 1h14v1H1zM1 2h1v13H1z"/>
+        <path fill="#fff" d="M9 4h2v1H9zM8 5h1v1H8zM7 6h1v1H7zM6 7h1v1H6zM5 8h1v1H5zM4 9h1v1H4zM11 6h2v1h-2zM10 7h1v1h-1zM9 8h1v1H9zM8 9h1v1H8zM7 10h1v1H7zM6 11h1v1H6zM13 8h2v1h-2zM12 9h1v1h-1zM11 10h1v1h-1zM10 11h1v1h-1zM9 12h1v1H9zM8 13h1v1H8z"/>
+        <path fill="#777" d="M10 5h1v1h-1zM9 6h1v1H9zM8 7h1v1H8zM7 8h1v1H7zM6 9h1v1H6zM5 10h1v1H5zM12 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM9 10h1v1H9zM8 11h1v1H8zM7 12h1v1H7zM14 9h1v1h-1zM13 10h1v1h-1zM12 11h1v1h-1zM11 12h1v1h-1zM10 13h1v1h-1zM9 14h1v1H9z"/>
+        <path fill="#aaa" d="M4 10h1v1H4zM6 12h1v1H6zM8 14h1v1H8z"/>
+      </svg>
+    </div>
+  </div>
+
   <!-- Global Search: the menubar magnifier. One box searches VMs, chat
        sessions, Notes and Todo; each row's 16×16 pixel icon names its type. -->
   <div class="window" id="win-search" style="left:250px; top:46px; width:440px;" hidden>
@@ -1573,9 +1637,9 @@ function mobileSwapIn(w) {
 // local only, never mixed into the shared desktop layout snapshot. Live
 // terminals and transient dialogs don't restore; win-detail needs the VM
 // name, carried alongside.
-const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps"]);
+const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps", "win-icons"]);
 const mobRestorable = id => MOB_RESTORE.has(id)
-  || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-");
+  || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-ic-");
 function mobSave() {
   const vis = [...document.querySelectorAll("#desktop .window")].find(w => !w.hidden && !MOB_DIALOG.has(w.id));
   localStorage.setItem("exe_mobile_winstate", JSON.stringify({
@@ -1600,6 +1664,7 @@ function mobRestore() {
     else if (id.startsWith("win-ws-")) openFinderWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-ed-")) openEditorWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-iv-")) openImageWin(decodeURIComponent(id.slice(7)));
+    else if (id.startsWith("win-ic-")) openIconEditor(id.slice(7));
     else (WIN_OPENERS[id] || (() => openWin("#" + id)))();
   }
 }
@@ -1786,6 +1851,7 @@ function wireGrow(grip, w, body, minW, opts = {}) {
 wireGrow($("#chat-grow"), $("#win-chat"), $(".chat-wrap"), 560, { minH: 240, stickEl: $("#chat-msgs") });
 wireGrow($("#news-grow"), $("#win-news"), $("#news-list"), 320, { minH: 160 });
 wireGrow($("#ma-grow"), $("#win-myapps"), $("#ma-icons"), 320);
+wireGrow($("#ic-grow"), $("#win-icons"), $("#ic-gallery"), 400);
 wireGrow($("#docs-grow"), $("#win-docs"), $("#docs-body"), 420, { minH: 160 });
 // Virtual Machines has no grow corner (its statusbar is full of buttons),
 // but the edges resize it: width, and the list body's height
@@ -1821,8 +1887,8 @@ autoVBar($("#sess-list"));
 const WIN_CLIENT = Math.random().toString(36).slice(2) + Date.now().toString(36);
 // windows whose open/closed state is restored and synced; win-detail needs a
 // current VM and the dialogs are transient, so those only keep geometry
-const WIN_SYNC_OPEN = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-docs", "win-myapps"]);
-const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin(), "win-myapps": () => openMyAppsWin() };
+const WIN_SYNC_OPEN = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-docs", "win-myapps", "win-icons"]);
+const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin(), "win-myapps": () => openMyAppsWin(), "win-icons": () => openIconsWin() };
 let winApplying = false; // applying a stored/remote snapshot — don't echo it back
 let winDragging = null;  // window under the local pointer — remote moves lose
 let winRev = 0;
@@ -1880,6 +1946,13 @@ function applyWinState(st) {
         else if (w && !v.open && !w.hidden) closeWin(w);
         continue;
       }
+      if (id.startsWith("win-ic-")) {
+        // icon-editor windows: on demand too, keyed by the icon name
+        if (v.open && !w) openIconEditor(id.slice(7));
+        else if (w && v.open && w.hidden) openWin(w);
+        else if (w && !v.open && !w.hidden) closeWin(w);
+        continue;
+      }
       if (!w || !WIN_SYNC_OPEN.has(id)) continue;
       if (v.open && w.hidden) (WIN_OPENERS[id] || (() => openWin(w)))();
       else if (!v.open && !w.hidden) closeWin(w);
@@ -1902,6 +1975,7 @@ function applyWinState(st) {
       if (id === "win-news" && v.h) $("#news-list").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-docs" && v.h) $("#docs-body").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-myapps" && v.h) $("#ma-icons").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
+      if (id === "win-icons" && v.h) $("#ic-gallery").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       // vms/config/detail carry h only once edge-resized — an absent h means
       // natural content height, so clear any leftover pin instead of keeping it
       if (id === "win-vms") $("#win-vms .win-body").style.height = v.h ? Math.max(120, Math.min(window.innerHeight - 170, v.h)) + "px" : "";
@@ -2019,6 +2093,7 @@ const ACTIONS = {
   },
   winvms: () => openWin("#win-vms"),
   winmyapps: () => openMyAppsWin(),
+  winicons: () => openIconsWin(),
   winchat: () => openChatWin(),
   winnews: () => openNewsWin(),
   winconfig: openConfigWin,
@@ -2135,19 +2210,27 @@ setInterval(tickClock, 10000);
 // One window searches everything: VMs, chat sessions, and the Notes and
 // Todo apps' data files. Picking a result closes the window and opens the
 // thing itself — the VM detail, the chat session, or the app.
-const MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+// custom system icons (Icon Editor): key -> SVG override, mirrored from the
+// daemon's System app-data store; every icon variable below is `let` so an
+// override (or its removal) can swap the art in place. Declared here, above
+// the first macIcon() call, so the override lookups never hit the TDZ.
+let iconOv = {};
+// stamp a custom icon's frame size — overrides are saved at their natural
+// grid, but the About box shows the VM at 44px like the factory art does
+const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="${size}" height="${size}"`);
+let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
   <path d="M4.5 10.5 v3 l3 -3 z" fill="#DAD5CA" stroke="#000"/>
   <rect x="4" y="5" width="8" height="1" fill="#55524B"/>
   <rect x="4" y="7" width="5" height="1" fill="#55524B"/>
 </svg>`;
-const MINI_NOTE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+let MINI_NOTE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <path fill="#ffff99" stroke="#000" d="M2.5 1.5h8l3 3v10h-11z"/>
   <path fill="#cc9933" stroke="#000" d="M10.5 1.5v3h3z"/>
   <path fill="#ddbb55" d="M4 7h8v1H4zM4 10h8v1H4z"/>
   <path fill="#ff8888" d="M5 2h1v12H5z"/>
 </svg>`;
-const MINI_TODO_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+let MINI_TODO_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="2.5" y="0.5" width="11" height="15" fill="#fff" stroke="#000"/>
   <rect x="3" y="1" width="10" height="1" fill="#DAD5CA"/>
   <rect x="4.5" y="3.5" width="4" height="4" fill="#fff" stroke="#000"/>
@@ -2156,8 +2239,12 @@ const MINI_TODO_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-re
   <rect x="4.5" y="9.5" width="4" height="4" fill="#fff" stroke="#000"/>
   <rect x="10" y="11" width="2" height="1" fill="#55524B"/>
 </svg>`;
-// the desktop's compact Mac at 16px, screen tinted by VM state
+// the desktop's compact Mac at 16px, screen tinted by VM state; a custom
+// icon keeps the tint — any pixel painted the factory running-green is the
+// screen, and follows the state
 function miniMacIcon(state) {
+  const ov = iconOv["vm-mini"];
+  if (ov) return ov.replace(/#7fd67f/gi, SCREEN_COLORS[state] || "#3A3F46");
   return `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
     <rect x="3.5" y="0.5" width="9" height="12" fill="#DAD5CA" stroke="#000"/>
     <rect x="5.5" y="2.5" width="5" height="5" fill="${SCREEN_COLORS[state] || "#3A3F46"}" stroke="#000"/>
@@ -2274,6 +2361,8 @@ $("#search-input").addEventListener("keydown", e => {
 const SCREEN_COLORS = { running: "#7FD67F", starting: "#E8B34B", stopping: "#E8B34B", stopped: "#3A3F46", error: "#D66A6A" };
 function macIcon(state, size) {
   const c = SCREEN_COLORS[state] || "#3A3F46";
+  const ov = iconOv["vm"];
+  if (ov) return sizeSvg(ov, size).replace(/#7fd67f/gi, c);
   return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" shape-rendering="crispEdges">
     <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
     <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
@@ -2347,21 +2436,21 @@ function renderIcons(vms) {
 
 // ---- desktop apps (folders in ~/.exe/apps with app.json + index.html) ----
 let appsList = [];
-const APP_FALLBACK_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+let APP_FALLBACK_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path d="M16 2.5 L29.5 16 L16 29.5 L2.5 16 Z" fill="#DAD5CA" stroke="#000"/>
   <path d="M16 8.5 L23.5 16 L16 23.5 L8.5 16 Z" fill="#9C9AF2" stroke="#000"/>
 </svg>`;
 // OS 9 folder, downsampled pixel-for-pixel from a real Mac OS 9 Finder
 // capture (Macintosh HD window): lavender perspective folder, navy outline,
 // quantized to the sampled 9-color ramp and run-length encoded per color.
-const FOLDER_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges"><g transform="translate(0 0)"><path fill="#6666be" d="M2 0h1v1h-1zM4 1h1v1h-1zM0 2h2v1h-2zM6 2h1v1h-1zM0 3h1v1h-1zM8 3h1v1h-1zM0 4h1v1h-1zM10 4h1v1h-1zM0 5h1v1h-1zM12 5h1v1h-1zM15 5h1v1h-1zM17 5h1v1h-1zM0 6h1v1h-1zM14 6h1v1h-1zM19 6h1v1h-1zM21 7h1v1h-1zM15 8h1v1h-1zM17 9h1v1h-1zM22 9h1v1h-1zM19 10h1v1h-1zM21 11h1v1h-1zM23 11h1v1h-1zM22 12h2v1h-2zM23 13h1v1h-1zM23 14h1v1h-1zM19 29h1v1h-1zM21 30h1v1h-1z"/><path fill="#4c4c96" d="M3 0h1v1h-1zM2 1h1v1h-1zM5 1h1v1h-1zM7 2h1v1h-1zM3 3h1v1h-1zM9 3h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM7 5h1v1h-1zM13 5h1v1h-1zM18 5h1v1h-1zM9 6h1v1h-1zM20 6h1v1h-1zM0 7h1v1h-1zM11 7h1v1h-1zM0 8h1v1h-1zM13 8h1v1h-1zM22 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM0 10h1v1h-1zM17 10h1v1h-1zM23 10h1v1h-1zM0 11h1v1h-1zM19 11h1v1h-1zM0 12h1v1h-1zM0 13h1v1h-1zM0 14h1v1h-1zM0 15h1v1h-1zM23 15h1v1h-1zM0 16h1v1h-1zM23 16h1v1h-1zM0 17h1v1h-1zM23 17h1v1h-1zM0 18h1v1h-1zM23 18h1v1h-1zM0 19h1v1h-1zM23 19h1v1h-1zM0 20h1v1h-1zM23 20h1v1h-1zM2 21h1v1h-1zM23 21h1v1h-1zM4 22h1v1h-1zM23 22h1v1h-1zM6 23h1v1h-1zM23 23h1v1h-1zM8 24h1v1h-1zM23 24h1v1h-1zM10 25h1v1h-1zM23 25h1v1h-1zM12 26h1v1h-1zM23 26h1v1h-1zM14 27h1v1h-1zM23 27h1v1h-1zM16 28h1v1h-1zM23 28h1v1h-1zM18 29h1v1h-1zM23 29h1v1h-1zM20 30h1v1h-1zM23 30h1v1h-1z"/><path fill="#30305e" d="M4 0h1v1h-1zM6 1h1v1h-1zM2 2h1v1h-1zM8 2h1v1h-1zM4 3h1v1h-1zM10 3h1v1h-1zM6 4h1v1h-1zM12 4h1v1h-1zM15 4h3v1h-3zM8 5h1v1h-1zM14 5h1v1h-1zM19 5h1v1h-1zM10 6h1v1h-1zM21 6h1v1h-1zM12 7h1v1h-1zM22 7h1v1h-1zM14 8h1v1h-1zM16 9h1v1h-1zM23 9h1v1h-1zM18 10h1v1h-1zM24 10h1v1h-1zM20 11h1v1h-1zM21 12h1v1h-1zM22 13h1v1h-1zM22 14h1v1h-1zM22 15h1v1h-1zM22 16h1v1h-1zM22 17h1v1h-1zM22 18h1v1h-1zM22 19h1v1h-1zM22 20h1v1h-1zM1 21h1v1h-1zM22 21h1v1h-1zM3 22h1v1h-1zM22 22h1v1h-1zM5 23h1v1h-1zM22 23h1v1h-1zM25 23h2v1h-2zM7 24h1v1h-1zM22 24h1v1h-1zM25 24h3v1h-3zM9 25h1v1h-1zM22 25h1v1h-1zM25 25h2v1h-2zM11 26h1v1h-1zM22 26h1v1h-1zM25 26h1v1h-1zM13 27h1v1h-1zM22 27h1v1h-1zM15 28h1v1h-1zM22 28h1v1h-1zM17 29h1v1h-1zM22 29h1v1h-1zM19 30h1v1h-1zM22 30h1v1h-1zM21 31h1v1h-1z"/><path fill="#9a9af4" d="M3 1h1v1h-1zM4 2h2v1h-2zM6 3h2v1h-2zM8 4h2v1h-2zM10 5h2v1h-2zM16 5h1v1h-1zM12 6h1v1h-1zM15 6h1v1h-1zM2 20h1v1h-1zM20 20h1v1h-1zM4 21h1v1h-1zM19 21h2v1h-2zM6 22h1v1h-1zM18 22h3v1h-3zM8 23h1v1h-1zM17 23h4v1h-4zM10 24h1v1h-1zM16 24h5v1h-5zM12 25h1v1h-1zM15 25h6v1h-6zM14 26h7v1h-7zM16 27h5v1h-5zM18 28h3v1h-3z"/><path fill="#8080dc" d="M3 2h1v1h-1zM2 3h1v1h-1zM5 3h1v1h-1zM4 4h1v1h-1zM7 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM8 6h1v1h-1zM11 6h1v1h-1zM13 6h1v1h-1zM16 6h3v1h-3zM10 7h1v1h-1zM13 7h8v1h-8zM12 8h1v1h-1zM16 8h6v1h-6zM14 9h1v1h-1zM18 9h4v1h-4zM16 10h1v1h-1zM20 10h3v1h-3zM18 11h1v1h-1zM22 11h1v1h-1zM20 12h1v1h-1zM21 14h1v1h-1zM21 15h1v1h-1zM21 16h1v1h-1zM21 17h1v1h-1zM21 18h1v1h-1zM21 19h1v1h-1zM1 20h1v1h-1zM21 20h1v1h-1zM3 21h1v1h-1zM21 21h1v1h-1zM5 22h1v1h-1zM21 22h1v1h-1zM7 23h1v1h-1zM21 23h1v1h-1zM9 24h1v1h-1zM21 24h1v1h-1zM11 25h1v1h-1zM21 25h1v1h-1zM13 26h1v1h-1zM21 26h1v1h-1zM15 27h1v1h-1zM21 27h1v1h-1zM17 28h1v1h-1zM21 28h1v1h-1zM20 29h2v1h-2z"/><path fill="#ececfd" d="M1 3h1v1h-1zM3 4h1v1h-1z"/><path fill="#d2d2fa" d="M1 4h2v1h-2zM1 5h5v1h-5zM1 6h7v1h-7zM1 7h9v1h-9zM1 8h7v1h-7zM11 8h1v1h-1zM1 9h5v1h-5zM13 9h1v1h-1zM1 10h5v1h-5zM15 10h1v1h-1zM1 11h4v1h-4zM17 11h1v1h-1zM1 12h3v1h-3zM19 12h1v1h-1zM1 13h2v1h-2zM21 13h1v1h-1zM1 14h1v1h-1z"/><path fill="#b6b6f4" d="M8 8h3v1h-3zM6 9h7v1h-7zM6 10h9v1h-9zM5 11h12v1h-12zM4 12h15v1h-15zM3 13h18v1h-18zM2 14h19v1h-19zM1 15h20v1h-20zM1 16h20v1h-20zM1 17h20v1h-20zM1 18h20v1h-20zM1 19h20v1h-20zM3 20h17v1h-17zM5 21h14v1h-14zM7 22h11v1h-11zM9 23h8v1h-8zM11 24h5v1h-5zM13 25h2v1h-2z"/><path fill="#222244" d="M24 11h1v1h-1zM24 12h1v1h-1zM24 13h1v1h-1zM24 14h1v1h-1zM24 15h1v1h-1zM24 16h1v1h-1zM24 17h1v1h-1zM24 18h1v1h-1zM24 19h1v1h-1zM24 20h1v1h-1zM24 21h1v1h-1zM24 22h1v1h-1zM24 23h1v1h-1zM24 24h1v1h-1zM24 25h1v1h-1zM24 26h1v1h-1zM24 27h1v1h-1zM24 28h1v1h-1zM24 29h1v1h-1zM24 30h1v1h-1zM22 31h2v1h-2z"/><path fill="#000" fill-opacity="0.25" d="M25 20h1v1h-1zM27 21h1v1h-1zM29 22h1v1h-1zM30 26h1v1h-1zM29 27h1v1h-1zM28 28h1v1h-1zM27 29h1v1h-1zM26 30h1v1h-1zM25 31h1v1h-1z"/><path fill="#000" fill-opacity="0.5" d="M25 21h1v1h-1zM25 22h3v1h-3zM27 23h2v1h-2zM28 24h2v1h-2zM27 25h3v1h-3zM26 26h3v1h-3zM25 27h3v1h-3zM25 28h2v1h-2zM25 29h1v1h-1zM24 31h1v1h-1z"/><path fill="#000" fill-opacity="0.4" d="M26 21h1v1h-1zM28 22h1v1h-1zM30 25h1v1h-1z"/><path fill="#000" fill-opacity="0.45" d="M29 23h1v1h-1zM30 24h1v1h-1zM29 26h1v1h-1zM28 27h1v1h-1zM27 28h1v1h-1zM26 29h1v1h-1zM25 30h1v1h-1z"/><path fill="#000" fill-opacity="0.35" d="M30 23h1v1h-1z"/><path fill="#000" fill-opacity="0.2" d="M31 24h1v1h-1z"/></g></svg>`;
+let FOLDER_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges"><g transform="translate(0 0)"><path fill="#6666be" d="M2 0h1v1h-1zM4 1h1v1h-1zM0 2h2v1h-2zM6 2h1v1h-1zM0 3h1v1h-1zM8 3h1v1h-1zM0 4h1v1h-1zM10 4h1v1h-1zM0 5h1v1h-1zM12 5h1v1h-1zM15 5h1v1h-1zM17 5h1v1h-1zM0 6h1v1h-1zM14 6h1v1h-1zM19 6h1v1h-1zM21 7h1v1h-1zM15 8h1v1h-1zM17 9h1v1h-1zM22 9h1v1h-1zM19 10h1v1h-1zM21 11h1v1h-1zM23 11h1v1h-1zM22 12h2v1h-2zM23 13h1v1h-1zM23 14h1v1h-1zM19 29h1v1h-1zM21 30h1v1h-1z"/><path fill="#4c4c96" d="M3 0h1v1h-1zM2 1h1v1h-1zM5 1h1v1h-1zM7 2h1v1h-1zM3 3h1v1h-1zM9 3h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM7 5h1v1h-1zM13 5h1v1h-1zM18 5h1v1h-1zM9 6h1v1h-1zM20 6h1v1h-1zM0 7h1v1h-1zM11 7h1v1h-1zM0 8h1v1h-1zM13 8h1v1h-1zM22 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM0 10h1v1h-1zM17 10h1v1h-1zM23 10h1v1h-1zM0 11h1v1h-1zM19 11h1v1h-1zM0 12h1v1h-1zM0 13h1v1h-1zM0 14h1v1h-1zM0 15h1v1h-1zM23 15h1v1h-1zM0 16h1v1h-1zM23 16h1v1h-1zM0 17h1v1h-1zM23 17h1v1h-1zM0 18h1v1h-1zM23 18h1v1h-1zM0 19h1v1h-1zM23 19h1v1h-1zM0 20h1v1h-1zM23 20h1v1h-1zM2 21h1v1h-1zM23 21h1v1h-1zM4 22h1v1h-1zM23 22h1v1h-1zM6 23h1v1h-1zM23 23h1v1h-1zM8 24h1v1h-1zM23 24h1v1h-1zM10 25h1v1h-1zM23 25h1v1h-1zM12 26h1v1h-1zM23 26h1v1h-1zM14 27h1v1h-1zM23 27h1v1h-1zM16 28h1v1h-1zM23 28h1v1h-1zM18 29h1v1h-1zM23 29h1v1h-1zM20 30h1v1h-1zM23 30h1v1h-1z"/><path fill="#30305e" d="M4 0h1v1h-1zM6 1h1v1h-1zM2 2h1v1h-1zM8 2h1v1h-1zM4 3h1v1h-1zM10 3h1v1h-1zM6 4h1v1h-1zM12 4h1v1h-1zM15 4h3v1h-3zM8 5h1v1h-1zM14 5h1v1h-1zM19 5h1v1h-1zM10 6h1v1h-1zM21 6h1v1h-1zM12 7h1v1h-1zM22 7h1v1h-1zM14 8h1v1h-1zM16 9h1v1h-1zM23 9h1v1h-1zM18 10h1v1h-1zM24 10h1v1h-1zM20 11h1v1h-1zM21 12h1v1h-1zM22 13h1v1h-1zM22 14h1v1h-1zM22 15h1v1h-1zM22 16h1v1h-1zM22 17h1v1h-1zM22 18h1v1h-1zM22 19h1v1h-1zM22 20h1v1h-1zM1 21h1v1h-1zM22 21h1v1h-1zM3 22h1v1h-1zM22 22h1v1h-1zM5 23h1v1h-1zM22 23h1v1h-1zM25 23h2v1h-2zM7 24h1v1h-1zM22 24h1v1h-1zM25 24h3v1h-3zM9 25h1v1h-1zM22 25h1v1h-1zM25 25h2v1h-2zM11 26h1v1h-1zM22 26h1v1h-1zM25 26h1v1h-1zM13 27h1v1h-1zM22 27h1v1h-1zM15 28h1v1h-1zM22 28h1v1h-1zM17 29h1v1h-1zM22 29h1v1h-1zM19 30h1v1h-1zM22 30h1v1h-1zM21 31h1v1h-1z"/><path fill="#9a9af4" d="M3 1h1v1h-1zM4 2h2v1h-2zM6 3h2v1h-2zM8 4h2v1h-2zM10 5h2v1h-2zM16 5h1v1h-1zM12 6h1v1h-1zM15 6h1v1h-1zM2 20h1v1h-1zM20 20h1v1h-1zM4 21h1v1h-1zM19 21h2v1h-2zM6 22h1v1h-1zM18 22h3v1h-3zM8 23h1v1h-1zM17 23h4v1h-4zM10 24h1v1h-1zM16 24h5v1h-5zM12 25h1v1h-1zM15 25h6v1h-6zM14 26h7v1h-7zM16 27h5v1h-5zM18 28h3v1h-3z"/><path fill="#8080dc" d="M3 2h1v1h-1zM2 3h1v1h-1zM5 3h1v1h-1zM4 4h1v1h-1zM7 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM8 6h1v1h-1zM11 6h1v1h-1zM13 6h1v1h-1zM16 6h3v1h-3zM10 7h1v1h-1zM13 7h8v1h-8zM12 8h1v1h-1zM16 8h6v1h-6zM14 9h1v1h-1zM18 9h4v1h-4zM16 10h1v1h-1zM20 10h3v1h-3zM18 11h1v1h-1zM22 11h1v1h-1zM20 12h1v1h-1zM21 14h1v1h-1zM21 15h1v1h-1zM21 16h1v1h-1zM21 17h1v1h-1zM21 18h1v1h-1zM21 19h1v1h-1zM1 20h1v1h-1zM21 20h1v1h-1zM3 21h1v1h-1zM21 21h1v1h-1zM5 22h1v1h-1zM21 22h1v1h-1zM7 23h1v1h-1zM21 23h1v1h-1zM9 24h1v1h-1zM21 24h1v1h-1zM11 25h1v1h-1zM21 25h1v1h-1zM13 26h1v1h-1zM21 26h1v1h-1zM15 27h1v1h-1zM21 27h1v1h-1zM17 28h1v1h-1zM21 28h1v1h-1zM20 29h2v1h-2z"/><path fill="#ececfd" d="M1 3h1v1h-1zM3 4h1v1h-1z"/><path fill="#d2d2fa" d="M1 4h2v1h-2zM1 5h5v1h-5zM1 6h7v1h-7zM1 7h9v1h-9zM1 8h7v1h-7zM11 8h1v1h-1zM1 9h5v1h-5zM13 9h1v1h-1zM1 10h5v1h-5zM15 10h1v1h-1zM1 11h4v1h-4zM17 11h1v1h-1zM1 12h3v1h-3zM19 12h1v1h-1zM1 13h2v1h-2zM21 13h1v1h-1zM1 14h1v1h-1z"/><path fill="#b6b6f4" d="M8 8h3v1h-3zM6 9h7v1h-7zM6 10h9v1h-9zM5 11h12v1h-12zM4 12h15v1h-15zM3 13h18v1h-18zM2 14h19v1h-19zM1 15h20v1h-20zM1 16h20v1h-20zM1 17h20v1h-20zM1 18h20v1h-20zM1 19h20v1h-20zM3 20h17v1h-17zM5 21h14v1h-14zM7 22h11v1h-11zM9 23h8v1h-8zM11 24h5v1h-5zM13 25h2v1h-2z"/><path fill="#222244" d="M24 11h1v1h-1zM24 12h1v1h-1zM24 13h1v1h-1zM24 14h1v1h-1zM24 15h1v1h-1zM24 16h1v1h-1zM24 17h1v1h-1zM24 18h1v1h-1zM24 19h1v1h-1zM24 20h1v1h-1zM24 21h1v1h-1zM24 22h1v1h-1zM24 23h1v1h-1zM24 24h1v1h-1zM24 25h1v1h-1zM24 26h1v1h-1zM24 27h1v1h-1zM24 28h1v1h-1zM24 29h1v1h-1zM24 30h1v1h-1zM22 31h2v1h-2z"/><path fill="#000" fill-opacity="0.25" d="M25 20h1v1h-1zM27 21h1v1h-1zM29 22h1v1h-1zM30 26h1v1h-1zM29 27h1v1h-1zM28 28h1v1h-1zM27 29h1v1h-1zM26 30h1v1h-1zM25 31h1v1h-1z"/><path fill="#000" fill-opacity="0.5" d="M25 21h1v1h-1zM25 22h3v1h-3zM27 23h2v1h-2zM28 24h2v1h-2zM27 25h3v1h-3zM26 26h3v1h-3zM25 27h3v1h-3zM25 28h2v1h-2zM25 29h1v1h-1zM24 31h1v1h-1z"/><path fill="#000" fill-opacity="0.4" d="M26 21h1v1h-1zM28 22h1v1h-1zM30 25h1v1h-1z"/><path fill="#000" fill-opacity="0.45" d="M29 23h1v1h-1zM30 24h1v1h-1zM29 26h1v1h-1zM28 27h1v1h-1zM27 28h1v1h-1zM26 29h1v1h-1zM25 30h1v1h-1z"/><path fill="#000" fill-opacity="0.35" d="M30 23h1v1h-1z"/><path fill="#000" fill-opacity="0.2" d="M31 24h1v1h-1z"/></g></svg>`;
 // OS 9 generic document: white page, black outline, folded top-right corner
-const DOC_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+let DOC_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
   <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
 </svg>`;
 // image document: the page with a framed landscape — sun over two hills
-const IMAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+let IMAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
   <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
   <rect x="9.5" y="12.5" width="13" height="12" fill="#9cf" stroke="#000"/>
@@ -2370,7 +2459,7 @@ const IMAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-render
   <path fill="#363" d="M18 17h1v1h-1zM17 18h3v1h-3zM16 19h5v1h-5zM15 20h7v1h-7zM14 21h8v1h-8zM13 22h9v1h-9zM12 23h10v1h-10z"/>
 </svg>`;
 // archive document (zip/dmg/rar/7z): the page with a zipper down the middle
-const ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+let ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
   <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
   <rect x="11.5" y="3.5" width="5" height="25" fill="#eee" stroke="#000"/>
@@ -2381,7 +2470,7 @@ const fileIcon = en => en.dir ? FOLDER_ICON
   : isImageFile(en.name) ? IMAGE_ICON
   : isArchiveFile(en.name) ? ARCHIVE_ICON : DOC_ICON;
 // host Terminal: the compact Mac with a dark screen showing a green prompt
-const TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+let TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
   <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
   <rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
@@ -2660,6 +2749,412 @@ async function maLoadIcon(it, host) {
       onload: () => URL.revokeObjectURL(u), onerror: () => URL.revokeObjectURL(u) });
     it.firstElementChild.replaceWith(img);
   } catch (e) {}
+}
+
+// ---- Icon Editor: the system's pixel icons, repaintable in place ----
+// Every built-in icon is a crispEdges SVG plotted on a small integer grid.
+// The gallery lists them all; opening one rasterizes the SVG back into its
+// grid, the editor repaints it pixel by pixel, and Save serializes the grid
+// into the same run-length SVG style and stores it in the daemon's System
+// app-data (icons.json) — so custom art survives restarts, lands on every
+// browser sharing this desk, and syncs to joined nodes like any app data.
+const ICON_DEFS = [
+  { key: "vm", label: "VM", size: 32, get: () => macIcon("running", 32),
+    note: "the green screen follows each VM's state" },
+  { key: "terminal", label: "Terminal", size: 32, get: () => TERMINAL_ICON, set: s => TERMINAL_ICON = s },
+  { key: "folder", label: "Folder", size: 32, get: () => FOLDER_ICON, set: s => FOLDER_ICON = s },
+  { key: "doc", label: "Document", size: 32, get: () => DOC_ICON, set: s => DOC_ICON = s },
+  { key: "image", label: "Image File", size: 32, get: () => IMAGE_ICON, set: s => IMAGE_ICON = s },
+  { key: "archive", label: "Archive", size: 32, get: () => ARCHIVE_ICON, set: s => ARCHIVE_ICON = s },
+  { key: "app", label: "App", size: 32, get: () => APP_FALLBACK_ICON, set: s => APP_FALLBACK_ICON = s },
+  { key: "news", label: "Newsfeed", size: 32, dom: "#news-icon svg" },
+  { key: "chat", label: "Chat", size: 32, dom: "#chat-icon svg" },
+  { key: "trash", label: "Trash", size: 32, dom: "#trash-icon svg" },
+  { key: "vm-mini", label: "VM (mini)", size: 16, get: () => miniMacIcon("running"),
+    note: "the green screen follows each VM's state" },
+  { key: "chat-mini", label: "Chat (mini)", size: 16, get: () => MINI_CHAT_ICON, set: s => MINI_CHAT_ICON = s },
+  { key: "note-mini", label: "Note (mini)", size: 16, get: () => MINI_NOTE_ICON, set: s => MINI_NOTE_ICON = s },
+  { key: "todo-mini", label: "Todo (mini)", size: 16, get: () => MINI_TODO_ICON, set: s => MINI_TODO_ICON = s },
+  // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
+  // custom SVG gets its display size re-stamped on the way into the DOM
+  { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
+  { key: "search", label: "Search", size: 15, dom: "#search-btn svg" },
+];
+// factory art, captured before any override can land
+const ICON_FACTORY = {};
+for (const d of ICON_DEFS) ICON_FACTORY[d.key] = d.dom ? $(d.dom).outerHTML : d.get();
+const iconCurrent = k => iconOv[k] || ICON_FACTORY[k];
+const putIcons = () => j("/v1/apps/System/data/icons.json", {
+  method: "PUT", json: { icons: iconOv }, headers: { "X-Exe-Seq": String(Date.now()) },
+});
+
+// land a new override set: swap the art everywhere, then repaint whatever
+// already drew from it
+function applyIconOverrides(ovs) {
+  iconOv = ovs || {};
+  for (const d of ICON_DEFS) {
+    const svg = iconCurrent(d.key);
+    if (d.set) d.set(svg);
+    if (d.dom) { const n = $(d.dom); if (n) n.outerHTML = d.disp ? sizeSvg(svg, d.disp) : svg; }
+  }
+  renderIcons(lastVMs);
+  $("#about-icon").innerHTML = macIcon("running", 44);
+  document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
+  if (!$("#win-myapps").hidden) loadMyApps().catch(() => {});
+  if (!$("#win-search").hidden) renderSearch();
+  if (!$("#win-icons").hidden) renderIconGallery();
+}
+async function loadIcons() {
+  const d = await j("/v1/apps/System/data/icons.json").catch(() => null);
+  if (d && d.icons && Object.keys(d.icons).length) applyIconOverrides(d.icons);
+}
+// another window or a synced peer changed icons.json — refetch and apply;
+// open editors keep unsaved strokes, clean ones reload the new art
+async function iconsChanged(client) {
+  if (client && client === WIN_CLIENT) return;
+  const d = await j("/v1/apps/System/data/icons.json").catch(() => null);
+  applyIconOverrides((d && d.icons) || {});
+  document.querySelectorAll(".icx-window").forEach(w => { if (w._icx && !w._icx.dirty) icxLoad(w); });
+}
+
+function openIconsWin() { openWin("#win-icons"); renderIconGallery(); }
+function renderIconGallery() {
+  const box = $("#ic-gallery");
+  box.replaceChildren();
+  let custom = 0;
+  for (const d of ICON_DEFS) {
+    if (iconOv[d.key]) custom++;
+    const it = el("div", { class: "fitem", title: `${d.label} — ${d.size}×${d.size} pixels${iconOv[d.key] ? ", customized" : ""}` });
+    const cur = iconCurrent(d.key);
+    it.innerHTML = `<span class="ic-box">${d.disp ? sizeSvg(cur, d.disp) : cur}</span>`;
+    it.append(el("span", { class: "lbl" }, d.label + (iconOv[d.key] ? " •" : "")));
+    const select = () => {
+      box.querySelectorAll(".fitem").forEach(x => x.classList.remove("sel"));
+      it.classList.add("sel");
+    };
+    it.addEventListener("click", e => { e.stopPropagation(); select(); });
+    tapOpen(it, () => openIconEditor(d.key));
+    it.addEventListener("contextmenu", e => {
+      e.preventDefault(); e.stopPropagation();
+      select();
+      showCtxMenu(e.clientX, e.clientY, [
+        { label: "Edit", act: () => openIconEditor(d.key) },
+        { label: "Copy SVG", act: () => copyText(iconCurrent(d.key), d.label + " SVG") },
+        "-",
+        { label: "Revert to Factory", act: () => icxRevert(d), dis: !iconOv[d.key] },
+      ]);
+    });
+    box.append(it);
+  }
+  $("#ic-items").textContent = `${ICON_DEFS.length} icons` + (custom ? `, ${custom} customized` : "");
+}
+
+// rasterize an icon SVG into its pixel grid: draw it 1:1 on a canvas and
+// read the pixels back. crispEdges keeps every cell full or empty, so the
+// round trip is exact; cells are "#rrggbb", "#rrggbb@0.45", or null.
+function svgToGrid(svg, n, cb) {
+  if (!svg.includes("xmlns")) svg = svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ');
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = n; c.height = n;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0, n, n);
+    const px = g.getImageData(0, 0, n, n).data;
+    const grid = new Array(n * n).fill(null);
+    for (let i = 0; i < n * n; i++) {
+      const a = px[i * 4 + 3];
+      if (a < 8) continue;
+      const hex = "#" + ((1 << 24) | (px[i * 4] << 16) | (px[i * 4 + 1] << 8) | px[i * 4 + 2]).toString(16).slice(1);
+      grid[i] = a > 247 ? hex : hex + "@" + (Math.round(a / 255 * 20) / 20).toFixed(2);
+    }
+    cb(grid);
+  };
+  img.onerror = () => cb(new Array(n * n).fill(null));
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+// serialize a grid back to the house style: per color, one path of
+// horizontal run rects; translucent colors keep their fill-opacity
+function gridToSvg(grid, n) {
+  const paths = new Map();
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; ) {
+    const c = grid[y * n + x];
+    if (!c) { x++; continue; }
+    let len = 1;
+    while (x + len < n && grid[y * n + x + len] === c) len++;
+    paths.set(c, (paths.get(c) || "") + `M${x} ${y}h${len}v1h-${len}z`);
+    x += len;
+  }
+  let out = `<svg width="${n}" height="${n}" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges">`;
+  for (const [c, dd] of paths) {
+    const [hex, a] = c.split("@");
+    out += `<path fill="${hex}"${a ? ` fill-opacity="${a}"` : ""} d="${dd}"/>`;
+  }
+  return out + "</svg>";
+}
+const icxCss = c => {
+  const [hex, a] = c.split("@");
+  if (!a) return hex;
+  const v = parseInt(hex.slice(1), 16);
+  return `rgba(${v >> 16 & 255},${v >> 8 & 255},${v & 255},${a})`;
+};
+
+// tool palette, 15×15 pixel glyphs in the house style (currentColor so the
+// pressed tool inverts): pencil, eraser, eyedropper, paint bucket
+const ICX_TOOLS = [
+  { t: "pencil", tip: "Pencil — paint pixels (right-click erases, ⌥-click picks up a color)",
+    d: "M11 1h3v1h-3zM10 2h3v1h-3zM9 3h3v1h-3zM8 4h3v1h-3zM7 5h3v1h-3zM6 6h3v1h-3zM5 7h3v1h-3zM4 8h3v1h-3zM3 9h3v1h-3zM2 10h3v1h-3zM2 11h2v1h-2zM2 12h1v1h-1z" },
+  { t: "eraser", tip: "Eraser — clear pixels to transparent",
+    d: "M4 4h8v1h-8zM3 5h8v1h-8zM2 6h8v5h-8zM11 5h1v4h-1zM10 6h1v5h-1z" },
+  { t: "picker", tip: "Eyedropper — pick up a color from the icon",
+    d: "M11 1h3v1h-3zM10 2h4v1h-4zM10 3h4v1h-4zM9 4h5v1h-5zM8 5h4v1h-4zM7 6h3v1h-3zM6 7h3v1h-3zM5 8h3v1h-3zM4 9h3v1h-3zM3 10h3v1h-3zM2 11h2v1h-2zM2 12h1v1h-1z" },
+  { t: "fill", tip: "Fill — flood a region with the color",
+    d: "M7 2h3v1h-3zM6 3h1v1h-1zM10 3h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM4 5h9v1h-9zM5 6h7v1h-7zM5 7h7v1h-7zM6 8h5v1h-5zM6 9h5v1h-5zM7 10h3v1h-3zM2 9h2v1h-2zM2 10h4v1h-4zM3 11h4v1h-4z" },
+];
+const ICX_PALETTE = [null,
+  "#000000", "#262626", "#444444", "#666666", "#777777", "#888888", "#999999", "#aaaaaa",
+  "#bbbbbb", "#cccccc", "#dddddd", "#eeeeee", "#ffffff", "#55524b", "#6e6a61", "#8b867b",
+  "#b7b2a7", "#c8c3b8", "#dad5ca", "#edeae2", "#7fd67f", "#33ff33", "#1f9e33", "#336633",
+  "#ffff33", "#ffff99", "#e8b34b", "#cc9933", "#cc8400", "#ff8888", "#cc3333", "#d66a6a",
+  "#99ccff", "#ccccff", "#9c9af2", "#333399", "#3a3f46", "#7a1010", "#ffcccc", "#00cccc",
+];
+
+function openIconEditor(key) {
+  const d = ICON_DEFS.find(x => x.key === key);
+  if (!d) return;
+  const id = "win-ic-" + key;
+  let w = document.getElementById(id);
+  if (!w) {
+    w = el("div", { class: "window icx-window", id });
+    const n = document.querySelectorAll("#desktop .icx-window").length;
+    w.style.left = (160 + n * 26) + "px";
+    w.style.top = (78 + n * 22) + "px";
+    const zoom = d.size >= 32 ? 10 : 14;
+    w.style.width = (d.size * zoom + 192) + "px";
+    w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title"></div>
+      <div class="stripe"></div><button class="tbox shade"></button></div>
+      <div class="win-frame">
+        <div class="icx-body">
+          <div class="icx-canvas-box"><canvas></canvas></div>
+          <div class="icx-side">
+            <div class="icx-tools"></div>
+            <div class="icx-pal"></div>
+            <div class="icx-prevs">
+              <span class="icx-prev"></span><span class="icx-prev icx-prev-desk"></span>
+            </div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span class="icx-pos mono" style="min-width:34px"></span>
+          <span class="icx-note">${d.note || ""}</span>
+          <span style="flex:1"></span>
+          <button class="ghost sm icx-undo">Undo</button>
+          <button class="ghost sm icx-revert danger">Revert</button>
+          <button class="ghost sm icx-save">Save</button>
+        </div>
+      </div>`;
+    w.querySelector(".title").textContent = d.label;
+    $("#desktop").append(w);
+    initWindow(w);
+    icxSetup(w, d, zoom);
+  }
+  openWin(w);
+}
+
+function icxSetup(w, d, zoom) {
+  const st = w._icx = {
+    d, n: d.size, zoom, grid: null, undo: [], dirty: false,
+    color: "#000000", tool: "pencil",
+    canvas: w.querySelector("canvas"), pal: w.querySelector(".icx-pal"),
+    tools: w.querySelector(".icx-tools"), pos: w.querySelector(".icx-pos"),
+    prevs: [...w.querySelectorAll(".icx-prev")],
+  };
+  st.canvas.style.width = st.n * zoom + "px";
+  st.canvas.style.height = st.n * zoom + "px";
+  for (const t of ICX_TOOLS) {
+    const b = el("button", { class: "ghost icx-tool", "data-t": t.t, title: t.tip,
+      onclick: () => icxSelTool(st, t.t) });
+    b.innerHTML = `<svg width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges" fill="currentColor"><path d="${t.d}"/></svg>`;
+    st.tools.append(b);
+  }
+  for (const c of ICX_PALETTE) st.pal.append(icxSwatch(st, c));
+  st.custom = el("input", { class: "icx-custom", type: "color", title: "Custom color…" });
+  st.custom.addEventListener("input", () => {
+    st.color = st.custom.value.toLowerCase();
+    if (st.tool === "eraser" || st.tool === "picker") icxSelTool(st, "pencil");
+    icxSelColor(st);
+  });
+  st.pal.append(st.custom);
+  icxSelTool(st, "pencil");
+  icxSelColor(st);
+
+  const cellAt = e => {
+    const r = st.canvas.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / r.width * st.n);
+    const y = Math.floor((e.clientY - r.top) / r.height * st.n);
+    return x >= 0 && y >= 0 && x < st.n && y < st.n ? { x, y } : null;
+  };
+  st.canvas.addEventListener("contextmenu", e => e.preventDefault());
+  st.canvas.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    const c = cellAt(e);
+    if (!c) return;
+    if (st.tool === "picker" || e.altKey) { icxPick(st, c); return; }
+    st.undo.push(st.grid.slice());
+    if (st.undo.length > 64) st.undo.shift();
+    // right button erases, whatever the tool — MacPaint's secondary color
+    const ink = (st.tool === "eraser" || e.button === 2) ? null : st.color;
+    if (st.tool === "fill" && e.button !== 2) { icxFill(st, c, ink); icxPaint(st); return; }
+    try { st.canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    const put = cc => {
+      st.grid[cc.y * st.n + cc.x] = ink;
+      st.dirty = true;
+      icxPaint(st);
+    };
+    put(c);
+    const move = ev => { const cc = cellAt(ev); if (cc) put(cc); };
+    st.canvas.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", () => st.canvas.removeEventListener("pointermove", move), { once: true });
+  });
+  st.canvas.addEventListener("pointermove", e => {
+    const c = cellAt(e);
+    st.pos.textContent = c ? c.x + "," + c.y : "";
+  });
+  st.canvas.addEventListener("pointerleave", () => { st.pos.textContent = ""; });
+
+  w.querySelector(".icx-undo").addEventListener("click", () => icxUndo(w));
+  w.querySelector(".icx-revert").addEventListener("click", () => icxRevert(st.d));
+  w.querySelector(".icx-save").addEventListener("click", async () => {
+    if (!st.grid) return;
+    iconOv[st.d.key] = gridToSvg(st.grid, st.n);
+    try { await putIcons(); } catch (e) { toast(e.message); return; }
+    st.dirty = false;
+    applyIconOverrides(iconOv);
+    toast(st.d.label + " icon saved");
+  });
+  icxLoad(w);
+}
+function icxLoad(w) {
+  const st = w._icx;
+  svgToGrid(iconCurrent(st.d.key), st.n, grid => {
+    st.grid = grid;
+    st.undo = [];
+    st.dirty = false;
+    icxAddIconColors(st);
+    icxPaint(st);
+  });
+}
+// fat bits: each cell painted over a 2×2 checker that shows through
+// transparency; sizes snapped to device pixels so the grid stays crisp at
+// fractional display scales
+function icxPaint(st) {
+  const { canvas, grid, n, zoom } = st;
+  const dpr = window.devicePixelRatio || 1;
+  const px = i => Math.round(i * zoom * dpr);
+  if (canvas.width !== px(n)) { canvas.width = px(n); canvas.height = px(n); }
+  const g = canvas.getContext("2d");
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const x0 = px(x), y0 = px(y), wp = px(x + 1) - x0, hp = px(y + 1) - y0;
+    g.fillStyle = "#fff";
+    g.fillRect(x0, y0, wp, hp);
+    g.fillStyle = "#ddd";
+    g.fillRect(x0, y0, wp >> 1, hp >> 1);
+    g.fillRect(x0 + (wp >> 1), y0 + (hp >> 1), wp - (wp >> 1), hp - (hp >> 1));
+    const c = grid[y * n + x];
+    if (c) { g.fillStyle = icxCss(c); g.fillRect(x0, y0, wp, hp); }
+  }
+  const svg = gridToSvg(grid, n);
+  for (const p of st.prevs) p.innerHTML = svg;
+}
+function icxSwatch(st, c) {
+  const s = el("span", { class: "icx-sw" + (c ? "" : " none"), title: c || "transparent" });
+  if (c) s.style.backgroundColor = icxCss(c);
+  s._c = c;
+  s.addEventListener("click", () => {
+    st.color = c;
+    if (st.tool === "eraser" || st.tool === "picker") icxSelTool(st, "pencil");
+    icxSelColor(st);
+  });
+  return s;
+}
+// ring the swatch holding the current color, growing one for a color the
+// palette doesn't carry (an eyedropped shade, a custom pick)
+function icxSelColor(st) {
+  let hit = null;
+  st.pal.querySelectorAll(".icx-sw").forEach(s => {
+    const m = s._c === st.color;
+    s.classList.toggle("sel", m);
+    if (m) hit = s;
+  });
+  if (!hit && st.color) {
+    const s = icxSwatch(st, st.color);
+    s.classList.add("sel");
+    st.pal.insertBefore(s, st.custom);
+  }
+}
+function icxSelTool(st, t) {
+  st.tool = t;
+  st.tools.querySelectorAll(".icx-tool").forEach(b => b.classList.toggle("sel", b.dataset.t === t));
+}
+// the icon's own colors join the palette, translucent shadows included
+function icxAddIconColors(st) {
+  const have = new Set([...st.pal.querySelectorAll(".icx-sw")].map(s => s._c));
+  for (const c of st.grid) {
+    if (!c || have.has(c)) continue;
+    have.add(c);
+    st.pal.insertBefore(icxSwatch(st, c), st.custom);
+  }
+}
+function icxPick(st, c) {
+  const v = st.grid[c.y * st.n + c.x];
+  if (v) { st.color = v; icxSelTool(st, "pencil"); icxSelColor(st); }
+  else icxSelTool(st, "eraser");
+}
+function icxFill(st, c, ink) {
+  const n = st.n, tgt = st.grid[c.y * n + c.x];
+  if (tgt === ink) return;
+  const q = [c.y * n + c.x];
+  while (q.length) {
+    const i = q.pop();
+    if (st.grid[i] !== tgt) continue;
+    st.grid[i] = ink;
+    if (i % n > 0) q.push(i - 1);
+    if (i % n < n - 1) q.push(i + 1);
+    if (i >= n) q.push(i - n);
+    if (i < n * (n - 1)) q.push(i + n);
+  }
+  st.dirty = true;
+}
+function icxUndo(w) {
+  const st = w._icx;
+  if (!st || !st.undo.length) return;
+  st.grid = st.undo.pop();
+  st.dirty = true;
+  icxPaint(st);
+}
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+    const w = document.querySelector(".icx-window.front");
+    if (w && !w.hidden) { e.preventDefault(); icxUndo(w); }
+  }
+});
+// Revert drops the override so the factory art is back everywhere; on a
+// still-factory icon it just reloads the editor's grid
+async function icxRevert(d) {
+  const w = document.getElementById("win-ic-" + d.key);
+  if (!iconOv[d.key]) { if (w) icxLoad(w); return; }
+  const ok = await confirmDialog({
+    message: `Revert “${d.label}” to the factory icon?`,
+    detail: "The custom artwork is removed from every desktop sharing this desk.",
+    action: "Revert", danger: true,
+  });
+  if (!ok) return;
+  delete iconOv[d.key];
+  try { await putIcons(); } catch (e) { toast(e.message); return; }
+  applyIconOverrides(iconOv);
+  if (w) icxLoad(w);
+  toast(d.label + " icon reverted");
 }
 $("#ma-icons").addEventListener("click", e => {
   if (e.target === e.currentTarget)
@@ -5188,6 +5683,8 @@ function appDataSubscribe() {
     if (ev.app === "@workspace") { workspaceChanged(ev.path, !!ev.deleted, ev.client || ""); return; }
     // a feed item landed (posted here or synced in) — refresh an open window
     if (ev.app === "Newsfeed") { if (!$("#win-news").hidden) loadNews().catch(() => {}); return; }
+    // custom system icons changed in another window or synced from a peer
+    if (ev.app === "System") { if (ev.path === "icons.json") iconsChanged(ev.client || ""); return; }
     // Forward even to a closed window: closeWin only hides the iframe, which
     // keeps running, so a hidden app must still hear the change or it would
     // reopen with stale in-memory state and clobber the synced-in doc.
@@ -5221,6 +5718,7 @@ appDataSubscribe();
 renderVMHead();
 loadVMs().catch(e => toast(e.message));
 loadApps().catch(() => {});
+loadIcons().catch(() => {});
 loadConfig().catch(() => {});
 cfHeartbeat(false);
 chatDetect(false);

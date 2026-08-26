@@ -193,10 +193,15 @@ func scopedPath(root, rel string) (string, error) {
 
 // appDataRoot validates the app name against an installed bundle and returns
 // the app's private data directory (always under ~/.exe/appdata, whichever
-// root the bundle itself lives in).
+// root the bundle itself lives in). "System" is reserved for the built-in
+// desktop's own state (the Icon Editor's custom icons live there) and needs
+// no bundle — it rides the same store so it persists, broadcasts and syncs
+// to joined nodes like any app data.
 func (s *Server) appDataRoot(name string) (string, error) {
-	if _, ok := s.findAppRoot(name); !ok {
-		return "", errors.New("no such app")
+	if name != "System" {
+		if _, ok := s.findAppRoot(name); !ok {
+			return "", errors.New("no such app")
+		}
 	}
 	return s.appDataDir(name), nil
 }
