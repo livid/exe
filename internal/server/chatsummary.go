@@ -191,23 +191,26 @@ func trimSummary(t string) string {
 	return t
 }
 
-// BackfillChatSummaries summarizes every stored session that predates
-// summaries, spaced out so a boot never bursts model calls. Sessions
-// already summarized make it a no-op, so running once per boot converges.
-func (s *Server) BackfillChatSummaries() {
+// BackfillChatMeta repairs stored session metadata on boot: titles cut
+// under the old 60-byte cap are re-derived from the first user message,
+// and sessions that predate summaries get one, spaced out so a boot
+// never bursts model calls. Both passes are no-ops once every session is
+// current, so running once per boot converges.
+func (s *Server) BackfillChatMeta() {
 	time.Sleep(chatBackfillDelay)
+	metas, err := chat.List(s.chatDir())
+	if err != nil {
+		log.Printf("chat backfill: %v", err)
+		return
+	}
+	s.backfillChatTitles(metas)
 	cfg := s.Config()
 	provider := chatProvider(cfg)
 	if provider == "openai" {
 		if s.codexCreds() == nil {
-			return // not signed in — next boot retries
+			return // not signed in — next boot retries the summaries
 		}
 	} else if cfg.Ollama.BaseURL == "" {
-		return
-	}
-	metas, err := chat.List(s.chatDir())
-	if err != nil {
-		log.Printf("chat summary backfill: %v", err)
 		return
 	}
 	n := 0
@@ -230,5 +233,43 @@ func (s *Server) BackfillChatSummaries() {
 	}
 	if n > 0 {
 		log.Printf("chat summaries: backfilled up to %d session(s)", n)
+	}
+}
+
+// backfillChatTitles re-derives each stored title from the session's
+// first user message. No model involved, so it runs even with no chat
+// backend configured; a title already matching its re-derivation (every
+// session created after the wider cap) costs one read and no write.
+func (s *Server) backfillChatTitles(metas []chat.Meta) {
+	n := 0
+	for _, m := range metas {
+		if _, live := s.chatRuns.Load(m.ID); live {
+			continue
+		}
+		sess, err := chat.Load(s.chatDir(), m.ID)
+		if err != nil {
+			continue
+		}
+		want := ""
+		for _, msg := range sess.Messages {
+			if msg.Role == "user" {
+				want = chat.Title(msg.Content)
+				break
+			}
+		}
+		if want == "" || want == sess.Title {
+			continue
+		}
+		s.chatSaveMu.Lock()
+		err = chat.SetTitle(s.chatDir(), m.ID, want)
+		s.chatSaveMu.Unlock()
+		if err != nil {
+			log.Printf("chat title %s: %v", m.ID, err)
+			continue
+		}
+		n++
+	}
+	if n > 0 {
+		log.Printf("chat titles: re-derived %d session title(s)", n)
 	}
 }

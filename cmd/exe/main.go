@@ -203,8 +203,9 @@ func cmdServe() error {
 		}()
 	}
 
-	// Chat sessions from before summaries existed get theirs on boot.
-	go srv.BackfillChatSummaries()
+	// Chat sessions from before summaries (or the wider title cap)
+	// existed get theirs on boot.
+	go srv.BackfillChatMeta()
 
 	apiHandler := srv.Handler()
 	proxyHandler := px.Handler()

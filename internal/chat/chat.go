@@ -51,11 +51,21 @@ func New(dir, title, vm string) (*Session, error) {
 	return s, Save(dir, s)
 }
 
-// Title trims a prompt into a session list label.
+// titleRunes caps stored titles: wide enough that the VM detail's
+// Sessions list never shows a mid-row ellipsis; narrow contexts (the
+// Chat sidebar) ellipsize with CSS instead.
+const titleRunes = 160
+
+// Title trims a prompt into a session list label, cutting on a rune
+// boundary and preferring a word break.
 func Title(prompt string) string {
 	t := strings.Join(strings.Fields(prompt), " ")
-	if len(t) > 60 {
-		t = t[:60] + "…"
+	if r := []rune(t); len(r) > titleRunes {
+		cut := string(r[:titleRunes])
+		if i := strings.LastIndexByte(cut, ' '); i > len(cut)/2 {
+			cut = cut[:i]
+		}
+		t = cut + "…"
 	}
 	if t == "" {
 		t = "New chat"
@@ -79,11 +89,22 @@ func Save(dir string, s *Session) error {
 // UpdatedAt: summaries land seconds to years after the conversation they
 // describe, and must not reorder the session list.
 func SetSummary(dir, id, summary string) error {
+	return update(dir, id, func(s *Session) { s.Summary = summary })
+}
+
+// SetTitle rewrites the stored title, likewise leaving UpdatedAt alone —
+// it repairs titles cut under the old 60-byte cap.
+func SetTitle(dir, id, title string) error {
+	return update(dir, id, func(s *Session) { s.Title = title })
+}
+
+// update applies f to the stored session and writes it back as-is.
+func update(dir, id string, f func(*Session)) error {
 	s, err := Load(dir, id)
 	if err != nil {
 		return err
 	}
-	s.Summary = summary
+	f(s)
 	return write(dir, s)
 }
 
