@@ -69,6 +69,9 @@ type Server struct {
 	chatStatKey string
 	chatStatRes map[string]any
 	chatRuns    sync.Map // session id -> *chatRun
+	// chatSaveMu serializes all chat-session writes so the detached summary
+	// writer (chatsummary.go) can't interleave with a run's saves.
+	chatSaveMu sync.Mutex
 
 	// ChatGPT sign-in state: cached ~/.exe/openai.json credentials and the
 	// pending OAuth flow, if any (see openai.go).

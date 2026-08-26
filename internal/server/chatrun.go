@@ -105,7 +105,7 @@ func (s *Server) startChatRun(cfg *config.Config, provider string, sess *chat.Se
 	run.base = len(sess.Messages) + 1
 	run.emit(map[string]any{"type": "session", "meta": sess.Meta})
 	sess.Messages = append(sess.Messages, agent.Message{Role: "user", Content: message})
-	if err := chat.Save(s.chatDir(), sess); err != nil {
+	if err := s.saveChat(sess); err != nil {
 		run.emit(map[string]any{"type": "error", "error": "save session: " + err.Error()})
 	}
 	go func() {
@@ -125,6 +125,9 @@ func (s *Server) startChatRun(cfg *config.Config, provider string, sess *chat.Se
 			run.done = true
 			run.mu.Unlock()
 			run.cond.Broadcast()
+			// Detached so done isn't delayed by a model call: after this the
+			// run goroutine's sess is private, safe to digest without locks.
+			go s.summarizeChat(cfg, provider, sess, run.base)
 		}()
 		s.runChatLoop(ctx, cfg, provider, sess, run)
 	}()
@@ -134,9 +137,8 @@ func (s *Server) startChatRun(cfg *config.Config, provider string, sess *chat.Se
 // runChatLoop is the agent loop: call the model, run the tool calls it
 // asks for, feed the results back, until a turn ends with plain text.
 func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider string, sess *chat.Session, run *chatRun) {
-	dir := s.chatDir()
 	save := func() {
-		if err := chat.Save(dir, sess); err != nil {
+		if err := s.saveChat(sess); err != nil {
 			run.emit(map[string]any{"type": "error", "error": "save session: " + err.Error()})
 		}
 	}

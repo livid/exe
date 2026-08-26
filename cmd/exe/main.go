@@ -203,6 +203,9 @@ func cmdServe() error {
 		}()
 	}
 
+	// Chat sessions from before summaries existed get theirs on boot.
+	go srv.BackfillChatSummaries()
+
 	apiHandler := srv.Handler()
 	proxyHandler := px.Handler()
 	errc := make(chan error, 4)

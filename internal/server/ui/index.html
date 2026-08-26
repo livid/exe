@@ -511,8 +511,11 @@ td .mono, td.mono { user-select: text; }
 .cs-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-time { font-size: 10px; color: #777; }
 .cs-vm { color: #777; }
+/* the model-written one-liner of what the session accomplished */
+.cs-sum { font-size: 10px; color: #555; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .cs-item.sel { background: var(--hl); }
-.cs-item.sel .cs-title, .cs-item.sel .cs-time, .cs-item.sel .cs-vm { color: #fff; }
+.cs-item.sel .cs-title, .cs-item.sel .cs-time, .cs-item.sel .cs-vm, .cs-item.sel .cs-sum { color: #fff; }
 /* a reply is streaming in this session (in the daemon, not necessarily on screen) */
 .cs-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 5px; animation: cs-pulse 1.2s ease-in-out infinite; }
 @keyframes cs-pulse { 50% { opacity: 0.25; } }
@@ -3488,10 +3491,10 @@ async function loadVMSessions() {
   for (const m of list) {
     const title = el("div", { class: "cs-title", title: m.title }, m.title);
     if (m.streaming) title.prepend(el("span", { class: "cs-live", title: "a reply is streaming" }));
-    const item = el("div", { class: "cs-item" + (m.id === chatCur ? " sel" : "") },
-      el("div", { style: "flex:1; min-width:0" },
-        title,
-        el("div", { class: "cs-time" }, fmtTime(m.updated_at))));
+    const body = el("div", { style: "flex:1; min-width:0" }, title);
+    if (m.summary) body.append(el("div", { class: "cs-sum", title: m.summary }, m.summary));
+    body.append(el("div", { class: "cs-time" }, fmtTime(m.updated_at)));
+    const item = el("div", { class: "cs-item" + (m.id === chatCur ? " sel" : "") }, body);
     item.onclick = () => { openChatWin(currentVM); selectChat(m.id); };
     box.append(item);
   }
@@ -3803,7 +3806,9 @@ async function loadChatSessions() {
       if (chatCur === m.id) { chatCur = null; chatCurVM = chatScope; chatTitle(); chatHint(); }
       loadChatSessions().catch(() => {});
     };
-    const title = el("div", { class: "cs-title", title: m.title + (m.vm ? " · " + m.vm : "") }, m.title);
+    // the narrow Chat sidebar keeps rows one line; the summary rides in the tooltip
+    const title = el("div", { class: "cs-title",
+      title: m.title + (m.summary ? " — " + m.summary : "") + (m.vm ? " · " + m.vm : "") }, m.title);
     if (m.streaming) title.prepend(el("span", { class: "cs-live", title: "a reply is streaming" }));
     // in the all-sessions view, VM-pinned chats carry their VM's name;
     // under a scope every row is that VM's, so the label would be noise

@@ -22,7 +22,10 @@ type Meta struct {
 	Title string `json:"title"`
 	// VM pins the session to a single VM: the agent's tools are scoped to
 	// it server-side. Empty for whole-daemon operator sessions.
-	VM        string    `json:"vm,omitempty"`
+	VM string `json:"vm,omitempty"`
+	// Summary is a model-written one-liner of what the session accomplished,
+	// regenerated after runs that did meaningful work (chatsummary.go).
+	Summary   string    `json:"summary,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -68,6 +71,24 @@ func path(dir, id string) (string, error) {
 }
 
 func Save(dir string, s *Session) error {
+	s.UpdatedAt = time.Now().UTC()
+	return write(dir, s)
+}
+
+// SetSummary stores a freshly generated summary without touching
+// UpdatedAt: summaries land seconds to years after the conversation they
+// describe, and must not reorder the session list.
+func SetSummary(dir, id, summary string) error {
+	s, err := Load(dir, id)
+	if err != nil {
+		return err
+	}
+	s.Summary = summary
+	return write(dir, s)
+}
+
+// write persists the session as-is (timestamps included).
+func write(dir string, s *Session) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -75,7 +96,6 @@ func Save(dir string, s *Session) error {
 	if err != nil {
 		return err
 	}
-	s.UpdatedAt = time.Now().UTC()
 	b, err := json.MarshalIndent(s, "", " ")
 	if err != nil {
 		return err
