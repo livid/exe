@@ -2205,13 +2205,33 @@ function searchMatches(q) {
     icon: MINI_NOTE_ICON, title: srFirstLine(n.text),
     // the matched body line, when the title alone doesn't say why this hit
     sub: has(srFirstLine(n.text)) ? "" : (n.text.split("\n").find(l => has(l)) || "").trim(),
-    open: () => openAppWin("Notes"),
+    open: () => revealInApp("Notes", n.id),
   });
   for (const t of searchData.todos) if (has(t.text)) out.push({
     icon: MINI_TODO_ICON, title: t.text, sub: t.done ? "done" : "",
-    open: () => openAppWin("Todo"),
+    open: () => revealInApp("Todo", t.id),
   });
   return out;
+}
+// A note/todo result deep-links into its app: open the window, then tell
+// the app which item to select. The app may still be booting (iframe just
+// created, doc not yet fetched), so the message repeats until the app
+// answers reveal-ack — an early reveal is stashed there and applied on load.
+let revealTimer = null;
+function revealInApp(app, id) {
+  openAppWin(app);
+  clearInterval(revealTimer);
+  revealTimer = null;
+  const w = document.getElementById("win-app-" + app);
+  const fr = w && w.querySelector(".app-frame");
+  if (!fr) return;
+  let tries = 0;
+  const post = () => {
+    if (fr.contentWindow) fr.contentWindow.postMessage({ exe: "reveal", id }, location.origin);
+    if (++tries >= 25) { clearInterval(revealTimer); revealTimer = null; }
+  };
+  revealTimer = setInterval(post, 200);
+  post();
 }
 function renderSearch() {
   const box = $("#search-results");
@@ -2427,6 +2447,10 @@ window.addEventListener("message", e => {
     // clicks inside the iframe never reach the window's own mousedown
     // handler, so apps raise their window through the bridge
     focusWin(w);
+  } else if (e.data.exe === "reveal-ack") {
+    // the app selected the item a search result named — stop repeating
+    clearInterval(revealTimer);
+    revealTimer = null;
   } else if (e.data.exe === "grow-start" && !IS_MOBILE) {
     appGrow = { win: w, frame: fr, w: w.offsetWidth, h: fr.offsetHeight };
     winDragging = w;
