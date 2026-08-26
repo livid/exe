@@ -1320,7 +1320,10 @@ body.mobile th.sorted {
       <div class="title">Icon Editor</div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
-      <div class="finder-status"><span id="ic-items">…</span></div>
+      <div class="finder-status" style="display:flex; align-items:center; text-align:left">
+        <span id="ic-items">…</span><span style="flex:1"></span>
+        <button class="ghost sm" id="ic-new">New Icon…</button>
+      </div>
       <div class="finder-icons doc-scroll" id="ic-gallery"></div>
       <svg id="ic-grow" class="grow-box" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
         <rect width="15" height="15" fill="#ccc"/>
@@ -1418,6 +1421,32 @@ body.mobile th.sorted {
         <div class="row" style="justify-content:flex-end; gap:11px; margin:4px 0 2px">
           <button class="ghost" id="nf-cancel">Cancel</button>
           <button class="btn" id="nf-go">Create</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Icon (modal), from the Icon Editor gallery: name it, pick a grid -->
+<div id="ni-overlay" class="overlay" hidden>
+  <div class="window modal front" style="max-width:340px">
+    <div class="titlebar"><button class="tbox close" id="ni-x"></button><div class="stripe"></div>
+      <div class="title">New Icon</div>
+      <div class="stripe"></div></div>
+    <div class="win-frame">
+      <div class="win-body">
+        <div class="field" style="margin-bottom:10px">
+          <label for="ni-name">Name</label>
+          <input id="ni-name" spellcheck="false" style="width:100%">
+        </div>
+        <div style="font-size:11px; color:#222; margin-bottom:12px">
+          <div style="margin-bottom:4px">Size</div>
+          <label style="margin-right:16px"><input type="radio" name="ni-size" value="32" checked> 32 × 32</label>
+          <label><input type="radio" name="ni-size" value="16"> 16 × 16</label>
+        </div>
+        <div class="row" style="justify-content:flex-end; gap:11px; margin:4px 0 2px">
+          <button class="ghost" id="ni-cancel">Cancel</button>
+          <button class="btn" id="ni-go">Create</button>
         </div>
       </div>
     </div>
@@ -2788,15 +2817,31 @@ const ICON_DEFS = [
 // factory art, captured before any override can land
 const ICON_FACTORY = {};
 for (const d of ICON_DEFS) ICON_FACTORY[d.key] = d.dom ? $(d.dom).outerHTML : d.get();
-const iconCurrent = k => iconOv[k] || ICON_FACTORY[k];
+// icons of the user's own making (key "c-<id>") ride along in icons.json:
+// unlike system overrides they have no factory art, so they delete instead
+// of reverting, and nothing in the system UI draws them
+let iconCustom = {};
+const svgGridSize = svg => { const m = /viewBox="0 0 (\d+)/.exec(svg || ""); return m ? +m[1] : 32; };
+const iconDef = k => ICON_DEFS.find(x => x.key === k)
+  || (iconCustom[k] && { key: k, label: iconCustom[k].label, size: svgGridSize(iconCustom[k].svg), custom: true });
+const iconCurrent = k => iconCustom[k] ? iconCustom[k].svg : (iconOv[k] || ICON_FACTORY[k]);
 const putIcons = () => j("/v1/apps/System/data/icons.json", {
-  method: "PUT", json: { icons: iconOv }, headers: { "X-Exe-Seq": String(Date.now()) },
+  method: "PUT", json: { icons: iconOv, custom: iconCustom }, headers: { "X-Exe-Seq": String(Date.now()) },
 });
 
 // land a new override set: swap the art everywhere, then repaint whatever
-// already drew from it
-function applyIconOverrides(ovs) {
+// already drew from it. custom is only passed on a fetch — local saves
+// mutate iconCustom in place and leave it alone
+function applyIconOverrides(ovs, custom) {
   iconOv = ovs || {};
+  if (custom !== undefined) {
+    iconCustom = custom || {};
+    // a custom icon deleted on another desk takes its editor window with it
+    document.querySelectorAll(".icx-window").forEach(w => {
+      const k = w.id.slice(7);
+      if (k.startsWith("c-") && !iconCustom[k]) { closeWin(w); w.remove(); }
+    });
+  }
   for (const d of ICON_DEFS) {
     const svg = iconCurrent(d.key);
     if (d.set) d.set(svg);
@@ -2808,17 +2853,20 @@ function applyIconOverrides(ovs) {
   if (!$("#win-myapps").hidden) loadMyApps().catch(() => {});
   if (!$("#win-search").hidden) renderSearch();
   if (!$("#win-icons").hidden) renderIconGallery();
+  // custom-icon editors whose restore beat the icons.json fetch open now
+  for (const k of [...icxPending]) if (iconDef(k)) { icxPending.delete(k); openIconEditor(k); }
 }
 async function loadIcons() {
   const d = await j("/v1/apps/System/data/icons.json").catch(() => null);
-  if (d && d.icons && Object.keys(d.icons).length) applyIconOverrides(d.icons);
+  if (d && (Object.keys(d.icons || {}).length || Object.keys(d.custom || {}).length))
+    applyIconOverrides(d.icons || {}, d.custom || {});
 }
 // another window or a synced peer changed icons.json — refetch and apply;
 // open editors keep unsaved strokes, clean ones reload the new art
 async function iconsChanged(client) {
   if (client && client === WIN_CLIENT) return;
   const d = await j("/v1/apps/System/data/icons.json").catch(() => null);
-  applyIconOverrides((d && d.icons) || {});
+  applyIconOverrides((d && d.icons) || {}, (d && d.custom) || {});
   document.querySelectorAll(".icx-window").forEach(w => { if (w._icx && !w._icx.dirty) icxLoad(w); });
 }
 
@@ -2826,10 +2874,12 @@ function openIconsWin() { openWin("#win-icons"); renderIconGallery(); }
 function renderIconGallery() {
   const box = $("#ic-gallery");
   box.replaceChildren();
-  let custom = 0;
-  for (const d of ICON_DEFS) {
-    if (iconOv[d.key]) custom++;
-    const it = el("div", { class: "fitem", title: `${d.label} — ${d.size}×${d.size} pixels${iconOv[d.key] ? ", customized" : ""}` });
+  let repainted = 0;
+  const defs = [...ICON_DEFS, ...Object.keys(iconCustom).sort().map(iconDef)];
+  for (const d of defs) {
+    if (iconOv[d.key]) repainted++;
+    const it = el("div", { class: "fitem", title: `${d.label} — ${d.size}×${d.size} pixels` +
+      (d.custom ? ", your own icon" : iconOv[d.key] ? ", customized" : "") });
     const cur = iconCurrent(d.key);
     it.innerHTML = `<span class="ic-box">${d.disp ? sizeSvg(cur, d.disp) : cur}</span>`;
     it.append(el("span", { class: "lbl" }, d.label + (iconOv[d.key] ? " •" : "")));
@@ -2846,13 +2896,53 @@ function renderIconGallery() {
         { label: "Edit", act: () => openIconEditor(d.key) },
         { label: "Copy SVG", act: () => copyText(iconCurrent(d.key), d.label + " SVG") },
         "-",
-        { label: "Revert to Factory", act: () => icxRevert(d), dis: !iconOv[d.key] },
+        // system icons revert to factory but never leave; only yours delete
+        d.custom ? { label: "Delete…", act: () => icxDelete(d) }
+          : { label: "Revert to Factory", act: () => icxRevert(d), dis: !iconOv[d.key] },
       ]);
     });
     box.append(it);
   }
-  $("#ic-items").textContent = `${ICON_DEFS.length} icons` + (custom ? `, ${custom} customized` : "");
+  const mine = defs.length - ICON_DEFS.length;
+  $("#ic-items").textContent = `${defs.length} icons` +
+    (repainted ? `, ${repainted} customized` : "") + (mine ? `, ${mine} added` : "");
 }
+$("#ic-gallery").addEventListener("click", e => {
+  if (e.target === e.currentTarget)
+    e.currentTarget.querySelectorAll(".fitem").forEach(x => x.classList.remove("sel"));
+});
+$("#ic-gallery").addEventListener("contextmenu", e => {
+  if (e.target !== e.currentTarget) return;
+  e.preventDefault();
+  showCtxMenu(e.clientX, e.clientY, [{ label: "New Icon…", act: niOpen }]);
+});
+
+// ---- New Icon dialog: name + grid size, then straight into the editor ----
+function niOpen() {
+  $("#ni-name").value = "";
+  $("#ni-overlay").hidden = false;
+  $("#ni-name").focus();
+}
+function niClose() { $("#ni-overlay").hidden = true; }
+$("#ic-new").onclick = niOpen;
+$("#ni-x").onclick = niClose;
+$("#ni-cancel").onclick = niClose;
+$("#ni-name").addEventListener("keydown", e => { if (e.key === "Enter") $("#ni-go").click(); });
+$("#ni-go").onclick = async () => {
+  const label = $("#ni-name").value.trim();
+  if (!label) { toast("name required"); return; }
+  const n = +(document.querySelector('input[name="ni-size"]:checked') || { value: 32 }).value;
+  const key = "c-" + Date.now().toString(36);
+  iconCustom[key] = { label, svg: `<svg width="${n}" height="${n}" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"></svg>` };
+  $("#ni-go").disabled = true;
+  try {
+    await putIcons();
+    niClose();
+    renderIconGallery();
+    openIconEditor(key);
+  } catch (e) { delete iconCustom[key]; toast(e.message); }
+  $("#ni-go").disabled = false;
+};
 
 // rasterize an icon SVG into its pixel grid: draw it 1:1 on a canvas and
 // read the pixels back. crispEdges keeps every cell full or empty, so the
@@ -2924,9 +3014,12 @@ const ICX_PALETTE = [null,
   "#99ccff", "#ccccff", "#9c9af2", "#333399", "#3a3f46", "#7a1010", "#ffcccc", "#00cccc",
 ];
 
+// layout restore can ask for a custom icon's editor before icons.json has
+// loaded — park the key and applyIconOverrides opens it once the data lands
+const icxPending = new Set();
 function openIconEditor(key) {
-  const d = ICON_DEFS.find(x => x.key === key);
-  if (!d) return;
+  const d = iconDef(key);
+  if (!d) { if (key.startsWith("c-")) icxPending.add(key); return; }
   const id = "win-ic-" + key;
   let w = document.getElementById(id);
   if (!w) {
@@ -3029,13 +3122,18 @@ function icxSetup(w, d, zoom) {
   st.canvas.addEventListener("pointerleave", () => { st.pos.textContent = ""; });
 
   w.querySelector(".icx-undo").addEventListener("click", () => icxUndo(w));
-  w.querySelector(".icx-revert").addEventListener("click", () => icxRevert(st.d));
+  // a custom icon has no factory art to revert to — its button deletes
+  const rev = w.querySelector(".icx-revert");
+  if (d.custom) rev.textContent = "Delete";
+  rev.addEventListener("click", () => d.custom ? icxDelete(st.d) : icxRevert(st.d));
   w.querySelector(".icx-save").addEventListener("click", async () => {
     if (!st.grid) return;
-    iconOv[st.d.key] = gridToSvg(st.grid, st.n);
+    if (st.d.custom) iconCustom[st.d.key] = { label: st.d.label, svg: gridToSvg(st.grid, st.n) };
+    else iconOv[st.d.key] = gridToSvg(st.grid, st.n);
     try { await putIcons(); } catch (e) { toast(e.message); return; }
     st.dirty = false;
-    applyIconOverrides(iconOv);
+    if (st.d.custom) { if (!$("#win-icons").hidden) renderIconGallery(); }
+    else applyIconOverrides(iconOv);
     toast(st.d.label + " icon saved");
   });
   icxLoad(w);
@@ -3159,6 +3257,21 @@ async function icxRevert(d) {
   applyIconOverrides(iconOv);
   if (w) icxLoad(w);
   toast(d.label + " icon reverted");
+}
+// custom icons are the user's to remove; the editor window goes with them
+async function icxDelete(d) {
+  const ok = await confirmDialog({
+    message: `Delete “${d.label}”?`,
+    detail: "The icon is removed from every desktop sharing this desk.",
+    action: "Delete", danger: true,
+  });
+  if (!ok) return;
+  delete iconCustom[d.key];
+  try { await putIcons(); } catch (e) { toast(e.message); return; }
+  const w = document.getElementById("win-ic-" + d.key);
+  if (w) { closeWin(w); w.remove(); }
+  if (!$("#win-icons").hidden) renderIconGallery();
+  toast(d.label + " icon deleted");
 }
 $("#ma-icons").addEventListener("click", e => {
   if (e.target === e.currentTarget)
@@ -5383,6 +5496,7 @@ document.addEventListener("keydown", e => {
   if (!$("#join-overlay").hidden) joinClose();
   if (!$("#cb-overlay").hidden) $("#cb-overlay").hidden = true;
   if (!$("#nf-overlay").hidden) nfClose();
+  if (!$("#ni-overlay").hidden) niClose();
   if (!$("#pub-overlay").hidden) pubClose();
   if (!$("#cfm-overlay").hidden) cfmClose(false);
 });

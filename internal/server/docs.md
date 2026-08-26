@@ -43,7 +43,9 @@ fill, undo, the Platinum palette plus a custom color well. Save applies the
 art everywhere at once, follows the desk into every browser and joined
 node, and survives restarts; Revert brings the factory icon back. On a VM
 icon, pixels painted the factory screen-green keep changing color with the
-VM's state.
+VM's state. **New Icon…** adds icons of your own on a 32×32 or 16×16 grid —
+draw them, copy their SVG for use anywhere, delete them when done. System
+icons can only be repainted, never deleted.
 
 ## Virtual machines
 
