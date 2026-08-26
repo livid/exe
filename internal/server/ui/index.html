@@ -917,7 +917,7 @@ body.mobile th.sorted {
       <span class="lbl">Chat</span>
     </div>
     <div class="dicon" id="trash-icon">
-      <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges"><rect x="13.5" y="2.5" width="5" height="2" fill="#C8C3B8" stroke="#000"/><rect x="8.5" y="4.5" width="15" height="3" fill="#D5D0C5" stroke="#000"/><rect x="9.5" y="7.5" width="13" height="21" fill="#CDC8BD" stroke="#000"/><path d="M12.5 10v16M15.5 10v16M18.5 10v16M21.5 10v16" stroke="#8B867B"/></svg>
+      <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges"><rect x="13.5" y="2.5" width="5" height="2" fill="#C8C3B8" stroke="#000"/><rect x="8.5" y="4.5" width="15" height="3" fill="#DAD5CA" stroke="#000"/><rect x="9.5" y="7.5" width="13" height="21" fill="#C8C3B8" stroke="#000"/><path d="M12.5 10v16M15.5 10v16M18.5 10v16M21.5 10v16" stroke="#8B867B"/></svg>
       <span class="lbl">Trash</span>
     </div>
   </div>
@@ -2254,6 +2254,27 @@ let iconOv = {};
 // stamp a custom icon's frame size — overrides are saved at their natural
 // grid, but the About box shows the VM at 44px like the factory art does
 const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="${size}" height="${size}"`);
+
+// ---- icon palette standard ----
+// Every pixel icon (here and in the static markup: trash, news, chat,
+// apple, search) draws from four families, checked against the dev.os9.ca
+// OS 9 HIG mirror:
+//   grays     #000 #444 #777 #888 #aaa #ccc #eee #fff — outlines are pure
+//             black, highlights pure white
+//   platinum  #55524b #6e6a61 #8b867b #b7b2a7 #c8c3b8 #dad5ca #edeae2 —
+//             the warm Mac-case beige ramp
+//   folder    #222244 #30305e #4c4c96 #6666be #8080dc #9a9af4 #b6b6f4
+//             #d2d2fa #ececfd — the blue-violet ramp
+//   accents   one hue per meaning: VM screen-green #7fd67f (reserved — the
+//             state tint rewrites exactly this color, so nothing else may
+//             use it), terminal-green #33ff33, landscape-green #77bb77 /
+//             #336633, note-yellow #ffff99 / #ddbb55 / #cc9933,
+//             alert-yellow #ffdd30 / #fff3a0, chat-pink #ff8888,
+//             sky-blue #99ccff, sun #ffff33
+// Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
+// they darken whatever sits beneath. Write chromatic colors as 6-digit hex
+// (pure grays may shorthand). ICX_PALETTE in the Icon Editor carries the
+// working subset; an icon's own colors join it when opened for editing.
 let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
   <path d="M4.5 10.5 v3 l3 -3 z" fill="#DAD5CA" stroke="#000"/>
@@ -2489,10 +2510,10 @@ let DOC_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering=
 let IMAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
   <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
-  <rect x="9.5" y="12.5" width="13" height="12" fill="#9cf" stroke="#000"/>
-  <path fill="#ff3" d="M12 14h2v1h-2zM12 15h2v1h-2z"/>
-  <path fill="#7b7" d="M14 18h1v1h-1zM13 19h3v1h-3zM12 20h5v1h-5zM11 21h7v1h-7zM10 22h9v1h-9zM10 23h10v1h-10z"/>
-  <path fill="#363" d="M18 17h1v1h-1zM17 18h3v1h-3zM16 19h5v1h-5zM15 20h7v1h-7zM14 21h8v1h-8zM13 22h9v1h-9zM12 23h10v1h-10z"/>
+  <rect x="9.5" y="12.5" width="13" height="12" fill="#99ccff" stroke="#000"/>
+  <path fill="#ffff33" d="M12 14h2v1h-2zM12 15h2v1h-2z"/>
+  <path fill="#77bb77" d="M14 18h1v1h-1zM13 19h3v1h-3zM12 20h5v1h-5zM11 21h7v1h-7zM10 22h9v1h-9zM10 23h10v1h-10z"/>
+  <path fill="#336633" d="M18 17h1v1h-1zM17 18h3v1h-3zM16 19h5v1h-5zM15 20h7v1h-7zM14 21h8v1h-8zM13 22h9v1h-9zM12 23h10v1h-10z"/>
 </svg>`;
 // archive document (zip/dmg/rar/7z): the page with a zipper down the middle
 let ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
@@ -2510,7 +2531,7 @@ let TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rende
   <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
   <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
   <rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
-  <path fill="#3f3" d="M12 7h1v1h-1zM13 8h1v1h-1zM12 9h1v1h-1zM15 9h3v1h-3z"/>
+  <path fill="#33ff33" d="M12 7h1v1h-1zM13 8h1v1h-1zM12 9h1v1h-1zM15 9h3v1h-3z"/>
   <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
   <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
   <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
