@@ -158,12 +158,19 @@ carry `{"resize":[cols,rows]}`. Auth via `?token=` if needed. Prefer plain
 `GET /v1/config` (full daemon config, incl. `ssh_user` and cloudflare setup),
 `GET /v1/logs` (streams daemon log).
 `POST /v1/vms/{name}/publish` body `{"path":"/home/dev/app","repo":"app","private":true}`
-publishes a VM folder to the signed-in user's GitHub (streams NDJSON progress;
-the daemon holds the token and pushes for the VM). **Only when the user asks**
-— it creates a repository on their account.
-`POST /v1/newsfeed` body `{"title":"...","body":"..."}` posts a note to the
-desktop Newsfeed of this node **and every joined node** — good for announcing
-finished work or problems the user should see.
+publishes a VM folder to the signed-in user's GitHub; the daemon holds the
+token and pushes for the VM. `repo` is optional: omitted, the daemon reuses
+the folder's `origin` remote name when it points at the signed-in account
+(so publishing again updates the same repo), else falls back to the folder
+name; it errors if `origin` points at a different account. Streams NDJSON
+events — `{"type":"step","text":"..."}` lines, ending in
+`{"type":"done","repo":"...","url":"..."}` (the repo URL) or
+`{"type":"error","error":"..."}`. **Only when the user asks** — it can
+create a repository on their account.
+`POST /v1/newsfeed` body `{"title":"...","body":"..."}` (optional `"kind"`,
+default `"note"`) posts a note to the desktop Newsfeed of this node **and
+every joined node** — good for announcing finished work or problems the user
+should see.
 Endpoints not listed in this file
 (config PUT, daemon restart, chat, workspace, apps, ui state) back exe's own
 web UI — leave them alone unless the user explicitly asks.
