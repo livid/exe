@@ -2758,6 +2758,11 @@ async function maLoadIcon(it, host) {
 // into the same run-length SVG style and stores it in the daemon's System
 // app-data (icons.json) — so custom art survives restarts, lands on every
 // browser sharing this desk, and syncs to joined nodes like any app data.
+// NEW SYSTEM ICONS MUST REGISTER HERE to become editable: add an entry with
+// key/label/size and either `dom` (a selector, when the icon lives in one
+// place in the DOM) or `get`+`set` (when it lives in a JS variable — which
+// must be `let`, and every draw site must reread it or go through
+// applyIconOverrides). `disp` re-stamps art displayed smaller than its grid.
 const ICON_DEFS = [
   { key: "vm", label: "VM", size: 32, get: () => macIcon("running", 32),
     note: "the green screen follows each VM's state" },
