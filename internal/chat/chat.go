@@ -33,6 +33,10 @@ type Meta struct {
 type Session struct {
 	Meta
 	Messages []agent.Message `json:"messages"`
+	// Compact bounds the model's view of a long session: the view starts
+	// at Messages[Compact.Through], preceded by Compact.Digest. Everything
+	// before it stays here on disk for the UI — it is just no longer sent.
+	Compact *agent.Compact `json:"compact,omitempty"`
 }
 
 // New creates and saves an empty session titled after the first prompt,

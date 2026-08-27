@@ -4847,6 +4847,7 @@ async function pumpChat(resp, ac) {
     }
     else if (ev.type === "text") addMDMsg(ev.text);
     else if (ev.type === "user") takeQueuedBubble(ev.text);
+    else if (ev.type === "compact") addMsg("tool", "▪ earlier conversation condensed into a summary");
     else if (ev.type === "confirm") chatConfirmAsk(ev);
     else if (ev.type === "confirm_result") chatConfirmSettle(ev);
     else if (ev.type === "tool_call") toolDots.push(addToolCall(ev.summary));

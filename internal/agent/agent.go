@@ -220,13 +220,52 @@ func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt,
 	if briefing != "" {
 		msgs = append(msgs, Message{Role: "system", Content: briefing})
 	}
+	head := len(msgs) // the system messages above sit outside compaction
 	msgs = append(msgs, Message{Role: "user", Content: prompt})
-	for turn := 0; turn < maxTurns; turn++ {
-		call := msgs
-		if left := maxTurns - turn; left <= 3 {
-			call = append(append([]Message{}, msgs...), Message{Role: "system", Content: WrapUpNote(left)})
+	var comp Compact
+	// compact folds the conversation's older messages into the running
+	// digest; msgs itself is untouched (the transcript logs everything),
+	// only the view sent to the model shrinks.
+	compact := func(keep int) bool {
+		conv := msgs[head:]
+		cut := CompactCut(conv[comp.Through:], keep)
+		if cut <= 0 {
+			return false
 		}
-		resp, err := Chat(ctx, cfg, call, tools)
+		resp, err := Chat(ctx, cfg, []Message{
+			{Role: "system", Content: DigestSystem},
+			{Role: "user", Content: RenderForDigest(comp.Digest, conv[comp.Through:comp.Through+cut])},
+		}, nil)
+		if err != nil || strings.TrimSpace(resp.Message.Content) == "" {
+			log.Printf("agent %s: compaction digest failed: %v", vmName, err)
+			return false
+		}
+		comp = Compact{Through: comp.Through + cut,
+			Digest: sshexec.Truncate(strings.TrimSpace(resp.Message.Content), DigestMax)}
+		logf("[condensed %d earlier messages into a summary]\n", cut)
+		return true
+	}
+	for turn := 0; turn < maxTurns; turn++ {
+		if ApproxSize(msgs[head+comp.Through:]) > CompactAt {
+			compact(CompactKeep)
+		}
+		view := func() []Message {
+			call := append([]Message{}, msgs[:head]...)
+			if comp.Through > 0 {
+				call = append(call, comp.Msg())
+			}
+			call = append(call, msgs[head+comp.Through:]...)
+			if left := maxTurns - turn; left <= 3 {
+				call = append(call, Message{Role: "system", Content: WrapUpNote(left)})
+			}
+			return call
+		}
+		resp, err := Chat(ctx, cfg, view(), tools)
+		// The budget is an estimate: when the backend still rejects the
+		// request for size, compact harder and retry the turn once.
+		if err != nil && IsContextOverflow(err) && ctx.Err() == nil && compact(CompactKeep/2) {
+			resp, err = Chat(ctx, cfg, view(), tools)
+		}
 		if err != nil {
 			return err
 		}

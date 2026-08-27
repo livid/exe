@@ -270,10 +270,11 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		prefix = append(prefix, agent.Message{Role: "system", Content: s.vmBriefing(ctx, sess.VM, sess.ID)})
 	}
 	tools := chatTools(sess.VM != "")
-	// callModel runs one turn on the configured backend. The ChatGPT path
+	// callModel runs one model call on the configured backend (tool-less
+	// calls, like the compaction digest, pass nil). The ChatGPT path
 	// resolves (and auto-refreshes) the token per turn and retries once
 	// after a 401 in case the token was revoked out from under us.
-	callModel := func(ctx context.Context, msgs []agent.Message, onDelta func(string)) (*agent.Message, error) {
+	callModel := func(ctx context.Context, msgs []agent.Message, tools []agent.Tool, onDelta func(string)) (*agent.Message, error) {
 		if provider != "openai" {
 			return agent.ChatStream(ctx, acfg, msgs, tools, onDelta)
 		}
@@ -293,6 +294,51 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		}
 		return msg, err
 	}
+	// compact folds the session's older messages into its running digest so
+	// the view stays inside the context budget; the full history stays on
+	// disk for the UI. keep is the tail left verbatim.
+	compact := func(keep int) bool {
+		from, prev := 0, ""
+		if sess.Compact != nil {
+			from, prev = sess.Compact.Through, sess.Compact.Digest
+		}
+		conv := sess.Messages[from:]
+		cut := agent.CompactCut(conv, keep)
+		if cut <= 0 {
+			return false
+		}
+		msg, err := callModel(ctx, []agent.Message{
+			{Role: "system", Content: agent.DigestSystem},
+			{Role: "user", Content: agent.RenderForDigest(prev, conv[:cut])},
+		}, nil, nil)
+		if err != nil || strings.TrimSpace(msg.Content) == "" {
+			log.Printf("chat %s: compaction digest failed: %v", sess.ID, err)
+			return false
+		}
+		sess.Compact = &agent.Compact{Through: from + cut,
+			Digest: sshexec.Truncate(strings.TrimSpace(msg.Content), agent.DigestMax)}
+		save()
+		run.emit(map[string]any{"type": "compact"})
+		log.Printf("chat %s: condensed %d messages into the digest", sess.ID, cut)
+		return true
+	}
+	// view is the model's take on the conversation: system prompt(s), the
+	// digest standing in for compacted history, then the live tail.
+	view := func(turn int) []agent.Message {
+		msgs := append([]agent.Message{}, prefix...)
+		live := sess.Messages
+		if c := sess.Compact; c != nil && c.Through <= len(live) {
+			msgs = append(msgs, c.Msg())
+			live = live[c.Through:]
+		}
+		msgs = append(msgs, live...)
+		// Ephemeral, never persisted: near the turn cap the model is told
+		// to wrap up, so the run ends with a summary, not a turn-limit error.
+		if left := chatMaxTurns - turn; left <= 3 {
+			msgs = append(msgs, agent.Message{Role: "system", Content: agent.WrapUpNote(left)})
+		}
+		return msgs
+	}
 	// inject appends user messages queued mid-run to the conversation, so
 	// the next model turn sees them ("actually, use port 3000").
 	inject := func(q []string) {
@@ -306,22 +352,29 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		if q := run.takeQueued(false); len(q) > 0 {
 			inject(q)
 		}
-		msgs := append(append([]agent.Message{}, prefix...), sess.Messages...)
-		// Ephemeral, never persisted: near the turn cap the model is told to
-		// wrap up, so the run ends with a summary, not a turn-limit error.
-		if left := chatMaxTurns - turn; left <= 3 {
-			msgs = append(msgs, agent.Message{Role: "system", Content: agent.WrapUpNote(left)})
+		from := 0
+		if sess.Compact != nil {
+			from = sess.Compact.Through
+		}
+		if agent.ApproxSize(sess.Messages[from:]) > agent.CompactAt {
+			compact(agent.CompactKeep)
 		}
 		var partial strings.Builder
 		var msg *agent.Message
 		var err error
 		for attempt := 0; ; attempt++ {
 			partial.Reset()
-			msg, err = callModel(ctx, msgs,
+			msg, err = callModel(ctx, view(turn), tools,
 				func(d string) {
 					partial.WriteString(d)
 					run.emit(map[string]any{"type": "delta", "text": d})
 				})
+			// The byte budget is an estimate: a backend that still rejects
+			// the request for size gets a harder compaction, then a retry.
+			if err != nil && agent.IsContextOverflow(err) && ctx.Err() == nil &&
+				attempt < 2 && compact(agent.CompactKeep/2) {
+				continue
+			}
 			// Retry a turn that died before anything streamed: the backends
 			// retry connection failures themselves, this covers streams
 			// dropped mid-read. Once deltas reached attached clients a
