@@ -33,6 +33,7 @@ const chatSystemTmpl = `You are the operator of exe, a personal VM cloud running
 %s
 
 Rules:
+- For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and update it via plan with "- [x]" checkmarks as steps complete — the user watches it as a live checklist. Skip it for trivial requests.
 - VM names: lowercase letters, digits, hyphens, max 31 chars.
 - To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
 - delete_vm and unexpose run only after the user approves an in-app confirmation dialog; still call them only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
@@ -47,6 +48,7 @@ const chatPinnedTmpl = `You are the operator of %q, one Debian Linux VM in exe, 
 %s
 
 Rules:
+- For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and update it via plan with "- [x]" checkmarks as steps complete — the user watches it as a live checklist. Skip it for trivial requests.
 - To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
 - unexpose runs only after the user approves an in-app confirmation dialog; still call it only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — the VM holds no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside the VM.
@@ -362,6 +364,7 @@ func chatTools(pinned bool) []agent.Tool {
 		agent.MkTool("recall", "Read a VM's saved memory — the durable notes earlier sessions kept about it. Check it before working on a VM you haven't touched in this conversation.", map[string]any{
 			"vm": vm,
 		}, []string{"vm"}),
+		agent.PlanTool(),
 	}
 	if !pinned {
 		return tools
@@ -483,6 +486,8 @@ func chatToolSummary(name string, args map[string]any) string {
 		return fmt.Sprintf("remember %s (%d bytes)", str("vm"), len(str("content")))
 	case "recall":
 		return "recall " + str("vm")
+	case "plan":
+		return fmt.Sprintf("plan (%d steps)", strings.Count(str("text"), "- ["))
 	default:
 		b, _ := json.Marshal(args)
 		if len(args) == 0 {
@@ -508,6 +513,7 @@ var chatRequiredArgs = map[string][]string{
 	"github_push": {"vm", "path"},
 	"remember":    {"vm"},
 	"recall":      {"vm"},
+	"plan":        {"text"},
 }
 
 func (s *Server) execChatTool(ctx context.Context, name string, args map[string]any, pin string) string {
@@ -640,6 +646,9 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 			return "(no memory saved for this VM)"
 		}
 		return mem
+	case "plan":
+		// purely informational: the run loop already emitted the plan event
+		return "ok — the user sees the checklist; continue"
 	case "list_ports":
 		info, err := s.runningVM(tctx, str("vm"))
 		if err != nil {

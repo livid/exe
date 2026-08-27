@@ -107,6 +107,7 @@ const systemPromptTmpl = `You are exe-agent, an autonomous coding agent operatin
 You are connected over SSH as user %s, who has passwordless sudo.
 
 Rules:
+- For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and call it again with updated checkmarks ("- [x]") as steps complete — the user watches it as a live checklist. Skip it for trivial one-step requests.
 - Use the bash tool to inspect and change the system. Install packages with: sudo apt-get install -y <pkg> (run sudo apt-get update once first).
 - Change existing files with edit_file; use write_file only for new files or full rewrites — read_file elides the middle of large files, so never rebuild a large file from what you read.
 - Build the project under ~/app unless the user says otherwise.
@@ -208,6 +209,7 @@ func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt,
 		MkTool("read_file", "Read a text file from the VM.", map[string]any{
 			"path": map[string]any{"type": "string"},
 		}, []string{"path"}),
+		PlanTool(),
 	}
 	hostByName := map[string]HostTool{}
 	for _, h := range host {
@@ -490,6 +492,16 @@ func ChatStream(ctx context.Context, cfg Config, msgs []Message, tools []Tool, o
 	return &full, nil
 }
 
+// PlanTool is the checklist tool both loops offer: purely informational —
+// the harness renders it for the user, nothing executes.
+func PlanTool() Tool {
+	return MkTool("plan",
+		"Post or update your plan as a short markdown checklist (\"- [ ] step\", \"- [x] done\"). Call it before starting a multi-step task and again with updated checkmarks as steps complete; the user watches it as a live checklist. Always send the complete current checklist.",
+		map[string]any{
+			"text": map[string]any{"type": "string", "description": "the complete checklist, one \"- [ ]\"/\"- [x]\" line per step"},
+		}, []string{"text"})
+}
+
 // requiredArgs names each tool's must-be-present string arguments; a call
 // missing one errors back to the model instead of running on zero values
 // (bash with an empty command, write_file to path "").
@@ -498,6 +510,7 @@ var requiredArgs = map[string][]string{
 	"write_file": {"path"},
 	"read_file":  {"path"},
 	"edit_file":  {"path"},
+	"plan":       {"text"},
 }
 
 func execTool(ctx context.Context, target sshexec.Target, tc ToolCall, logf Logf) string {
@@ -554,6 +567,9 @@ func execTool(ctx context.Context, target sshexec.Target, tc ToolCall, logf Logf
 			return fmt.Sprintf("error: %v", err)
 		}
 		return out
+	case "plan":
+		logf("\n[plan]\n%s\n\n", strings.TrimSpace(str("text")))
+		return "ok — the user sees the checklist; continue"
 	default:
 		return fmt.Sprintf("unknown tool %q", tc.Function.Name)
 	}

@@ -421,6 +421,12 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 				pinChatArgs(name, args, sess.VM)
 			}
 			run.emit(map[string]any{"type": "tool_call", "name": name, "summary": chatToolSummary(name, args)})
+			// the plan renders as a live checklist block, not a tool line
+			if name == "plan" {
+				if text, _ := args["text"].(string); strings.TrimSpace(text) != "" {
+					run.emit(map[string]any{"type": "plan", "text": text})
+				}
+			}
 			// Stop must hold between the tools of a turn: a canceled ctx
 			// skips execution outright — some tools (VM delete) would
 			// otherwise still act despite the dead context.

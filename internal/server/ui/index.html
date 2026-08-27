@@ -648,6 +648,16 @@ td .mono, td.mono { user-select: text; }
   background: #b8b8b0; border: 1px solid #808078; }
 .tool-dot.ok { background: #4a9e4a; border-color: #1e601e; }
 .tool-dot.fail { background: #c84a3a; border-color: #7a1010; }
+/* the agent's plan: one checklist block that updates in place as the model
+   re-posts it with checkmarks */
+.msg.plan { border: 1px solid var(--g600); background: #f4f4ef; padding: 7px 10px 8px;
+  margin: 0 24px 10px 0; box-shadow: inset 1px 1px 0 #fff; }
+.plan-title { font-weight: bold; font-size: 11px; margin-bottom: 5px; }
+.plan-item { display: flex; gap: 7px; align-items: flex-start; margin: 3px 0; }
+.plan-box { flex: none; width: 12px; height: 12px; border: 1px solid #000; background: #fff;
+  box-shadow: 1px 1px 0 #999; font-size: 11px; line-height: 12px; text-align: center; margin-top: 1px; }
+.plan-item.done .plan-text { text-decoration: line-through; color: #777; }
+.plan-note { color: #555; font-size: 11px; margin: 3px 0; }
 .msg.tool-out { font-family: var(--mono); font-size: 11px; color: #444; background: #f4f4ef;
   border: 1px solid var(--g500); margin: -2px 24px 10px 11px; padding: 5px 8px;
   max-height: 130px; overflow: auto; white-space: pre-wrap; overflow-wrap: break-word; }
@@ -4676,6 +4686,25 @@ function chatConfirmClear() {
   clearTimeout(c.timer);
   if (c.open) cfmClose(false);
 }
+// ---- the plan checklist: one block, updated in place ----
+// Each plan call carries the complete checklist, so the block re-renders
+// wholesale; a wiped transcript (session switch) just grows a fresh one.
+let planBlock = null;
+function renderPlan(text) {
+  if (!planBlock || !planBlock.isConnected) {
+    planBlock = el("div", { class: "msg plan" });
+    chatMsgs.append(planBlock);
+  }
+  planBlock.replaceChildren(el("div", { class: "plan-title" }, "Plan"));
+  for (const line of (text || "").split("\n")) {
+    const m = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.*)/);
+    if (m) planBlock.append(el("div", { class: "plan-item" + (m[1] === " " ? "" : " done") },
+      el("span", { class: "plan-box" }, m[1] === " " ? "" : "✓"),
+      el("span", { class: "plan-text" }, m[2])));
+    else if (line.trim()) planBlock.append(el("div", { class: "plan-note" }, line.trim()));
+  }
+  chatStick(true);
+}
 // bubbles for messages queued mid-run await their echo (a "user" event when
 // the loop injects them); FIFO-matched like tool dots. An echo with no
 // matching bubble is another client's injection — render it fresh.
@@ -4711,8 +4740,13 @@ function renderChatSession(sess) {
     if (m.role === "user") addMsg("user", m.content);
     else if (m.role === "assistant") {
       if ((m.content || "").trim()) addMDMsg(m.content.trim());
-      for (const tc of m.tool_calls || []) dots.push(addToolCall(toolSummary(tc.function.name, tc.function.arguments)));
-    } else if (m.role === "tool") {
+      for (const tc of m.tool_calls || []) {
+        let a = tc.function.arguments || {};
+        if (typeof a === "string") { try { a = JSON.parse(a); } catch (e) { a = {}; } }
+        if (tc.function.name === "plan") renderPlan(a.text || "");
+        else dots.push(addToolCall(toolSummary(tc.function.name, a)));
+      }
+    } else if (m.role === "tool" && m.tool_name !== "plan") {
       setToolDot(dots.shift(), m.content || "");
       addToolOut(m.content || "");
     }
@@ -4848,10 +4882,12 @@ async function pumpChat(resp, ac) {
     else if (ev.type === "text") addMDMsg(ev.text);
     else if (ev.type === "user") takeQueuedBubble(ev.text);
     else if (ev.type === "compact") addMsg("tool", "▪ earlier conversation condensed into a summary");
+    else if (ev.type === "plan") renderPlan(ev.text);
     else if (ev.type === "confirm") chatConfirmAsk(ev);
     else if (ev.type === "confirm_result") chatConfirmSettle(ev);
-    else if (ev.type === "tool_call") toolDots.push(addToolCall(ev.summary));
-    else if (ev.type === "tool_result") { setToolDot(toolDots.shift(), ev.output || ""); addToolOut(ev.output || ""); }
+    // plan calls render as the checklist block, not tool lines
+    else if (ev.type === "tool_call") { if (ev.name !== "plan") toolDots.push(addToolCall(ev.summary)); }
+    else if (ev.type === "tool_result") { if (ev.name !== "plan") { setToolDot(toolDots.shift(), ev.output || ""); addToolOut(ev.output || ""); } }
     else if (ev.type === "error") addMsg("err", ev.error);
     if (ev.type !== "done") { chatMsgs.append(think); chatStick(); }
   };
