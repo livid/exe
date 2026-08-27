@@ -180,8 +180,17 @@ func MkTool(name, desc string, props map[string]any, required []string) Tool {
 	}}
 }
 
+// HostTool is a tool executed by the daemon itself rather than inside the
+// VM — e.g. remember, which writes the VM's memory file on the host.
+type HostTool struct {
+	Tool Tool
+	Exec func(ctx context.Context, args map[string]any) string
+}
+
 // Run executes the agent loop until the model stops calling tools.
-func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt string, logf Logf) error {
+// briefing, when non-empty, rides along as a second system message — the
+// VM fact sheet the server assembles so a run doesn't start blind.
+func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt, briefing string, host []HostTool, logf Logf) error {
 	tools := []Tool{
 		MkTool("bash", "Run a shell command on the VM; returns combined output and exit code.", map[string]any{
 			"command": map[string]any{"type": "string", "description": "shell command to run"},
@@ -200,10 +209,18 @@ func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt 
 			"path": map[string]any{"type": "string"},
 		}, []string{"path"}),
 	}
+	hostByName := map[string]HostTool{}
+	for _, h := range host {
+		tools = append(tools, h.Tool)
+		hostByName[h.Tool.Function.Name] = h
+	}
 	msgs := []Message{
 		{Role: "system", Content: fmt.Sprintf(systemPromptTmpl, vmName, target.User)},
-		{Role: "user", Content: prompt},
 	}
+	if briefing != "" {
+		msgs = append(msgs, Message{Role: "system", Content: briefing})
+	}
+	msgs = append(msgs, Message{Role: "user", Content: prompt})
 	for turn := 0; turn < maxTurns; turn++ {
 		call := msgs
 		if left := maxTurns - turn; left <= 3 {
@@ -221,7 +238,13 @@ func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt 
 			return nil
 		}
 		for _, tc := range resp.Message.ToolCalls {
-			result := execTool(ctx, target, tc, logf)
+			var result string
+			if h, ok := hostByName[tc.Function.Name]; ok {
+				logf("[%s]\n", tc.Function.Name)
+				result = h.Exec(ctx, ParseArgs(tc.Function.Arguments))
+			} else {
+				result = execTool(ctx, target, tc, logf)
+			}
 			msgs = append(msgs, Message{Role: "tool", ToolName: tc.Function.Name, Content: result})
 		}
 	}

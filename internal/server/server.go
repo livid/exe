@@ -139,6 +139,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/vms/{name}/transcripts/{id}", s.handleTranscript)
 	mux.HandleFunc("GET /v1/vms/{name}/notes", s.handleNotesGet)
 	mux.HandleFunc("PUT /v1/vms/{name}/notes", s.handleNotesPut)
+	mux.HandleFunc("GET /v1/vms/{name}/memory", s.handleMemoryGet)
+	mux.HandleFunc("DELETE /v1/vms/{name}/memory", s.handleMemoryDelete)
 	mux.HandleFunc("GET /v1/apps", s.handleApps)
 	mux.HandleFunc("GET /v1/apps/events", s.handleAppDataEvents)
 	mux.HandleFunc("GET /v1/apps/{app}/data", s.handleAppDataList)
@@ -395,7 +397,24 @@ func (s *Server) agentRun(ctx context.Context, info *vmm.Info, name, prompt, mod
 	}
 	target := s.vmTarget(info)
 	logf("[agent] model %s on vm %s (%s)\n", acfg.Model, name, info.IP)
-	runErr := agent.Run(ctx, acfg, target, name, prompt, logf)
+	// The run starts with the VM briefing (state, notes, memory, recent
+	// sessions) and can save durable facts for future runs; remember is a
+	// host tool — the memory file lives beside the VM's notes, not in it.
+	remember := agent.HostTool{
+		Tool: rememberTool(false),
+		Exec: func(_ context.Context, args map[string]any) string {
+			content, ok := args["content"].(string)
+			if !ok {
+				return "error: missing required argument(s): content"
+			}
+			if err := s.writeVMMemory(name, content); err != nil {
+				return "error: " + err.Error()
+			}
+			return "ok, memory saved"
+		},
+	}
+	runErr := agent.Run(ctx, acfg, target, name, prompt,
+		s.vmBriefing(ctx, name, ""), []agent.HostTool{remember}, logf)
 	if runErr != nil {
 		logf("\n[agent] ERROR: %v\n", runErr)
 	} else {

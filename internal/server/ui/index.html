@@ -384,6 +384,11 @@ td.actions button + button { margin-left: 8px; }
 #win-detail .pane:not([hidden]) { flex: 1; display: flex; flex-direction: column; }
 #pane-term #term-box { flex: 1 1 auto; min-height: 160px; }
 #pane-notes #n-text { flex: 1 1 auto; }
+/* the agent's memory is read-only here: shown for transparency, erased
+   with Forget, written only by the remember tool */
+#n-memory { font-family: var(--mono); font-size: 11px; color: #444; background: #f4f4ef;
+  border: 1px solid var(--g500); padding: 6px 8px; max-height: 150px; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: break-word; box-shadow: inset 1px 1px 0 #fff; }
 #pane-sess .listbox { flex: 1 1 240px; max-height: none; }
 /* the terminal is the one pane that can adapt its height (xterm refits
    its rows), so when the body runs short — the 100vh cap on a small
@@ -1021,10 +1026,15 @@ body.mobile th.sorted {
 
           <div class="pane" id="pane-notes" hidden>
             <div class="row" style="margin-bottom:6px">
-              <span class="muted">Notes about this VM — saved automatically.</span>
+              <span class="muted">Notes about this VM — saved automatically. The agent reads them at the start of every run.</span>
               <span class="muted" id="n-status" style="margin-left:auto"></span>
             </div>
             <textarea id="n-text" style="min-height:220px" spellcheck="false" placeholder="What runs here, why it exists, how to rebuild it…"></textarea>
+            <div class="row" id="n-mem-head" style="margin:10px 0 6px" hidden>
+              <span class="muted">Agent memory — what the assistant saved about this VM for future runs.</span>
+              <button class="ghost sm danger" id="n-forget" style="margin-left:auto" title="Erase the agent's memory of this VM">Forget</button>
+            </div>
+            <div id="n-memory" hidden></div>
           </div>
         </div>
       </div>
@@ -4354,11 +4364,37 @@ async function loadNotes() {
   notesVM = currentVM;
   notesText.value = "";
   notesStatus("");
+  loadMemory();
   try {
     const d = await j(`/v1/vms/${notesVM}/notes`);
     if (notesVM === currentVM) notesText.value = d.notes || "";
   } catch (e) { notesStatus(e.message); }
 }
+// the agent's memory of this VM, shown under the user's notes; the block
+// disappears entirely while there is nothing remembered
+async function loadMemory() {
+  const vm = currentVM;
+  $("#n-mem-head").hidden = $("#n-memory").hidden = true;
+  try {
+    const d = await j(`/v1/vms/${vm}/memory`);
+    if (vm !== currentVM) return;
+    const has = (d.memory || "").trim() !== "";
+    $("#n-mem-head").hidden = $("#n-memory").hidden = !has;
+    $("#n-memory").textContent = d.memory || "";
+  } catch (e) {}
+}
+$("#n-forget").onclick = async () => {
+  const b = $("#n-forget");
+  if (!b.classList.contains("armed")) {
+    b.classList.add("armed");
+    setTimeout(() => b.classList.remove("armed"), 3000);
+    return;
+  }
+  b.classList.remove("armed");
+  try { await api(`/v1/vms/${currentVM}/memory`, { method: "DELETE" }); }
+  catch (e) { toast(e.message); return; }
+  loadMemory();
+};
 function saveNotes(vm, text) {
   // keepalive lets a flush fired from pagehide finish after the page is gone
   api(`/v1/vms/${vm}/notes`, { method: "PUT", json: { notes: text }, keepalive: true })
@@ -4663,6 +4699,8 @@ function toolSummary(name, rawArgs) {
     case "edit_file": return `edit ${at}${a.path}`;
     case "read_file": return `read ${at}${a.path}`;
     case "expose": return `expose ${at}${a.port}` + (a.subdomain ? ` as "${a.subdomain}"` : "");
+    case "remember": return `remember ${a.vm || ""} (${(a.content || "").length} bytes)`.replace("  ", " ");
+    case "recall": return "recall " + (a.vm || "");
     default: return name + (Object.keys(a).length ? " " + JSON.stringify(a) : "");
   }
 }

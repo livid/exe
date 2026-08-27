@@ -37,6 +37,7 @@ Rules:
 - To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
 - delete_vm and unexpose run only after the user approves an in-app confirmation dialog; still call them only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — VMs hold no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside a VM.
+- Each VM has a persistent memory for future sessions: recall reads it, remember replaces it. Save durable facts — where projects live, how services start, gotchas — when you learn them.
 - Creating a VM takes ~10 seconds and it boots with an IP; the very first creation ever downloads a 3 GB image.
 - Format answers in Markdown (lists, tables, code blocks and links render nicely), and keep them concise. When you finish a task, summarize what changed and give the address where it can be reached.`
 
@@ -49,6 +50,7 @@ Rules:
 - To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
 - unexpose runs only after the user approves an in-app confirmation dialog; still call it only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — the VM holds no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside the VM.
+- The VM's saved memory and current state are in your context; when you learn something durable, save the complete updated memory with remember.
 - Format answers in Markdown (lists, tables, code blocks and links render nicely), and keep them concise. When you finish a task, summarize what changed and give the address where it can be reached.`
 
 func (s *Server) chatDir() string { return filepath.Join(s.StateDir, "chat") }
@@ -356,6 +358,10 @@ func chatTools(pinned bool) []agent.Tool {
 		agent.MkTool("daemon_logs", "Read the tail of the exe daemon's own log — useful to diagnose expose/DNS/VM issues.", map[string]any{
 			"lines": num("how many lines (default 100, max 400)"),
 		}, nil),
+		rememberTool(true),
+		agent.MkTool("recall", "Read a VM's saved memory — the durable notes earlier sessions kept about it. Check it before working on a VM you haven't touched in this conversation.", map[string]any{
+			"vm": vm,
+		}, []string{"vm"}),
 	}
 	if !pinned {
 		return tools
@@ -391,7 +397,7 @@ func chatTools(pinned bool) []agent.Tool {
 // hallucinated value must not win either — overwriting beats validating.
 func pinChatArgs(name string, args map[string]any, vm string) {
 	switch name {
-	case "bash", "write_file", "edit_file", "read_file", "list_ports", "expose", "github_push":
+	case "bash", "write_file", "edit_file", "read_file", "list_ports", "expose", "github_push", "remember", "recall":
 		args["vm"] = vm
 	case "start_vm", "stop_vm":
 		args["name"] = vm
@@ -414,6 +420,24 @@ func (s *Server) routeBelongsTo(ctx context.Context, vmName, host string) error 
 		return fmt.Errorf("%s does not route to VM %s", host, vmName)
 	}
 	return nil
+}
+
+// rememberTool is the schema of the memory-writing tool. Fleet chat
+// addresses a VM by name; pinned sessions and vibecode runs have the
+// target injected, so their schema carries no vm parameter.
+func rememberTool(withVM bool) agent.Tool {
+	props := map[string]any{
+		"content": map[string]any{"type": "string",
+			"description": "the complete new memory (Markdown) — it replaces what was saved before; empty forgets everything"},
+	}
+	required := []string{"content"}
+	if withVM {
+		props["vm"] = map[string]any{"type": "string", "description": "VM name"}
+		required = []string{"vm", "content"}
+	}
+	return agent.MkTool("remember",
+		"Save durable notes about the VM for future sessions: where projects live, how services start, decisions made, gotchas hit. Replaces the VM's saved memory wholesale — write the complete memory, keeping what still matters.",
+		props, required)
 }
 
 // confirmPrompt returns the alert copy for tools that only run after an
@@ -455,6 +479,10 @@ func chatToolSummary(name string, args map[string]any) string {
 		return fmt.Sprintf("expose %s:%d as %q", str("vm"), int(p), str("subdomain"))
 	case "github_push":
 		return fmt.Sprintf("push %s:%s to github", str("vm"), str("path"))
+	case "remember":
+		return fmt.Sprintf("remember %s (%d bytes)", str("vm"), len(str("content")))
+	case "recall":
+		return "recall " + str("vm")
 	default:
 		b, _ := json.Marshal(args)
 		if len(args) == 0 {
@@ -478,6 +506,8 @@ var chatRequiredArgs = map[string][]string{
 	"expose":      {"vm"},
 	"unexpose":    {"host"},
 	"github_push": {"vm", "path"},
+	"remember":    {"vm"},
+	"recall":      {"vm"},
 }
 
 func (s *Server) execChatTool(ctx context.Context, name string, args map[string]any, pin string) string {
@@ -504,7 +534,7 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 	if msg := agent.RequireArgs(args, chatRequiredArgs[name]...); msg != "" {
 		return msg
 	}
-	if _, ok := args["content"]; !ok && name == "write_file" {
+	if _, ok := args["content"]; !ok && (name == "write_file" || name == "remember") {
 		return "error: missing required argument(s): content"
 	}
 	tctx, cancel := context.WithTimeout(ctx, chatToolTimeout)
@@ -593,6 +623,23 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 			return "error: " + err.Error()
 		}
 		return out
+	case "remember":
+		if _, err := s.VMs.Get(tctx, str("vm")); err != nil {
+			return "error: " + err.Error()
+		}
+		if err := s.writeVMMemory(str("vm"), str("content")); err != nil {
+			return "error: " + err.Error()
+		}
+		return "ok, memory saved"
+	case "recall":
+		if _, err := s.VMs.Get(tctx, str("vm")); err != nil {
+			return "error: " + err.Error()
+		}
+		mem := s.readVMMemory(str("vm"))
+		if strings.TrimSpace(mem) == "" {
+			return "(no memory saved for this VM)"
+		}
+		return mem
 	case "list_ports":
 		info, err := s.runningVM(tctx, str("vm"))
 		if err != nil {

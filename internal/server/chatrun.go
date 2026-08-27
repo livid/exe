@@ -262,7 +262,13 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 	}
 	acfg := agent.Config{BaseURL: cfg.Ollama.BaseURL, APIKey: cfg.Ollama.APIKey,
 		Model: cfg.Ollama.Model, Effort: cfg.Ollama.Effort}
-	system := agent.Message{Role: "system", Content: chatSystemPrompt(cfg.SSHUser, cfg.Cloudflare.Domain, sess.VM)}
+	// A pinned run opens with the VM briefing — live state, the user's
+	// notes, the agent's saved memory, recent session summaries — built
+	// once at run start and injected ephemerally, never persisted.
+	prefix := []agent.Message{{Role: "system", Content: chatSystemPrompt(cfg.SSHUser, cfg.Cloudflare.Domain, sess.VM)}}
+	if sess.VM != "" {
+		prefix = append(prefix, agent.Message{Role: "system", Content: s.vmBriefing(ctx, sess.VM, sess.ID)})
+	}
 	tools := chatTools(sess.VM != "")
 	// callModel runs one turn on the configured backend. The ChatGPT path
 	// resolves (and auto-refreshes) the token per turn and retries once
@@ -300,7 +306,7 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		if q := run.takeQueued(false); len(q) > 0 {
 			inject(q)
 		}
-		msgs := append([]agent.Message{system}, sess.Messages...)
+		msgs := append(append([]agent.Message{}, prefix...), sess.Messages...)
 		// Ephemeral, never persisted: near the turn cap the model is told to
 		// wrap up, so the run ends with a summary, not a turn-limit error.
 		if left := chatMaxTurns - turn; left <= 3 {
