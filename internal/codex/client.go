@@ -198,6 +198,7 @@ func ChatStream(ctx context.Context, cfg ClientConfig, msgs []agent.Message, too
 	rctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	reqID := newUUID()
+	attempt := 0
 	for {
 		body, err := json.Marshal(respRequest{
 			Model:          cfg.Model,
@@ -227,6 +228,15 @@ func ChatStream(ctx context.Context, cfg ClientConfig, msgs []agent.Message, too
 		req.Header.Set("x-client-request-id", reqID)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
+			// transient network failure — retry with backoff inside the
+			// 5-minute window unless the caller's context is what ended it
+			if rctx.Err() == nil && attempt < 2 {
+				log.Printf("chatgpt %s: %v; retrying", cfg.Model, err)
+				attempt++
+				if agent.SleepCtx(rctx, agent.RetryDelay(attempt-1, "")) {
+					continue
+				}
+			}
 			return nil, err
 		}
 		if resp.StatusCode == http.StatusOK {
@@ -248,6 +258,13 @@ func ChatStream(ctx context.Context, cfg ClientConfig, msgs []agent.Message, too
 				cfg.Model, cfg.Effort, truncate(string(raw), 200))
 			reasoning = nil
 			continue
+		}
+		if agent.RetryStatus(resp.StatusCode) && attempt < 2 {
+			log.Printf("chatgpt %s: HTTP %d; retrying", cfg.Model, resp.StatusCode)
+			attempt++
+			if agent.SleepCtx(rctx, agent.RetryDelay(attempt-1, resp.Header.Get("Retry-After"))) {
+				continue
+			}
 		}
 		return nil, fmt.Errorf("chatgpt %s: HTTP %d: %s", cfg.Model, resp.StatusCode, truncate(string(raw), 2000))
 	}

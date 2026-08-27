@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,7 +37,71 @@ const (
 	maxTurns      = 60
 	maxToolOutput = 12000
 	toolTimeout   = 5 * time.Minute
+	// maxAttempts bounds one model call: the first try plus retries on
+	// transient failures (connection errors, 429, 5xx).
+	maxAttempts = 3
 )
+
+// retryBase is the first retry's delay, doubling per attempt; a variable so
+// tests don't sleep for real.
+var retryBase = time.Second
+
+// RetryStatus reports whether an HTTP status is worth retrying.
+func RetryStatus(code int) bool {
+	switch code {
+	case http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
+}
+
+// RetryDelay is the backoff before retry number attempt (0-based), stretched
+// (capped at 30s) by a Retry-After header when the server sent one.
+func RetryDelay(attempt int, retryAfter string) time.Duration {
+	d := retryBase << attempt
+	if s, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && s >= 0 {
+		if ra := time.Duration(s) * time.Second; ra > d {
+			d = min(ra, 30*time.Second)
+		}
+	}
+	return d
+}
+
+// SleepCtx sleeps for d unless ctx ends first; false means it did.
+func SleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+// WrapUpNote is appended (ephemerally, never persisted) to the model's view
+// of the conversation when a loop nears its turn cap, so the run ends with
+// a usable summary instead of an abrupt turn-limit error.
+func WrapUpNote(left int) string {
+	return fmt.Sprintf("NOTE: at most %d tool turn(s) remain before this run is force-stopped. Wrap up now: make only the smallest remaining change, then reply without tool calls, summarizing what works and what is left to do.", left)
+}
+
+// RequireArgs returns a tool-result error naming the string arguments that
+// are missing or empty, or "" when all are present — a malformed call must
+// error back to the model, not run with zero values.
+func RequireArgs(args map[string]any, keys ...string) string {
+	var missing []string
+	for _, k := range keys {
+		if v, _ := args[k].(string); strings.TrimSpace(v) == "" {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) == 0 {
+		return ""
+	}
+	return "error: missing required argument(s): " + strings.Join(missing, ", ")
+}
 
 const systemPromptTmpl = `You are exe-agent, an autonomous coding agent operating a Debian Linux VM named %s.
 You are connected over SSH as user %s, who has passwordless sudo.
@@ -140,7 +205,11 @@ func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt 
 		{Role: "user", Content: prompt},
 	}
 	for turn := 0; turn < maxTurns; turn++ {
-		resp, err := Chat(ctx, cfg, msgs, tools)
+		call := msgs
+		if left := maxTurns - turn; left <= 3 {
+			call = append(append([]Message{}, msgs...), Message{Role: "system", Content: WrapUpNote(left)})
+		}
+		resp, err := Chat(ctx, cfg, call, tools)
 		if err != nil {
 			return err
 		}
@@ -237,6 +306,7 @@ func chatHTTP(ctx context.Context, cfg Config, msgs []Message, tools []Tool, str
 		creq.Think = cfg.Effort
 	}
 	rctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	attempt := 0
 	for {
 		body, err := json.Marshal(creq)
 		if err != nil {
@@ -255,6 +325,15 @@ func chatHTTP(ctx context.Context, cfg Config, msgs []Message, tools []Tool, str
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
+			// transient network failure — retry with backoff inside the
+			// 5-minute window unless the caller's context is what ended it
+			if rctx.Err() == nil && attempt < maxAttempts-1 {
+				log.Printf("ollama %s: %v; retrying", cfg.Model, err)
+				attempt++
+				if SleepCtx(rctx, RetryDelay(attempt-1, "")) {
+					continue
+				}
+			}
 			cancel()
 			return nil, nil, err
 		}
@@ -273,6 +352,13 @@ func chatHTTP(ctx context.Context, cfg Config, msgs []Message, tools []Tool, str
 				cfg.Model, creq.Think, sshexec.Truncate(string(raw), 200))
 			creq.Think = nil
 			continue
+		}
+		if RetryStatus(resp.StatusCode) && attempt < maxAttempts-1 {
+			log.Printf("ollama %s: HTTP %d; retrying", cfg.Model, resp.StatusCode)
+			attempt++
+			if SleepCtx(rctx, RetryDelay(attempt-1, resp.Header.Get("Retry-After"))) {
+				continue
+			}
 		}
 		cancel()
 		return nil, nil, fmt.Errorf("ollama %s: HTTP %d: %s", cfg.Model, resp.StatusCode, sshexec.Truncate(string(raw), 2000))
@@ -342,9 +428,25 @@ func ChatStream(ctx context.Context, cfg Config, msgs []Message, tools []Tool, o
 	return &full, nil
 }
 
+// requiredArgs names each tool's must-be-present string arguments; a call
+// missing one errors back to the model instead of running on zero values
+// (bash with an empty command, write_file to path "").
+var requiredArgs = map[string][]string{
+	"bash":       {"command"},
+	"write_file": {"path"},
+	"read_file":  {"path"},
+	"edit_file":  {"path"},
+}
+
 func execTool(ctx context.Context, target sshexec.Target, tc ToolCall, logf Logf) string {
 	args := ParseArgs(tc.Function.Arguments)
 	str := func(k string) string { v, _ := args[k].(string); return v }
+	if msg := RequireArgs(args, requiredArgs[tc.Function.Name]...); msg != "" {
+		return msg
+	}
+	if _, ok := args["content"]; !ok && tc.Function.Name == "write_file" {
+		return "error: missing required argument(s): content"
+	}
 	tctx, cancel := context.WithTimeout(ctx, toolTimeout)
 	defer cancel()
 

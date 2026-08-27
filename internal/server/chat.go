@@ -442,6 +442,22 @@ func chatToolSummary(name string, args map[string]any) string {
 	}
 }
 
+// chatRequiredArgs names each chat tool's must-be-present string arguments.
+var chatRequiredArgs = map[string][]string{
+	"create_vm":   {"name"},
+	"start_vm":    {"name"},
+	"stop_vm":     {"name"},
+	"delete_vm":   {"name"},
+	"bash":        {"vm", "command"},
+	"write_file":  {"vm", "path"},
+	"edit_file":   {"vm", "path"},
+	"read_file":   {"vm", "path"},
+	"list_ports":  {"vm"},
+	"expose":      {"vm"},
+	"unexpose":    {"host"},
+	"github_push": {"vm", "path"},
+}
+
 func (s *Server) execChatTool(ctx context.Context, name string, args map[string]any, pin string) string {
 	cfg := s.Config()
 	str := func(k string) string { v, _ := args[k].(string); return v }
@@ -459,6 +475,15 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 			return sshexec.Target{}, err
 		}
 		return s.vmTarget(info), nil
+	}
+	// A call missing a required argument errors back to the model instead of
+	// running on zero values (bash with an empty command, VM name "").
+	// pinChatArgs ran already, so pinned sessions always carry vm here.
+	if msg := agent.RequireArgs(args, chatRequiredArgs[name]...); msg != "" {
+		return msg
+	}
+	if _, ok := args["content"]; !ok && name == "write_file" {
+		return "error: missing required argument(s): content"
 	}
 	tctx, cancel := context.WithTimeout(ctx, chatToolTimeout)
 	defer cancel()

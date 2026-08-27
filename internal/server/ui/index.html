@@ -634,6 +634,12 @@ td .mono, td.mono { user-select: text; }
 .msg.asst img { max-width: 100%; }
 .msg.tool { font-family: var(--mono); font-size: 11px; color: #555; margin: 0 24px 6px 0;
   padding: 1px 0 1px 8px; border-left: 3px solid var(--g500); white-space: pre-wrap; overflow-wrap: break-word; }
+/* the marker dot starts neutral while the tool runs, then turns
+   green (ran clean) or red (error / nonzero exit) with the result */
+.tool-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
+  background: #b8b8b0; border: 1px solid #808078; }
+.tool-dot.ok { background: #4a9e4a; border-color: #1e601e; }
+.tool-dot.fail { background: #c84a3a; border-color: #7a1010; }
 .msg.tool-out { font-family: var(--mono); font-size: 11px; color: #444; background: #f4f4ef;
   border: 1px solid var(--g500); margin: -2px 24px 10px 11px; padding: 5px 8px;
   max-height: 130px; overflow: auto; white-space: pre-wrap; overflow-wrap: break-word; }
@@ -4587,6 +4593,21 @@ function addMDMsg(text) {
 function addToolOut(out) {
   if (out && out.trim()) addMsg("tool-out", out.length > 4000 ? out.slice(0, 4000) + "…" : out);
 }
+// each tool call renders with a status dot; the caller queues the returned
+// dot and colors it when the matching result arrives (calls and results are
+// emitted strictly in order, so a FIFO pairs them exactly)
+function addToolCall(summary) {
+  const dot = el("span", { class: "tool-dot" });
+  const d = el("div", { class: "msg tool" }, dot, summary);
+  chatMsgs.append(d);
+  chatStick(true);
+  return dot;
+}
+function setToolDot(dot, out) {
+  if (!dot) return;
+  const failed = /^error:/.test(out) || /\[exit code -?\d+\]$/.test(out.trimEnd());
+  dot.classList.add(failed ? "fail" : "ok");
+}
 // mirrors the server's chatToolSummary for replaying stored sessions
 function toolSummary(name, rawArgs) {
   let a = rawArgs || {};
@@ -4605,12 +4626,16 @@ function toolSummary(name, rawArgs) {
 }
 function renderChatSession(sess) {
   chatMsgs.replaceChildren();
+  const dots = [];
   for (const m of sess.messages || []) {
     if (m.role === "user") addMsg("user", m.content);
     else if (m.role === "assistant") {
       if ((m.content || "").trim()) addMDMsg(m.content.trim());
-      for (const tc of m.tool_calls || []) addMsg("tool", "▸ " + toolSummary(tc.function.name, tc.function.arguments));
-    } else if (m.role === "tool") addToolOut(m.content || "");
+      for (const tc of m.tool_calls || []) dots.push(addToolCall(toolSummary(tc.function.name, tc.function.arguments)));
+    } else if (m.role === "tool") {
+      setToolDot(dots.shift(), m.content || "");
+      addToolOut(m.content || "");
+    }
   }
   if (!chatMsgs.children.length) chatHint();
 }
@@ -4713,6 +4738,7 @@ async function chatStop() {
 async function pumpChat(resp, ac) {
   const think = addMsg("think", "working");
   let cur = null, curText = "", raf = 0;
+  const toolDots = [];
   // deltas render at most once a frame: a re-attach replays the whole
   // backlog in one burst, and re-parsing the full reply per fragment
   // would freeze the tab
@@ -4737,8 +4763,8 @@ async function pumpChat(resp, ac) {
       if (chatStopWanted) { chatStopWanted = false; chatStop(); }
     }
     else if (ev.type === "text") addMDMsg(ev.text);
-    else if (ev.type === "tool_call") addMsg("tool", "▸ " + ev.summary);
-    else if (ev.type === "tool_result") addToolOut(ev.output || "");
+    else if (ev.type === "tool_call") toolDots.push(addToolCall(ev.summary));
+    else if (ev.type === "tool_result") { setToolDot(toolDots.shift(), ev.output || ""); addToolOut(ev.output || ""); }
     else if (ev.type === "error") addMsg("err", ev.error);
     if (ev.type !== "done") { chatMsgs.append(think); chatStick(); }
   };

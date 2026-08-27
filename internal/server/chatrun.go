@@ -170,12 +170,35 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		return msg, err
 	}
 	for turn := 0; turn < chatMaxTurns; turn++ {
+		msgs := append([]agent.Message{system}, sess.Messages...)
+		// Ephemeral, never persisted: near the turn cap the model is told to
+		// wrap up, so the run ends with a summary, not a turn-limit error.
+		if left := chatMaxTurns - turn; left <= 3 {
+			msgs = append(msgs, agent.Message{Role: "system", Content: agent.WrapUpNote(left)})
+		}
 		var partial strings.Builder
-		msg, err := callModel(ctx, append([]agent.Message{system}, sess.Messages...),
-			func(d string) {
-				partial.WriteString(d)
-				run.emit(map[string]any{"type": "delta", "text": d})
-			})
+		var msg *agent.Message
+		var err error
+		for attempt := 0; ; attempt++ {
+			partial.Reset()
+			msg, err = callModel(ctx, msgs,
+				func(d string) {
+					partial.WriteString(d)
+					run.emit(map[string]any{"type": "delta", "text": d})
+				})
+			// Retry a turn that died before anything streamed: the backends
+			// retry connection failures themselves, this covers streams
+			// dropped mid-read. Once deltas reached attached clients a
+			// retry would replay them as duplicates, so stop retrying then.
+			if err == nil || partial.Len() > 0 || attempt == 2 ||
+				ctx.Err() != nil || errors.Is(err, codex.ErrUnauthorized) {
+				break
+			}
+			log.Printf("chat %s turn %d: %v; retrying turn", sess.ID, turn, err)
+			if !agent.SleepCtx(ctx, agent.RetryDelay(attempt, "")) {
+				break
+			}
+		}
 		if err != nil {
 			// keep what already streamed — without this the partial reply
 			// lives only in the run's event buffer and dies with the run
