@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,67 @@ type chatRun struct {
 	// drain — the sender falls back to a normal send instead.
 	queued []string
 	closed bool
+	// confirm is the destructive tool call currently blocked on the user's
+	// answer (one at a time — tools run sequentially); confirmSeq numbers
+	// them so a stale answer can't approve a later confirmation.
+	confirm    *chatConfirmReq
+	confirmSeq int
+}
+
+// chatConfirmTimeout bounds how long the loop waits for the user to answer
+// a destructive-tool confirmation before treating it as unanswered.
+const chatConfirmTimeout = 2 * time.Minute
+
+type chatConfirmReq struct {
+	id string
+	ch chan bool
+}
+
+// requestConfirm blocks the loop on an in-app confirmation: it emits a
+// confirm event for the alert dialog, waits for the answer (POST
+// /v1/chat/sessions/{id}/confirm), and reports "approved", "declined",
+// "timeout" or "stopped". The outcome goes out as a confirm_result event so
+// every attached client settles its dialog, replays included.
+func (r *chatRun) requestConfirm(ctx context.Context, message, detail, action string) string {
+	r.mu.Lock()
+	r.confirmSeq++
+	pc := &chatConfirmReq{id: strconv.Itoa(r.confirmSeq), ch: make(chan bool, 1)}
+	r.confirm = pc
+	r.mu.Unlock()
+	r.emit(map[string]any{"type": "confirm", "id": pc.id,
+		"message": message, "detail": detail, "action": action})
+	outcome := "stopped"
+	select {
+	case ok := <-pc.ch:
+		if ok {
+			outcome = "approved"
+		} else {
+			outcome = "declined"
+		}
+	case <-time.After(chatConfirmTimeout):
+		outcome = "timeout"
+	case <-ctx.Done():
+	}
+	r.mu.Lock()
+	if r.confirm == pc {
+		r.confirm = nil
+	}
+	r.mu.Unlock()
+	r.emit(map[string]any{"type": "confirm_result", "id": pc.id, "outcome": outcome})
+	return outcome
+}
+
+// answerConfirm resolves the pending confirmation; false when none matches
+// (already answered elsewhere, timed out, or the run moved on).
+func (r *chatRun) answerConfirm(id string, approve bool) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.confirm == nil || r.confirm.id != id {
+		return false
+	}
+	r.confirm.ch <- approve // buffered; consumed at most once
+	r.confirm = nil
+	return true
 }
 
 // queue hands msg to the running loop for injection before its next model
@@ -305,7 +367,20 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 			// otherwise still act despite the dead context.
 			result := "error: " + run.stopReason()
 			if ctx.Err() == nil {
-				result = s.execChatTool(ctx, name, args, sess.VM)
+				if cm, cd, ca, gated := confirmPrompt(name, args, sess.VM); gated {
+					switch run.requestConfirm(ctx, cm, cd, ca) {
+					case "approved":
+						result = s.execChatTool(ctx, name, args, sess.VM)
+					case "declined":
+						result = "error: the user declined the confirmation — do not retry; ask what they want instead"
+					case "timeout":
+						result = "error: the user did not answer the confirmation in time — do not retry; ask again when they are back"
+					default: // stopped
+						result = "error: " + run.stopReason()
+					}
+				} else {
+					result = s.execChatTool(ctx, name, args, sess.VM)
+				}
 			}
 			run.emit(map[string]any{"type": "tool_result", "name": name, "output": sshexec.Truncate(result, 4000)})
 			sess.Messages = append(sess.Messages, agent.Message{Role: "tool", ToolName: name, ToolCallID: tc.ID, Content: result})
@@ -386,6 +461,26 @@ func (s *Server) handleChatQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "queued"})
+}
+
+// handleChatConfirm answers the run's pending destructive-tool
+// confirmation. 409 when none matches — answered from another window,
+// timed out, or the run has moved on.
+func (s *Server) handleChatConfirm(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID      string `json:"id"`
+		Approve bool   `json:"approve"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	v, ok := s.chatRuns.Load(r.PathValue("id"))
+	if !ok || !v.(*chatRun).answerConfirm(req.ID, req.Approve) {
+		writeErr(w, http.StatusConflict, errors.New("no matching confirmation is pending"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "answered"})
 }
 
 // handleChatStop cancels a session's in-flight reply; the loop winds down

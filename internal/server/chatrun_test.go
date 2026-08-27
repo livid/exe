@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"sync"
 	"testing"
+	"time"
 )
 
 // The queue closes atomically on the loop's final empty drain, so a message
@@ -43,5 +45,60 @@ func TestChatRunQueue(t *testing.T) {
 	}
 	if run2.queue("x") {
 		t.Fatal("queue accepted after an empty final drain")
+	}
+}
+
+func waitForConfirm(t *testing.T, run *chatRun) {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		run.mu.Lock()
+		ok := run.confirm != nil
+		run.mu.Unlock()
+		if ok {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("confirmation never registered")
+}
+
+// A destructive tool call blocks on requestConfirm until the matching
+// answer arrives (or the run is stopped); stale or mismatched answers are
+// refused, so an old dialog can't approve a later confirmation.
+func TestChatRunConfirm(t *testing.T) {
+	run := &chatRun{}
+	run.cond = sync.NewCond(&run.mu)
+	done := make(chan string, 1)
+
+	go func() { done <- run.requestConfirm(context.Background(), "m", "d", "Delete") }()
+	waitForConfirm(t, run)
+	if run.answerConfirm("999", true) {
+		t.Fatal("answer with a wrong id accepted")
+	}
+	if !run.answerConfirm("1", true) {
+		t.Fatal("matching answer refused")
+	}
+	if got := <-done; got != "approved" {
+		t.Fatalf("outcome = %q, want approved", got)
+	}
+
+	go func() { done <- run.requestConfirm(context.Background(), "m", "d", "Delete") }()
+	waitForConfirm(t, run)
+	if !run.answerConfirm("2", false) {
+		t.Fatal("decline refused")
+	}
+	if got := <-done; got != "declined" {
+		t.Fatalf("outcome = %q, want declined", got)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { done <- run.requestConfirm(ctx, "m", "d", "Delete") }()
+	waitForConfirm(t, run)
+	cancel()
+	if got := <-done; got != "stopped" {
+		t.Fatalf("outcome = %q, want stopped", got)
+	}
+	if run.answerConfirm("3", true) {
+		t.Fatal("answer accepted after the run moved on")
 	}
 }

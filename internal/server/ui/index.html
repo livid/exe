@@ -4611,6 +4611,35 @@ function setToolDot(dot, out) {
   const failed = /^error:/.test(out) || /\[exit code -?\d+\]$/.test(out.trimEnd());
   dot.classList.add(failed ? "fail" : "ok");
 }
+// ---- destructive-tool confirmations: the run blocks until answered ----
+// The alert opens on a micro-delay: an attach replays history in one burst,
+// and a confirmation already settled there (its confirm_result follows in
+// the same burst) must not flash the dialog.
+let chatCfm = null; // the pending confirm event this window may answer
+function chatConfirmAsk(ev) {
+  chatConfirmClear();
+  const c = chatCfm = { id: ev.id, session: chatCur, open: false };
+  c.timer = setTimeout(async () => {
+    if (chatCfm !== c) return;
+    c.open = true;
+    const ok = await confirmDialog({ message: ev.message, detail: ev.detail,
+      action: ev.action || "OK", danger: true });
+    if (chatCfm !== c) return; // settled from elsewhere — the dialog was closed for us
+    chatCfm = null;
+    try { await api("/v1/chat/sessions/" + c.session + "/confirm", { method: "POST", json: { id: c.id, approve: ok } }); }
+    catch (e) { toast(e.message); } // answered in another window, or timed out
+  }, 100);
+}
+function chatConfirmSettle(ev) {
+  if (chatCfm && chatCfm.id === ev.id) chatConfirmClear();
+}
+function chatConfirmClear() {
+  const c = chatCfm;
+  if (!c) return;
+  chatCfm = null; // before cfmClose: its resolve must see the handoff
+  clearTimeout(c.timer);
+  if (c.open) cfmClose(false);
+}
 // bubbles for messages queued mid-run await their echo (a "user" event when
 // the loop injects them); FIFO-matched like tool dots. An echo with no
 // matching bubble is another client's injection — render it fresh.
@@ -4738,6 +4767,7 @@ function chatDetach() {
   chatSel++;
   chatStopWanted = false;
   chatBusy = false;
+  chatConfirmClear(); // the dialog belongs to the stream we just left
   chatSendBtn();
 }
 // chatStop cancels the run in the daemon; everyone attached sees it end.
@@ -4779,6 +4809,8 @@ async function pumpChat(resp, ac) {
     }
     else if (ev.type === "text") addMDMsg(ev.text);
     else if (ev.type === "user") takeQueuedBubble(ev.text);
+    else if (ev.type === "confirm") chatConfirmAsk(ev);
+    else if (ev.type === "confirm_result") chatConfirmSettle(ev);
     else if (ev.type === "tool_call") toolDots.push(addToolCall(ev.summary));
     else if (ev.type === "tool_result") { setToolDot(toolDots.shift(), ev.output || ""); addToolOut(ev.output || ""); }
     else if (ev.type === "error") addMsg("err", ev.error);
@@ -4806,6 +4838,7 @@ async function pumpChat(resp, ac) {
   flush();
   think.remove();
   if (chatAbort !== ac) return; // detached — whoever detached owns the UI now
+  chatConfirmClear(); // a rejoin replays the confirm if it is still pending
   chatAbort = null;
   chatStopWanted = false;
   if (dropped) {

@@ -35,7 +35,7 @@ const chatSystemTmpl = `You are the operator of exe, a personal VM cloud running
 Rules:
 - VM names: lowercase letters, digits, hyphens, max 31 chars.
 - To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
-- Only call delete_vm or unexpose when the user explicitly asked for that; for anything destructive, restate what you are about to do first.
+- delete_vm and unexpose run only after the user approves an in-app confirmation dialog; still call them only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — VMs hold no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside a VM.
 - Creating a VM takes ~10 seconds and it boots with an IP; the very first creation ever downloads a 3 GB image.
 - Format answers in Markdown (lists, tables, code blocks and links render nicely), and keep them concise. When you finish a task, summarize what changed and give the address where it can be reached.`
@@ -47,7 +47,7 @@ const chatPinnedTmpl = `You are the operator of %q, one Debian Linux VM in exe, 
 
 Rules:
 - To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
-- Only call unexpose when the user explicitly asked for that; for anything destructive, restate what you are about to do first.
+- unexpose runs only after the user approves an in-app confirmation dialog; still call it only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — the VM holds no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside the VM.
 - Format answers in Markdown (lists, tables, code blocks and links render nicely), and keep them concise. When you finish a task, summarize what changed and give the address where it can be reached.`
 
@@ -414,6 +414,28 @@ func (s *Server) routeBelongsTo(ctx context.Context, vmName, host string) error 
 		return fmt.Errorf("%s does not route to VM %s", host, vmName)
 	}
 	return nil
+}
+
+// confirmPrompt returns the alert copy for tools that only run after an
+// in-app confirmation — the enforcement behind the "only when the user
+// asked" prompt rules. Pinned sessions skip delete_vm here: execChatTool
+// refuses it outright, so there is nothing to confirm.
+func confirmPrompt(name string, args map[string]any, pin string) (message, detail, action string, gated bool) {
+	str := func(k string) string { v, _ := args[k].(string); return v }
+	switch name {
+	case "delete_vm":
+		if pin != "" {
+			return
+		}
+		return fmt.Sprintf("Delete the VM “%s”?", str("name")),
+			"The assistant wants to delete this VM. Its disk and everything on it are removed permanently.",
+			"Delete", true
+	case "unexpose":
+		return fmt.Sprintf("Remove the route “%s”?", str("host")),
+			"The assistant wants to unpublish this hostname. Its public URL stops working immediately.",
+			"Remove", true
+	}
+	return
 }
 
 // chatToolSummary is the one-liner the UI shows for a tool call.
