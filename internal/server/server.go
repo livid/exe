@@ -160,6 +160,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/chat/sessions/{id}", s.handleChatSessionDelete)
 	mux.HandleFunc("GET /v1/chat/sessions/{id}/stream", s.handleChatStream)
 	mux.HandleFunc("POST /v1/chat/sessions/{id}/stop", s.handleChatStop)
+	mux.HandleFunc("POST /v1/chat/sessions/{id}/queue", s.handleChatQueue)
 	mux.HandleFunc("POST /v1/chat/send", s.handleChatSend)
 	mux.HandleFunc("GET /v1/vms/{name}/publish/scan", s.handlePublishScan)
 	mux.HandleFunc("POST /v1/vms/{name}/publish", s.handlePublish)

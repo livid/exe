@@ -613,6 +613,9 @@ td .mono, td.mono { user-select: text; }
 .msg { margin: 0 0 10px; }
 .msg.user { background: var(--lav); border: 1px solid #99c; padding: 5px 9px; margin-left: 48px;
   white-space: pre-wrap; overflow-wrap: break-word; box-shadow: 1px 1px 0 #99c; }
+/* a message queued into a streaming reply: dashed and dim until the loop
+   picks it up between turns and echoes it back */
+.msg.user.queued { opacity: .55; border-style: dashed; box-shadow: none; }
 /* assistant messages are rendered markdown (marked + DOMPurify) */
 .msg.asst { overflow-wrap: break-word; margin-right: 24px; }
 .msg.asst > :first-child { margin-top: 0; }
@@ -4608,6 +4611,16 @@ function setToolDot(dot, out) {
   const failed = /^error:/.test(out) || /\[exit code -?\d+\]$/.test(out.trimEnd());
   dot.classList.add(failed ? "fail" : "ok");
 }
+// bubbles for messages queued mid-run await their echo (a "user" event when
+// the loop injects them); FIFO-matched like tool dots. An echo with no
+// matching bubble is another client's injection — render it fresh.
+let chatQueuedEls = [];
+function takeQueuedBubble(text) {
+  chatQueuedEls = chatQueuedEls.filter(b => b.isConnected);
+  const b = chatQueuedEls[0];
+  if (b && b.dataset.text === text) { chatQueuedEls.shift(); b.classList.remove("queued"); return; }
+  addMsg("user", text);
+}
 // mirrors the server's chatToolSummary for replaying stored sessions
 function toolSummary(name, rawArgs) {
   let a = rawArgs || {};
@@ -4714,8 +4727,10 @@ $("#chat-new").onclick = () => {
 // chatSel invalidates in-flight session loads whenever the pane's
 // ownership changes, so a slow response can't render over a newer view.
 let chatAbort = null, chatSel = 0, chatStopWanted = false;
+// While a reply streams the button is Stop — or Queue once the user has
+// typed a follow-up, which slips it into the run between model turns.
 function chatSendBtn() {
-  $("#chat-send").textContent = chatBusy ? "Stop" : "Send";
+  $("#chat-send").textContent = chatBusy ? (chatInput.value.trim() ? "Queue" : "Stop") : "Send";
 }
 // chatDetach stops watching the current reply without stopping it.
 function chatDetach() {
@@ -4763,6 +4778,7 @@ async function pumpChat(resp, ac) {
       if (chatStopWanted) { chatStopWanted = false; chatStop(); }
     }
     else if (ev.type === "text") addMDMsg(ev.text);
+    else if (ev.type === "user") takeQueuedBubble(ev.text);
     else if (ev.type === "tool_call") toolDots.push(addToolCall(ev.summary));
     else if (ev.type === "tool_result") { setToolDot(toolDots.shift(), ev.output || ""); addToolOut(ev.output || ""); }
     else if (ev.type === "error") addMsg("err", ev.error);
@@ -4915,10 +4931,39 @@ async function chatSend() {
   await pumpChat(resp, ac);
   chatInput.focus();
 }
-$("#chat-send").onclick = () => { chatBusy ? chatStop() : chatSend(); };
+// chatQueue steers a streaming reply: the message is queued in the daemon
+// and injected before the loop's next model turn. The bubble renders dashed
+// right away and solidifies when its echo comes back through the stream.
+async function chatQueue() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  if (!chatCur) { toast("still starting — try again in a moment"); return; }
+  const b = addMsg("user queued", text);
+  b.dataset.text = text;
+  chatQueuedEls.push(b);
+  // keep the thinking indicator below the freshly queued message
+  const t = chatMsgs.querySelector(".msg.think");
+  if (t) t.before(b);
+  chatInput.value = "";
+  chatSendBtn();
+  try {
+    await api("/v1/chat/sessions/" + chatCur + "/queue", { method: "POST", json: { message: text } });
+  } catch (e) {
+    // the reply finished in the meantime (409) or the network hiccuped:
+    // withdraw the bubble and fall back to a normal send once idle
+    b.remove();
+    chatQueuedEls = chatQueuedEls.filter(x => x !== b);
+    if (!chatInput.value) chatInput.value = text;
+    for (let i = 0; i < 20 && chatBusy; i++) await new Promise(r => setTimeout(r, 100));
+    if (!chatBusy) { chatSend(); return; }
+    toast(e.message);
+  }
+}
+$("#chat-send").onclick = () => { chatBusy ? (chatInput.value.trim() ? chatQueue() : chatStop()) : chatSend(); };
 chatInput.addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatSend(); }
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatBusy ? chatQueue() : chatSend(); }
 });
+chatInput.addEventListener("input", chatSendBtn);
 
 // ---- chat backend switcher ----
 // Clicking the Chat status line opens a small modal to flip

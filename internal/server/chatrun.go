@@ -46,6 +46,49 @@ type chatRun struct {
 	events  [][]byte // marshaled NDJSON events, in emit order
 	done    bool
 	stopMsg string // why the run was canceled, for the client-facing error
+	// queued holds user messages sent while the reply streams; the loop
+	// injects them into the conversation before its next model turn.
+	// closed refuses further queueing once the loop is past its last
+	// drain — the sender falls back to a normal send instead.
+	queued []string
+	closed bool
+}
+
+// queue hands msg to the running loop for injection before its next model
+// turn; false means the run no longer accepts (finished or about to).
+func (r *chatRun) queue(msg string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return false
+	}
+	r.queued = append(r.queued, msg)
+	return true
+}
+
+// takeQueued drains the messages waiting for injection. final is the
+// loop's last look before finishing: when nothing is pending it closes the
+// queue atomically, so a message can never land accepted-but-unseen.
+func (r *chatRun) takeQueued(final bool) []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	q := r.queued
+	r.queued = nil
+	if final && len(q) == 0 {
+		r.closed = true
+	}
+	return q
+}
+
+// closeQueue stops accepting and returns whatever is still pending —
+// error and stop paths leave the loop without a final drain.
+func (r *chatRun) closeQueue() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	q := r.queued
+	r.queued = nil
+	r.closed = true
+	return q
 }
 
 func (r *chatRun) emit(ev map[string]any) {
@@ -117,6 +160,19 @@ func (s *Server) startChatRun(cfg *config.Config, provider string, sess *chat.Se
 				log.Printf("chat run %s: panic: %v\n%s", sess.ID, v, debug.Stack())
 				run.emit(map[string]any{"type": "error", "error": fmt.Sprintf("internal error: %v", v)})
 			}
+			// Messages queued but never injected (the loop left via an error
+			// or stop) still belong to the user: persist them into the
+			// session so nothing accepted is silently dropped — the next
+			// send carries them into the conversation.
+			if q := run.closeQueue(); len(q) > 0 {
+				for _, m := range q {
+					sess.Messages = append(sess.Messages, agent.Message{Role: "user", Content: m})
+					run.emit(map[string]any{"type": "user", "text": m})
+				}
+				if err := s.saveChat(sess); err != nil {
+					run.emit(map[string]any{"type": "error", "error": "save session: " + err.Error()})
+				}
+			}
 			// Unregister before announcing done so a session GET can't pair
 			// a complete file with a stale run entry and serve it truncated.
 			s.chatRuns.Delete(sess.ID)
@@ -169,7 +225,19 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		}
 		return msg, err
 	}
+	// inject appends user messages queued mid-run to the conversation, so
+	// the next model turn sees them ("actually, use port 3000").
+	inject := func(q []string) {
+		for _, m := range q {
+			sess.Messages = append(sess.Messages, agent.Message{Role: "user", Content: m})
+			run.emit(map[string]any{"type": "user", "text": m})
+		}
+		save()
+	}
 	for turn := 0; turn < chatMaxTurns; turn++ {
+		if q := run.takeQueued(false); len(q) > 0 {
+			inject(q)
+		}
 		msgs := append([]agent.Message{system}, sess.Messages...)
 		// Ephemeral, never persisted: near the turn cap the model is told to
 		// wrap up, so the run ends with a summary, not a turn-limit error.
@@ -216,6 +284,13 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		sess.Messages = append(sess.Messages, *msg)
 		if len(msg.ToolCalls) == 0 {
 			save()
+			// The reply is finished — but messages queued meanwhile keep the
+			// run going as their answer. The final drain closes the queue
+			// atomically when empty, so later sends start a fresh run.
+			if q := run.takeQueued(true); len(q) > 0 {
+				inject(q)
+				continue
+			}
 			return
 		}
 		for _, tc := range msg.ToolCalls {
@@ -287,6 +362,30 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	streamChatRun(w, r.Context(), v.(*chatRun))
+}
+
+// handleChatQueue slips a user message into a session's in-flight reply;
+// the loop injects it before its next model turn. 409 when nothing is
+// streaming (or the run stopped accepting) — the client falls back to a
+// normal send.
+func (s *Server) handleChatQueue(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(req.Message) == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("message is required"))
+		return
+	}
+	v, ok := s.chatRuns.Load(r.PathValue("id"))
+	if !ok || !v.(*chatRun).queue(req.Message) {
+		writeErr(w, http.StatusConflict, errors.New("no reply is streaming in this session"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 }
 
 // handleChatStop cancels a session's in-flight reply; the loop winds down
