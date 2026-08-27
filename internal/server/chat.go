@@ -34,7 +34,7 @@ const chatSystemTmpl = `You are the operator of exe, a personal VM cloud running
 
 Rules:
 - VM names: lowercase letters, digits, hyphens, max 31 chars.
-- To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive.
+- To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
 - Only call delete_vm or unexpose when the user explicitly asked for that; for anything destructive, restate what you are about to do first.
 - Pushing to github.com: use github_push — VMs hold no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside a VM.
 - Creating a VM takes ~10 seconds and it boots with an IP; the very first creation ever downloads a 3 GB image.
@@ -46,7 +46,7 @@ const chatPinnedTmpl = `You are the operator of %q, one Debian Linux VM in exe, 
 %s
 
 Rules:
-- To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive.
+- To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
 - Only call unexpose when the user explicitly asked for that; for anything destructive, restate what you are about to do first.
 - Pushing to github.com: use github_push — the VM holds no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside the VM.
 - Format answers in Markdown (lists, tables, code blocks and links render nicely), and keep them concise. When you finish a task, summarize what changed and give the address where it can be reached.`
@@ -330,6 +330,12 @@ func chatTools(pinned bool) []agent.Tool {
 		agent.MkTool("write_file", "Create or overwrite a file inside a running VM; parent directories are created.", map[string]any{
 			"vm": vm, "path": str("absolute path"), "content": str("file content"),
 		}, []string{"vm", "path", "content"}),
+		agent.MkTool("edit_file", "Replace text in an existing file inside a running VM. old_string must match the current content exactly (whitespace included) and appear exactly once, unless replace_all is set. Prefer this over write_file for changing existing files.", map[string]any{
+			"vm": vm, "path": str("absolute path"),
+			"old_string":  str("exact text to replace"),
+			"new_string":  str("replacement text"),
+			"replace_all": map[string]any{"type": "boolean", "description": "replace every occurrence (default false)"},
+		}, []string{"vm", "path", "old_string", "new_string"}),
 		agent.MkTool("read_file", "Read a text file from a running VM.", map[string]any{
 			"vm": vm, "path": str("absolute path"),
 		}, []string{"vm", "path"}),
@@ -385,7 +391,7 @@ func chatTools(pinned bool) []agent.Tool {
 // hallucinated value must not win either — overwriting beats validating.
 func pinChatArgs(name string, args map[string]any, vm string) {
 	switch name {
-	case "bash", "write_file", "read_file", "list_ports", "expose", "github_push":
+	case "bash", "write_file", "edit_file", "read_file", "list_ports", "expose", "github_push":
 		args["vm"] = vm
 	case "start_vm", "stop_vm":
 		args["name"] = vm
@@ -418,6 +424,8 @@ func chatToolSummary(name string, args map[string]any) string {
 		return str("vm") + " $ " + str("command")
 	case "write_file":
 		return fmt.Sprintf("write %s:%s (%d bytes)", str("vm"), str("path"), len(str("content")))
+	case "edit_file":
+		return fmt.Sprintf("edit %s:%s", str("vm"), str("path"))
 	case "read_file":
 		return fmt.Sprintf("read %s:%s", str("vm"), str("path"))
 	case "expose":
@@ -517,6 +525,17 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 			return "error: " + err.Error()
 		}
 		return "ok"
+	case "edit_file":
+		t, err := target(tctx)
+		if err != nil {
+			return "error: " + err.Error()
+		}
+		all, _ := args["replace_all"].(bool)
+		n, err := t.EditFile(tctx, str("path"), str("old_string"), str("new_string"), all)
+		if err != nil {
+			return "error: " + err.Error()
+		}
+		return agent.EditOK(n)
 	case "read_file":
 		t, err := target(tctx)
 		if err != nil {

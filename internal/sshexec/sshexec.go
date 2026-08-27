@@ -129,6 +129,53 @@ func (t Target) ReadFile(ctx context.Context, p string, maxOut int) (string, err
 	return out, nil
 }
 
+// editMax caps the file size EditFile will pull into memory; the read runs
+// through head -c so a giant file never crosses the wire at all.
+const editMax = 5 << 20
+
+// EditFile applies a string-replace edit to a remote text file: read it in
+// full (never truncated — an edit written back from an elided read would
+// destroy the file), replace, write back. Returns the replacement count.
+func (t Target) EditFile(ctx context.Context, p, oldStr, newStr string, replaceAll bool) (int, error) {
+	out, code, err := t.Run(ctx, fmt.Sprintf("head -c %d %s", editMax+1, shq(p)), 0)
+	if err != nil {
+		return 0, err
+	}
+	if code != 0 {
+		return 0, fmt.Errorf("read %s: exit %d: %s", p, code, strings.TrimSpace(out))
+	}
+	if len(out) > editMax {
+		return 0, fmt.Errorf("%s exceeds %d bytes — too large for edit_file; use bash (sed, patch) instead", p, editMax)
+	}
+	edited, n, err := ReplaceEdit(out, oldStr, newStr, replaceAll)
+	if err != nil {
+		return 0, fmt.Errorf("edit %s: %w", p, err)
+	}
+	if err := t.WriteFile(ctx, p, []byte(edited)); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ReplaceEdit replaces oldStr with newStr in content: exactly one match
+// unless replaceAll. Errors tell the model what to do differently.
+func ReplaceEdit(content, oldStr, newStr string, replaceAll bool) (string, int, error) {
+	if oldStr == "" {
+		return "", 0, fmt.Errorf("old_string is empty — to create or fully rewrite a file, use write_file")
+	}
+	if oldStr == newStr {
+		return "", 0, fmt.Errorf("old_string and new_string are identical")
+	}
+	n := strings.Count(content, oldStr)
+	switch {
+	case n == 0:
+		return "", 0, fmt.Errorf("old_string not found — it must match the file exactly, whitespace included; read_file to check the current content")
+	case n > 1 && !replaceAll:
+		return "", 0, fmt.Errorf("old_string appears %d times — include more surrounding lines to make it unique, or set replace_all", n)
+	}
+	return strings.Replace(content, oldStr, newStr, n), n, nil
+}
+
 func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // Quote returns s single-quoted for a POSIX shell.

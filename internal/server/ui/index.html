@@ -4597,6 +4597,7 @@ function toolSummary(name, rawArgs) {
   switch (name) {
     case "bash": return (a.vm ? a.vm + " " : "") + "$ " + (a.command || "");
     case "write_file": return `write ${at}${a.path} (${(a.content || "").length} bytes)`;
+    case "edit_file": return `edit ${at}${a.path}`;
     case "read_file": return `read ${at}${a.path}`;
     case "expose": return `expose ${at}${a.port}` + (a.subdomain ? ` as "${a.subdomain}"` : "");
     default: return name + (Object.keys(a).length ? " " + JSON.stringify(a) : "");

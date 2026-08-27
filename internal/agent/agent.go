@@ -43,6 +43,7 @@ You are connected over SSH as user %s, who has passwordless sudo.
 
 Rules:
 - Use the bash tool to inspect and change the system. Install packages with: sudo apt-get install -y <pkg> (run sudo apt-get update once first).
+- Change existing files with edit_file; use write_file only for new files or full rewrites — read_file elides the middle of large files, so never rebuild a large file from what you read.
 - Build the project under ~/app unless the user says otherwise.
 - If the deliverable is a web app or service: bind it to 0.0.0.0, and install a systemd unit (write /etc/systemd/system/app.service via sudo tee, then sudo systemctl enable --now app) so it keeps running after you finish.
 - Servers must handle concurrent connections: browsers hold idle preconnections open, which wedges single-threaded servers. With Python's stdlib use ThreadingHTTPServer, never plain HTTPServer.
@@ -124,6 +125,12 @@ func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt 
 			"path":    map[string]any{"type": "string"},
 			"content": map[string]any{"type": "string"},
 		}, []string{"path", "content"}),
+		MkTool("edit_file", "Replace text in an existing file on the VM. old_string must match the current content exactly (whitespace included) and appear exactly once, unless replace_all is set. Prefer this over write_file for changing existing files.", map[string]any{
+			"path":        map[string]any{"type": "string"},
+			"old_string":  map[string]any{"type": "string", "description": "exact text to replace"},
+			"new_string":  map[string]any{"type": "string", "description": "replacement text"},
+			"replace_all": map[string]any{"type": "boolean", "description": "replace every occurrence (default false)"},
+		}, []string{"path", "old_string", "new_string"}),
 		MkTool("read_file", "Read a text file from the VM.", map[string]any{
 			"path": map[string]any{"type": "string"},
 		}, []string{"path"}),
@@ -366,6 +373,15 @@ func execTool(ctx context.Context, target sshexec.Target, tc ToolCall, logf Logf
 			return fmt.Sprintf("error: %v", err)
 		}
 		return "ok"
+	case "edit_file":
+		p := str("path")
+		all, _ := args["replace_all"].(bool)
+		logf("[edit %s]\n", p)
+		n, err := target.EditFile(tctx, p, str("old_string"), str("new_string"), all)
+		if err != nil {
+			return fmt.Sprintf("error: %v", err)
+		}
+		return EditOK(n)
 	case "read_file":
 		p := str("path")
 		logf("[read %s]\n", p)
@@ -377,6 +393,15 @@ func execTool(ctx context.Context, target sshexec.Target, tc ToolCall, logf Logf
 	default:
 		return fmt.Sprintf("unknown tool %q", tc.Function.Name)
 	}
+}
+
+// EditOK phrases an edit_file success for the model; shared with the chat
+// loop so both surfaces report edits identically.
+func EditOK(n int) string {
+	if n == 1 {
+		return "ok, replaced 1 occurrence"
+	}
+	return fmt.Sprintf("ok, replaced %d occurrences", n)
 }
 
 // ParseArgs tolerates both a JSON object and a JSON-encoded string of one.
