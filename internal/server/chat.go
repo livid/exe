@@ -31,7 +31,7 @@ const (
 	chatTurnLeg       = 40
 	chatMaxTurns      = 400
 	chatToolTimeout   = 5 * time.Minute
-	chatMaxToolOutput = 12000
+	chatMaxToolOutput = sshexec.ReadCap
 )
 
 const chatSystemTmpl = `You are the operator of exe, a personal VM cloud running on this Mac. You manage Debian Linux VMs (Virtualization.framework) through tools; inside every running VM you act as user %s over SSH, with passwordless sudo.
@@ -347,8 +347,8 @@ func chatTools(pinned bool) []agent.Tool {
 		}, []string{"vm", "path", "old_string", "new_string"}),
 		agent.MkTool("read_file", "Read a text file from a running VM. Output beyond ~12KB is elided in the middle; pass offset/limit to read an exact region of a large file.", map[string]any{
 			"vm": vm, "path": str("absolute path"),
-			"offset": map[string]any{"type": "integer", "description": "1-based line to start from (default 1)"},
-			"limit":  map[string]any{"type": "integer", "description": "max lines to read (default: to the end)"},
+			"offset": num("1-based line to start from (default 1)"),
+			"limit":  num("max lines to read (default: to the end)"),
 		}, []string{"vm", "path"}),
 		agent.MkTool("list_ports", "List TCP services listening inside a running VM (SSH excluded).", map[string]any{"vm": vm}, []string{"vm"}),
 		agent.MkTool("list_routes", "List published routes: hostname -> VM backend.", map[string]any{}, nil),
@@ -526,7 +526,7 @@ var chatRequiredArgs = map[string][]string{
 func (s *Server) execChatTool(ctx context.Context, name string, args map[string]any, pin string) string {
 	cfg := s.Config()
 	str := func(k string) string { v, _ := args[k].(string); return v }
-	num := func(k string) int { v, _ := args[k].(float64); return int(v) }
+	num := func(k string) int { return agent.IntArg(args, k) }
 	asJSON := func(v any, err error) string {
 		if err != nil {
 			return "error: " + err.Error()
@@ -631,7 +631,7 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 		if err != nil {
 			return "error: " + err.Error()
 		}
-		out, err := t.ReadFile(tctx, str("path"), agent.IntArg(args, "offset"), agent.IntArg(args, "limit"), chatMaxToolOutput)
+		out, err := t.ReadFile(tctx, str("path"), num("offset"), num("limit"), chatMaxToolOutput)
 		if err != nil {
 			return "error: " + err.Error()
 		}

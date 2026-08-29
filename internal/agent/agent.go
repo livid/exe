@@ -35,7 +35,7 @@ type Logf func(format string, args ...any)
 
 const (
 	maxTurns      = 60
-	maxToolOutput = 12000
+	maxToolOutput = sshexec.ReadCap
 	toolTimeout   = 5 * time.Minute
 	// maxAttempts bounds one model call: the first try plus retries on
 	// transient failures (connection errors, 429, 5xx).

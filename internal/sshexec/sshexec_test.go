@@ -3,6 +3,7 @@ package sshexec
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestReplaceEdit(t *testing.T) {
@@ -50,6 +51,27 @@ func TestReplaceEdit(t *testing.T) {
 		// an all-whitespace old_string must not fuzzy-match blank lines
 		{name: "whitespace-only old", file: "a\n\n\nb\n",
 			old: " \n ", new: "x", errContains: "not found"},
+		// the reverse slip: CRLF strings from the model, LF file — no stray \r
+		{name: "fuzzy lf file crlf strings", file: "a\nfoo\nb\n",
+			old: "foo\r", new: "FOO\r",
+			want: "a\nFOO\nb\n", wantN: 1},
+		{name: "fuzzy lf file crlf pair", file: "a\nfoo\nbar\nb\n",
+			old: "foo\r\nbar\r", new: "FOO\r\nBAR\r",
+			want: "a\nFOO\nBAR\nb\n", wantN: 1},
+		// the phantom empty line after a final newline is not matchable
+		{name: "phantom eof line", file: "a\nb\n",
+			old: "b\n\n", new: "B\n", errContains: "not found"},
+		// whole-line deletion swallows the terminator — no blank line left
+		{name: "fuzzy line deletion", file: "a\nb \nc\n",
+			old: "b\n", new: "",
+			want: "a\nc\n", wantN: 1},
+		{name: "fuzzy line deletion crlf", file: "a\r\nb \r\nc\r\n",
+			old: "b\n", new: "",
+			want: "a\r\nc\r\n", wantN: 1},
+		// an interior blank line is a real line and still matches
+		{name: "interior blank line", file: "a\nb \n\nc\n",
+			old: "b\n\nc", new: "B\nC",
+			want: "a\nB\nC\n", wantN: 1},
 
 		// diagnostics
 		{name: "over-escaped", file: "a\nb\nc\n",
@@ -74,6 +96,28 @@ func TestReplaceEdit(t *testing.T) {
 		if got != tt.want || n != tt.wantN {
 			t.Errorf("%s: got (%q, %d), want (%q, %d)", tt.name, got, n, tt.want, tt.wantN)
 		}
+	}
+}
+
+func TestEscapeDetectorSkipsLiteralBackslashes(t *testing.T) {
+	// old_string quoting source with an escaped backslash (\\n as bytes)
+	// must not be accused of over-escaping, even when the decoded form
+	// happens to appear in the file
+	_, _, err := ReplaceEdit("x\nprintf(\"\\\ny\n", `printf("\\n`, "z", false)
+	if err == nil || strings.Contains(err.Error(), "escape sequences") {
+		t.Errorf("literal backslash content misdiagnosed as over-escaping: %v", err)
+	}
+	// genuine over-escaping is still detected
+	_, _, err = ReplaceEdit("a\nb\nc\n", `a\nb`, "q", false)
+	if err == nil || !strings.Contains(err.Error(), "escape sequences") {
+		t.Errorf("over-escaped old_string not diagnosed: %v", err)
+	}
+}
+
+func TestClipRuneBoundary(t *testing.T) {
+	got := clip(strings.Repeat("a", 76) + "世界世界")
+	if !utf8.ValidString(strings.TrimSuffix(got, "...")) {
+		t.Errorf("clip split a rune: %q", got)
 	}
 }
 
