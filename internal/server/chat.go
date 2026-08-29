@@ -29,7 +29,7 @@ const (
 	// chatMaxTurns cap, where it stops with a visible error instead of
 	// silently running out.
 	chatTurnLeg       = 40
-	chatMaxTurns      = 200
+	chatMaxTurns      = 400
 	chatToolTimeout   = 5 * time.Minute
 	chatMaxToolOutput = 12000
 )
