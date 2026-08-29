@@ -109,7 +109,7 @@ You are connected over SSH as user %s, who has passwordless sudo.
 Rules:
 - For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and call it again with updated checkmarks ("- [x]") as steps complete — the user watches it as a live checklist. Skip it for trivial one-step requests.
 - Use the bash tool to inspect and change the system. Install packages with: sudo apt-get install -y <pkg> (run sudo apt-get update once first).
-- Change existing files with edit_file; use write_file only for new files or full rewrites — read_file elides the middle of large files, so never rebuild a large file from what you read.
+- Change existing files with edit_file; use write_file only for new files or full rewrites — read_file elides the middle of large files, so never rebuild a large file from what you read; read an exact region with read_file offset/limit or grep -n instead.
 - Build the project under ~/app unless the user says otherwise.
 - If the deliverable is a web app or service: bind it to 0.0.0.0, and install a systemd unit (write /etc/systemd/system/app.service via sudo tee, then sudo systemctl enable --now app) so it keeps running after you finish.
 - Servers must handle concurrent connections: browsers hold idle preconnections open, which wedges single-threaded servers. With Python's stdlib use ThreadingHTTPServer, never plain HTTPServer.
@@ -206,8 +206,10 @@ func Run(ctx context.Context, cfg Config, target sshexec.Target, vmName, prompt,
 			"new_string":  map[string]any{"type": "string", "description": "replacement text"},
 			"replace_all": map[string]any{"type": "boolean", "description": "replace every occurrence (default false)"},
 		}, []string{"path", "old_string", "new_string"}),
-		MkTool("read_file", "Read a text file from the VM.", map[string]any{
-			"path": map[string]any{"type": "string"},
+		MkTool("read_file", "Read a text file from the VM. Output beyond ~12KB is elided in the middle; pass offset/limit to read an exact region of a large file.", map[string]any{
+			"path":   map[string]any{"type": "string"},
+			"offset": map[string]any{"type": "integer", "description": "1-based line to start from (default 1)"},
+			"limit":  map[string]any{"type": "integer", "description": "max lines to read (default: to the end)"},
 		}, []string{"path"}),
 		PlanTool(),
 	}
@@ -562,7 +564,7 @@ func execTool(ctx context.Context, target sshexec.Target, tc ToolCall, logf Logf
 	case "read_file":
 		p := str("path")
 		logf("[read %s]\n", p)
-		out, err := target.ReadFile(tctx, p, maxToolOutput)
+		out, err := target.ReadFile(tctx, p, IntArg(args, "offset"), IntArg(args, "limit"), maxToolOutput)
 		if err != nil {
 			return fmt.Sprintf("error: %v", err)
 		}
@@ -582,6 +584,19 @@ func EditOK(n int) string {
 		return "ok, replaced 1 occurrence"
 	}
 	return fmt.Sprintf("ok, replaced %d occurrences", n)
+}
+
+// IntArg reads an integer tool argument, tolerating the number arriving
+// as a JSON string. Absent or unparseable values return 0.
+func IntArg(args map[string]any, k string) int {
+	switch v := args[k].(type) {
+	case float64:
+		return int(v)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(v))
+		return n
+	}
+	return 0
 }
 
 // ParseArgs tolerates both a JSON object and a JSON-encoded string of one.

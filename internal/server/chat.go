@@ -40,7 +40,7 @@ const chatSystemTmpl = `You are the operator of exe, a personal VM cloud running
 Rules:
 - For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and update it via plan with "- [x]" checkmarks as steps complete — the user watches it as a live checklist. Skip it for trivial requests.
 - VM names: lowercase letters, digits, hyphens, max 31 chars.
-- To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
+- To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones — read an exact region with read_file offset/limit or grep -n.
 - delete_vm and unexpose run only after the user approves an in-app confirmation dialog; still call them only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — VMs hold no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside a VM.
 - Each VM has a persistent memory for future sessions: recall reads it, remember replaces it. Save durable facts — where projects live, how services start, gotchas — when you learn them.
@@ -54,7 +54,7 @@ const chatPinnedTmpl = `You are the operator of %q, one Debian Linux VM in exe, 
 
 Rules:
 - For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and update it via plan with "- [x]" checkmarks as steps complete — the user watches it as a live checklist. Skip it for trivial requests.
-- To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones.
+- To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones — read an exact region with read_file offset/limit or grep -n.
 - unexpose runs only after the user approves an in-app confirmation dialog; still call it only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — the VM holds no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside the VM.
 - The VM's saved memory and current state are in your context; when you learn something durable, save the complete updated memory with remember.
@@ -345,8 +345,10 @@ func chatTools(pinned bool) []agent.Tool {
 			"new_string":  str("replacement text"),
 			"replace_all": map[string]any{"type": "boolean", "description": "replace every occurrence (default false)"},
 		}, []string{"vm", "path", "old_string", "new_string"}),
-		agent.MkTool("read_file", "Read a text file from a running VM.", map[string]any{
+		agent.MkTool("read_file", "Read a text file from a running VM. Output beyond ~12KB is elided in the middle; pass offset/limit to read an exact region of a large file.", map[string]any{
 			"vm": vm, "path": str("absolute path"),
+			"offset": map[string]any{"type": "integer", "description": "1-based line to start from (default 1)"},
+			"limit":  map[string]any{"type": "integer", "description": "max lines to read (default: to the end)"},
 		}, []string{"vm", "path"}),
 		agent.MkTool("list_ports", "List TCP services listening inside a running VM (SSH excluded).", map[string]any{"vm": vm}, []string{"vm"}),
 		agent.MkTool("list_routes", "List published routes: hostname -> VM backend.", map[string]any{}, nil),
@@ -629,7 +631,7 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 		if err != nil {
 			return "error: " + err.Error()
 		}
-		out, err := t.ReadFile(tctx, str("path"), chatMaxToolOutput)
+		out, err := t.ReadFile(tctx, str("path"), agent.IntArg(args, "offset"), agent.IntArg(args, "limit"), chatMaxToolOutput)
 		if err != nil {
 			return "error: " + err.Error()
 		}
