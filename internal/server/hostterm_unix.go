@@ -3,6 +3,7 @@
 package server
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"runtime"
@@ -27,6 +28,31 @@ func (s *unixShell) Close() error {
 	s.cmd.Process.Kill()
 	s.cmd.Wait()
 	return err
+}
+
+// startClaudeCode runs the Claude Code CLI on a pty in the project dir.
+// With tmux on the host the CLI lives inside a persistent "exe-claude"
+// session: closing the window only detaches, and the desktop icon returns
+// to the running conversation. -A attaches when the session already
+// exists, -D kicks any stale client so the pty size follows the newest
+// window. Without tmux each window is a fresh CLI run.
+func (s *Server) startClaudeCode(cols, rows int) (hostShell, error) {
+	claude := claudePath()
+	if claude == "" {
+		return nil, errors.New("Claude Code is not installed on this host")
+	}
+	dir := s.claudeProjectDir()
+	cmd := exec.Command(claude)
+	if tmux, err := exec.LookPath("tmux"); err == nil {
+		cmd = exec.Command(tmux, "new-session", "-A", "-D", "-s", "exe-claude", "-c", dir, claude)
+	}
+	cmd.Dir = dir
+	cmd.Env = claudeEnv(claude)
+	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	if err != nil {
+		return nil, err
+	}
+	return &unixShell{f: f, cmd: cmd}, nil
 }
 
 // startHostShell starts the user's login shell on a pty.

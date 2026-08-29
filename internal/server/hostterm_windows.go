@@ -39,3 +39,22 @@ func startHostShell(cols, rows int) (hostShell, error) {
 	}
 	return &windowsShell{pty: pty}, nil
 }
+
+// startClaudeCode runs the Claude Code CLI on a ConPTY in the project dir.
+// No tmux on Windows — each window is a fresh CLI run.
+func (s *Server) startClaudeCode(cols, rows int) (hostShell, error) {
+	claude := claudePath()
+	if claude == "" {
+		return nil, fmt.Errorf("Claude Code is not installed on this host")
+	}
+	opts := []conpty.ConPtyOption{
+		conpty.ConPtyDimensions(cols, rows),
+		conpty.ConPtyEnv(claudeEnv(claude)),
+		conpty.ConPtyWorkDir(s.claudeProjectDir()),
+	}
+	pty, err := conpty.Start(fmt.Sprintf(`"%s"`, claude), opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &windowsShell{pty: pty}, nil
+}

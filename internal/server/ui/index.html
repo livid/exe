@@ -2464,6 +2464,9 @@ function macIcon(state, size) {
 }
 $("#about-icon").innerHTML = macIcon("running", 44);
 let selectedIcon = null;
+// set by the boot hostinfo fetch: the Claude Code icon shows only on hosts
+// with the CLI installed, and its tooltip names the project dir it opens in
+let hostClaude = null; // { dir }
 function renderIcons(vms) {
   const box = $("#icons");
   box.replaceChildren();
@@ -2491,6 +2494,19 @@ function renderIcons(vms) {
       ic.classList.add("sel");
     });
     tapOpen(ic, () => openHostTermWin());
+    box.append(ic);
+  }
+  if (hostClaude) {
+    const ic = el("div", { class: "dicon" + (selectedIcon === "claude" ? " sel" : ""), title: "Claude Code — an agent session in " + hostClaude.dir + "; reopen to pick up where you left off" });
+    ic.innerHTML = CLAUDE_ICON;
+    ic.append(el("span", { class: "lbl" }, "Claude Code"));
+    ic.addEventListener("click", e => {
+      e.stopPropagation();
+      selectedIcon = "claude";
+      box.querySelectorAll(".dicon").forEach(d => d.classList.remove("sel"));
+      ic.classList.add("sel");
+    });
+    tapOpen(ic, () => openHostTermWin("claude"));
     box.append(ic);
   }
   for (const vm of vms) {
@@ -2565,6 +2581,16 @@ let TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rende
   <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
   <rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
   <path fill="#33ff33" d="M12 7h1v1h-1zM13 8h1v1h-1zM12 9h1v1h-1zM15 9h3v1h-3z"/>
+  <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+  <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
+  <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
+</svg>`;
+// Claude Code: the same compact Mac, its screen showing the coral spark
+let CLAUDE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+  <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
+  <rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
+  <path fill="#D97757" d="M13 6h1v1h-1zM16 6h1v1h-1zM19 6h1v1h-1zM14 7h1v1h-1zM16 7h1v1h-1zM18 7h1v1h-1zM15 8h3v1h-3zM13 9h7v1h-7zM15 10h3v1h-3zM14 11h1v1h-1zM16 11h1v1h-1zM18 11h1v1h-1zM13 12h1v1h-1zM16 12h1v1h-1zM19 12h1v1h-1z"/>
   <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
   <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
   <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
@@ -2857,6 +2883,7 @@ const ICON_DEFS = [
   { key: "vm", label: "VM", size: 32, get: () => macIcon("running", 32),
     note: "the green screen follows each VM's state" },
   { key: "terminal", label: "Terminal", size: 32, get: () => TERMINAL_ICON, set: s => TERMINAL_ICON = s },
+  { key: "claude", label: "Claude Code", size: 32, get: () => CLAUDE_ICON, set: s => CLAUDE_ICON = s },
   { key: "folder", label: "Folder", size: 32, get: () => FOLDER_ICON, set: s => FOLDER_ICON = s },
   { key: "doc", label: "Document", size: 32, get: () => DOC_ICON, set: s => DOC_ICON = s },
   { key: "image", label: "Image File", size: 32, get: () => IMAGE_ICON, set: s => IMAGE_ICON = s },
@@ -4081,7 +4108,11 @@ $("#term-open").onclick = () => {
 // sessions, so they are never restored from the layout snapshot, and
 // closing one ends its shell and removes the window for good. ----
 let termSeq = 0;
-function openHostTermWin() {
+// app === "claude" opens the Claude Code CLI instead of a shell; on hosts
+// with tmux the daemon keeps one persistent session behind the icon, so
+// every claude window is the same conversation (opening a second one takes
+// it over from the first)
+function openHostTermWin(app) {
   const n = ++termSeq;
   const w = el("div", { class: "window grow term-window", id: "win-term-" + n });
   const open = document.querySelectorAll("#desktop .term-window").length;
@@ -4096,7 +4127,8 @@ function openHostTermWin() {
       <div class="statusbar"><span class="term-status">…</span></div>
       ${GROW_TILE}
     </div>`;
-  w.querySelector(".title").textContent = n === 1 ? "Terminal" : "Terminal " + n;
+  w.querySelector(".title").textContent = app === "claude" ? "Claude Code"
+    : n === 1 ? "Terminal" : "Terminal " + n;
   const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status");
   box.addEventListener("wheel", e => e.preventDefault(), { passive: false });
   $("#desktop").append(w);
@@ -4114,9 +4146,11 @@ function openHostTermWin() {
   box.querySelector(".xterm-viewport").classList.add("vflush");
   fit.fit();
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const tok = tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "";
+  const qs = new URLSearchParams();
+  if (tokenInput.value) qs.set("token", tokenInput.value);
+  if (app) qs.set("app", app);
   status.textContent = "connecting…";
-  const ws = new WebSocket(`${proto}://${location.host}/v1/host/terminal${tok}`);
+  const ws = new WebSocket(`${proto}://${location.host}/v1/host/terminal${qs.size ? "?" + qs : ""}`);
   ws.binaryType = "arraybuffer";
   const enc = new TextEncoder();
   const resize = () => {
@@ -4135,7 +4169,9 @@ function openHostTermWin() {
   ws.onmessage = e => term.write(new Uint8Array(e.data));
   ws.onclose = () => {
     term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-    status.textContent = "disconnected — close and reopen for a new shell";
+    status.textContent = app === "claude"
+      ? "disconnected — close and reopen to return to the session"
+      : "disconnected — close and reopen for a new shell";
   };
   term.onData(d => { if (ws.readyState === 1) ws.send(enc.encode(d)); });
   window.addEventListener("resize", resize);
@@ -6099,6 +6135,10 @@ renderVMHead();
 loadVMs().catch(e => toast(e.message));
 loadApps().catch(() => {});
 loadIcons().catch(() => {});
+// hosts with the Claude Code CLI get its desktop icon
+j("/v1/hostinfo").then(h => {
+  if (h.claude_code) { hostClaude = { dir: h.claude_dir || "the Workspace folder" }; renderIcons(lastVMs); }
+}).catch(() => {});
 loadConfig().catch(() => {});
 cfHeartbeat(false);
 chatDetect(false);

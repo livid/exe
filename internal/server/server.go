@@ -702,7 +702,9 @@ func (s *Server) handleTailscale(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleHostInfo reports this host's identity for the About window: hostname,
-// machine model, LAN IPv4, and the Tailscale IPv4 when on a tailnet.
+// machine model, LAN IPv4, and the Tailscale IPv4 when on a tailnet — plus
+// whether the Claude Code CLI is installed (the desktop shows its icon only
+// then) and the project dir its sessions open in.
 func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	host, _ := os.Hostname()
 	ts := config.TailscaleIP()
@@ -710,9 +712,14 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	if lan == ts {
 		lan = "" // the default route is the tailnet; don't show the same IP twice
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	info := map[string]any{
 		"hostname": host, "machine": hostinfo.Model(), "lan_ip": lan, "tailscale_ip": ts,
-	})
+	}
+	if claudePath() != "" {
+		info["claude_code"] = true
+		info["claude_dir"] = s.claudeProjectDir()
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 func (s *Server) handleRoutes(w http.ResponseWriter, r *http.Request) {
