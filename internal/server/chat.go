@@ -24,7 +24,12 @@ import (
 // multi-turn session.
 
 const (
-	chatMaxTurns      = 40
+	// A run works in legs: at each chatTurnLeg boundary it auto-continues
+	// (what users used to do by typing "continue") up to the absolute
+	// chatMaxTurns cap, where it stops with a visible error instead of
+	// silently running out.
+	chatTurnLeg       = 40
+	chatMaxTurns      = 200
 	chatToolTimeout   = 5 * time.Minute
 	chatMaxToolOutput = 12000
 )

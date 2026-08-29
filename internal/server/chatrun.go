@@ -349,6 +349,15 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		save()
 	}
 	for turn := 0; turn < chatMaxTurns; turn++ {
+		// Reaching a leg boundary means the model is still mid-task after
+		// chatTurnLeg tool turns: grant another leg automatically instead of
+		// ending the run and waiting for the user to type "continue", and
+		// mark it so a long run is visibly auto-continuing, not runaway.
+		if turn > 0 && turn%chatTurnLeg == 0 {
+			run.emit(map[string]any{"type": "notice",
+				"text": fmt.Sprintf("auto-continuing — %d tool turns so far", turn)})
+			log.Printf("chat %s: auto-continuing at %d turns", sess.ID, turn)
+		}
 		if q := run.takeQueued(false); len(q) > 0 {
 			inject(q)
 		}
@@ -452,6 +461,13 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 		}
 		save()
 	}
+	// Out of turns with the model still calling tools. Falling off the end
+	// silently would look exactly like a finished reply — no error, working
+	// indicator gone mid-task — so say what happened; the transcript is
+	// intact and the next send picks the task back up.
+	run.emit(map[string]any{"type": "error",
+		"error": fmt.Sprintf("stopped at the %d-turn cap without finishing — send a message (\"continue\" works) to pick the task back up", chatMaxTurns)})
+	log.Printf("chat %s: stopped at the %d-turn cap", sess.ID, chatMaxTurns)
 }
 
 // streamChatRun replays the run's buffered events on w as NDJSON and

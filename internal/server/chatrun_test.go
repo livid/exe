@@ -2,10 +2,67 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"exe/internal/chat"
+	"exe/internal/config"
 )
+
+// A run whose model never stops calling tools auto-continues at every leg
+// boundary (a visible notice, where users once had to type "continue") and
+// ends at the absolute cap with a visible error — never by falling off the
+// end silently, which looks exactly like a finished reply.
+func TestChatRunAutoContinue(t *testing.T) {
+	var calls atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		fmt.Fprintln(w, `{"message":{"role":"assistant","tool_calls":[{"function":{"name":"plan","arguments":{"text":"- [ ] step"}}}]},"done":true}`)
+	}))
+	defer backend.Close()
+
+	s := New(&config.Config{Ollama: config.OllamaConfig{BaseURL: backend.URL, Model: "m"}}, nil, nil, "", t.TempDir())
+	sess, err := chat.New(s.chatDir(), "endless", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &chatRun{cancel: func() {}}
+	run.cond = sync.NewCond(&run.mu)
+	s.runChatLoop(context.Background(), s.Config(), "ollama", sess, run)
+
+	if got := int(calls.Load()); got != chatMaxTurns {
+		t.Fatalf("model calls = %d, want %d", got, chatMaxTurns)
+	}
+	notices, errs := 0, 0
+	for _, b := range run.events {
+		var ev struct{ Type, Error string }
+		if json.Unmarshal(b, &ev) != nil {
+			continue
+		}
+		switch ev.Type {
+		case "notice":
+			notices++
+		case "error":
+			errs++
+			if want := fmt.Sprintf("%d-turn cap", chatMaxTurns); !strings.Contains(ev.Error, want) {
+				t.Fatalf("error event %q does not name the cap", ev.Error)
+			}
+		}
+	}
+	if want := chatMaxTurns/chatTurnLeg - 1; notices != want {
+		t.Fatalf("notice events = %d, want %d", notices, want)
+	}
+	if errs != 1 {
+		t.Fatalf("error events = %d, want exactly 1", errs)
+	}
+}
 
 // The queue closes atomically on the loop's final empty drain, so a message
 // is either injected by the loop or refused (the sender falls back to a
