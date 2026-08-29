@@ -695,12 +695,16 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 		// large push can outgrow the budget for quick commands.
 		pctx, pcancel := context.WithTimeout(ctx, publishTimeout)
 		defer pcancel()
-		repo, err := s.publishVM(pctx, s.vmTarget(info), creds, str("path"), str("repo"), private, "", step)
+		repo, sha, err := s.publishVM(pctx, s.vmTarget(info), creds, str("path"), str("repo"), private, "", step)
 		if err != nil {
 			return steps.String() + "error: " + err.Error()
 		}
-		s.PostNews("vm", "Published to GitHub", str("vm")+": "+str("path")+" → "+repo.HTMLURL)
-		return steps.String() + "pushed: " + repo.HTMLURL
+		s.PostNews("vm", "Published to GitHub", publishNews(str("vm"), str("path"), repo, sha))
+		res := "pushed: " + repo.HTMLURL
+		if sha != "" {
+			res += " (commit " + sha + ")"
+		}
+		return steps.String() + res
 	case "daemon_logs":
 		if s.Logs == nil {
 			return "error: daemon log not available"

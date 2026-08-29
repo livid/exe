@@ -164,8 +164,8 @@ the folder's `origin` remote name when it points at the signed-in account
 (so publishing again updates the same repo), else falls back to the folder
 name; it errors if `origin` points at a different account. Streams NDJSON
 events — `{"type":"step","text":"..."}` lines, ending in
-`{"type":"done","repo":"...","url":"..."}` (the repo URL) or
-`{"type":"error","error":"..."}`. **Only when the user asks** — it can
+`{"type":"done","repo":"...","url":"...","commit":"..."}` (the repo URL and
+pushed commit id) or `{"type":"error","error":"..."}`. **Only when the user asks** — it can
 create a repository on their account.
 `POST /v1/newsfeed` body `{"title":"...","body":"..."}` (optional `"kind"`,
 default `"note"`) posts a note to the desktop Newsfeed of this node **and

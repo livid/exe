@@ -138,20 +138,32 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		emit(map[string]string{"type": "step", "text": fmt.Sprintf(format, args...)})
 	}
 
-	repo, err := s.publishVM(ctx, s.vmTarget(info), creds, req.Path, req.Repo, req.Private, req.Description, step)
+	repo, sha, err := s.publishVM(ctx, s.vmTarget(info), creds, req.Path, req.Repo, req.Private, req.Description, step)
 	if err != nil {
 		emit(map[string]string{"type": "error", "error": err.Error()})
 		return
 	}
-	s.PostNews("vm", "Published to GitHub", name+": "+req.Path+" → "+repo.HTMLURL)
-	emit(map[string]string{"type": "done", "repo": repo.FullName, "url": repo.HTMLURL})
+	s.PostNews("vm", "Published to GitHub", publishNews(name, req.Path, repo, sha))
+	emit(map[string]string{"type": "done", "repo": repo.FullName, "url": repo.HTMLURL, "commit": sha})
 }
 
-// publishVM runs the publish steps against one VM. Every guest command
-// goes over SSH as the VM user; nothing GitHub-related persists in the
-// guest beyond the repository's canonical https remote URL.
+// publishNews is the feed line for a completed publish. The commit rides
+// along as a [short-sha](url) span, which the Newsfeed body renderer turns
+// into a link to that commit on GitHub.
+func publishNews(vm, path string, repo *github.Repo, sha string) string {
+	line := vm + ": " + path + " → " + repo.HTMLURL
+	if len(sha) >= 7 {
+		line += " @ [" + sha[:7] + "](" + repo.HTMLURL + "/commit/" + sha + ")"
+	}
+	return line
+}
+
+// publishVM runs the publish steps against one VM and returns the repo
+// plus the pushed commit id. Every guest command goes over SSH as the VM
+// user; nothing GitHub-related persists in the guest beyond the
+// repository's canonical https remote URL.
 func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *github.Creds,
-	path, repoName string, private bool, description string, step func(string, ...any)) (*github.Repo, error) {
+	path, repoName string, private bool, description string, step func(string, ...any)) (*github.Repo, string, error) {
 
 	q := sshexec.Quote
 	if path == "~" || strings.HasPrefix(path, "~/") {
@@ -164,48 +176,48 @@ func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *gi
 
 	out, code, err := run("cd " + q(path) + " && pwd -P")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if code != 0 {
-		return nil, fmt.Errorf("%s is not a directory in the VM", path)
+		return nil, "", fmt.Errorf("%s is not a directory in the VM", path)
 	}
 	path = strings.TrimSpace(out)
 	git := "git -C " + q(path) + " "
 
 	if _, code, err = run("command -v git >/dev/null 2>&1"); err != nil {
-		return nil, err
+		return nil, "", err
 	} else if code != 0 {
 		step("Installing git in the VM (first publish)…")
 		out, code, err = run("sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && " +
 			"sudo env DEBIAN_FRONTEND=noninteractive apt-get install -qq -y git 2>&1")
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if code != 0 {
-			return nil, fail("installing git failed", out)
+			return nil, "", fail("installing git failed", out)
 		}
 	}
 
 	out, code, err = run(git + "rev-parse --is-inside-work-tree 2>/dev/null")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if code == 0 && strings.TrimSpace(out) == "true" {
 		// Refuse a subfolder of a larger repository: pushing it would
 		// publish the whole worktree's history, not the folder.
 		out, code, err = run(git + "rev-parse --show-toplevel")
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if top := strings.TrimSpace(out); code == 0 && top != path {
-			return nil, fmt.Errorf("%s is inside the git repository at %s — publish that folder instead", path, top)
+			return nil, "", fmt.Errorf("%s is inside the git repository at %s — publish that folder instead", path, top)
 		}
 	} else {
 		step("Initializing a git repository in %s", path)
 		if out, code, err = run(git + "init -q -b main 2>&1"); err != nil {
-			return nil, err
+			return nil, "", err
 		} else if code != 0 {
-			return nil, fail("git init failed", out)
+			return nil, "", fail("git init failed", out)
 		}
 	}
 
@@ -214,18 +226,18 @@ func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *gi
 	if out, code, err = run(git + "config --get user.email >/dev/null 2>&1 || { " +
 		git + "config user.name " + q(creds.Login) + " && " +
 		git + "config user.email " + q(creds.NoreplyEmail()) + "; }"); err != nil {
-		return nil, err
+		return nil, "", err
 	} else if code != 0 {
-		return nil, fail("setting the git identity failed", out)
+		return nil, "", fail("setting the git identity failed", out)
 	}
 
 	_, headCode, err := run(git + "rev-parse -q --verify HEAD >/dev/null 2>&1")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	out, _, err = run(git + "status --porcelain | head -1")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if headCode != 0 || strings.TrimSpace(out) != "" {
 		step("Committing files")
@@ -235,23 +247,23 @@ func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *gi
 		}
 		out, code, err = run(git + "add -A 2>&1 && " + git + "commit -q -m " + q(msg) + " 2>&1")
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if code != 0 {
 			if headCode != 0 {
-				return nil, fail("nothing to publish — no committable files in "+path, out)
+				return nil, "", fail("nothing to publish — no committable files in "+path, out)
 			}
-			return nil, fail("git commit failed", out)
+			return nil, "", fail("git commit failed", out)
 		}
 	}
 
 	out, code, err = run(git + "symbolic-ref --short -q HEAD")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	branch := strings.TrimSpace(out)
 	if code != 0 || branch == "" {
-		return nil, errors.New("the repository is on a detached HEAD — check out a branch first")
+		return nil, "", errors.New("the repository is on a detached HEAD — check out a branch first")
 	}
 
 	// No name given (the chat tool's default): reuse the folder's origin
@@ -260,12 +272,12 @@ func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *gi
 	if repoName == "" {
 		out, code, err = run(git + "remote get-url origin 2>/dev/null")
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if code == 0 {
 			if owner, name, ok := parseGitHubRemote(strings.TrimSpace(out)); ok {
 				if !strings.EqualFold(owner, creds.Login) {
-					return nil, fmt.Errorf("origin points at %s/%s, which is not the signed-in account %s — pass a repository name to publish a copy", owner, name, creds.Login)
+					return nil, "", fmt.Errorf("origin points at %s/%s, which is not the signed-in account %s — pass a repository name to publish a copy", owner, name, creds.Login)
 				}
 				repoName = name
 			}
@@ -275,12 +287,12 @@ func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *gi
 		}
 	}
 	if !repoNameRe.MatchString(repoName) {
-		return nil, fmt.Errorf("no usable repository name (got %q) — pass one explicitly (letters, digits, '.', '-', '_')", repoName)
+		return nil, "", fmt.Errorf("no usable repository name (got %q) — pass one explicitly (letters, digits, '.', '-', '_')", repoName)
 	}
 
 	repo, err := github.EnsureRepo(ctx, creds, repoName, private, description)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if repo.Created {
 		visibility := "public"
@@ -296,26 +308,26 @@ func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *gi
 	if out, code, err = run(git + "remote get-url origin >/dev/null 2>&1 && " +
 		git + "remote set-url origin " + q(remote) + " || " +
 		git + "remote add origin " + q(remote)); err != nil {
-		return nil, err
+		return nil, "", err
 	} else if code != 0 {
-		return nil, fail("setting the origin remote failed", out)
+		return nil, "", fail("setting the origin remote failed", out)
 	}
 
 	// The push path: a host-held listener remote-forwarded onto the guest's
 	// 127.0.0.1, alive only for this operation and pinned to this one repo.
 	client, err := target.Dial(ctx)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer client.Close()
 	ln, err := client.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return nil, fmt.Errorf("forward a port into the guest: %w", err)
+		return nil, "", fmt.Errorf("forward a port into the guest: %w", err)
 	}
 	defer ln.Close()
 	addr, ok := ln.Addr().(*net.TCPAddr)
 	if !ok {
-		return nil, fmt.Errorf("unexpected forward address %v", ln.Addr())
+		return nil, "", fmt.Errorf("unexpected forward address %v", ln.Addr())
 	}
 	local := "http://127.0.0.1:" + strconv.Itoa(addr.Port)
 	srv := &http.Server{Handler: githubProxy(&url.URL{Scheme: "https", Host: "github.com"},
@@ -327,12 +339,18 @@ func (s *Server) publishVM(ctx context.Context, target sshexec.Target, creds *gi
 	rewrite := q("url." + local + "/.insteadOf=https://github.com/")
 	out, code, err = run("git -C " + q(path) + " -c " + rewrite + " push -u origin " + q(branch) + " 2>&1")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if code != 0 {
-		return nil, fail("git push failed", out)
+		return nil, "", fail("git push failed", out)
 	}
-	return repo, nil
+	// The pushed commit id — worth surfacing, but not worth failing a
+	// publish that already landed on GitHub.
+	sha := ""
+	if out, code, err = run(git + "rev-parse HEAD"); err == nil && code == 0 {
+		sha = strings.TrimSpace(out)
+	}
+	return repo, sha, nil
 }
 
 // githubProxy serves the git smart-HTTP protocol for exactly one

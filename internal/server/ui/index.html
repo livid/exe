@@ -4454,7 +4454,7 @@ async function loadNews() {
   newsOpenRow = null; // rows were just rebuilt — no swipe is open anymore
   for (const it of items) {
     const wrap = el("div", { class: "news-swipe" }, el("div", { class: "news-title" }, it.title || ""));
-    if (it.body) wrap.append(el("div", { class: "news-body" }, it.body));
+    if (it.body) wrap.append(newsBody(it.body));
     wrap.append(el("div", { class: "news-meta" }, (it.host || "?") + " · " + new Date(it.time).toLocaleString()));
     const row = el("div", { class: "news-item" });
     if (IS_MOBILE) {
@@ -4471,6 +4471,21 @@ async function loadNews() {
     list.append(row);
   }
   $("#news-count").textContent = items.length === 1 ? "1 item" : items.length + " items";
+}
+
+// News bodies are plain text except links: [text](url) spans (how publish
+// items carry their commit link) and bare http(s) URLs become anchors.
+// Everything is appended as text nodes or elements, never as HTML.
+function newsBody(text) {
+  const div = el("div", { class: "news-body" });
+  const re = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|https?:\/\/[^\s)]+/g;
+  let last = 0;
+  for (let m; (m = re.exec(text)); last = re.lastIndex) {
+    div.append(text.slice(last, m.index),
+      el("a", { href: m[2] || m[0], target: "_blank", rel: "noopener" }, m[1] || m[0]));
+  }
+  div.append(text.slice(last));
+  return div;
 }
 
 // mobile swipe-to-delete: drag a row left to park its content at -72px and
