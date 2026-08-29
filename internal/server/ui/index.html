@@ -4642,7 +4642,8 @@ chatMsgs.addEventListener("scroll", () => {
   chatFollow = chatMsgs.scrollHeight - chatMsgs.scrollTop - chatMsgs.clientHeight < 40;
 });
 function chatStick(force) {
-  // during streaming only follow the bottom if the user hasn't scrolled up
+  // arriving content only follows the bottom while the user is there;
+  // force is for user-initiated jumps (own send, opening a session)
   if (force || chatFollow) {
     chatMsgs.scrollTop = chatMsgs.scrollHeight;
     chatFollow = true;
@@ -4651,7 +4652,7 @@ function chatStick(force) {
 function addMsg(cls, text) {
   const d = el("div", { class: "msg " + cls }, text);
   chatMsgs.append(d);
-  chatStick(true);
+  chatStick();
   return d;
 }
 // a run that stopped (restart, Stop button, the turn cap) left its task
@@ -4667,7 +4668,7 @@ function addErrMsg(text) {
     chatSend("continue");
   };
   d.append(act);
-  chatStick(true);
+  chatStick();
   return d;
 }
 // assistant markdown: marked parses, DOMPurify strips anything dangerous
@@ -4681,7 +4682,7 @@ function renderMD(node, text) {
 function addMDMsg(text) {
   const d = addMsg("asst", "");
   renderMD(d, text);
-  chatStick(true);
+  chatStick();
   return d;
 }
 function addToolOut(out) {
@@ -4694,7 +4695,7 @@ function addToolCall(summary) {
   const dot = el("span", { class: "tool-dot" });
   const d = el("div", { class: "msg tool" }, dot, summary);
   chatMsgs.append(d);
-  chatStick(true);
+  chatStick();
   return dot;
 }
 function setToolDot(dot, out) {
@@ -4750,7 +4751,7 @@ function renderPlan(text) {
       el("span", { class: "plan-text" }, m[2])));
     else if (line.trim()) planBlock.append(el("div", { class: "plan-note" }, line.trim()));
   }
-  chatStick(true);
+  chatStick();
 }
 // bubbles for messages queued mid-run await their echo (a "user" event when
 // the loop injects them); FIFO-matched like tool dots. An echo with no
@@ -4799,6 +4800,7 @@ function renderChatSession(sess) {
     }
   }
   if (!chatMsgs.children.length) chatHint();
+  chatStick(true); // an opened session starts at its newest message
 }
 async function loadChatSessions() {
   const list = (await j("/v1/chat/sessions")).filter(m => !chatScope || m.vm === chatScope);
@@ -5061,6 +5063,7 @@ async function chatSend(msg) {
   const hint = chatMsgs.querySelector(".chat-hint");
   if (hint) hint.remove();
   addMsg("user", text);
+  chatStick(true);
   if (!msg) chatInput.value = "";
   const ac = new AbortController();
   chatAbort = ac;
@@ -5102,6 +5105,7 @@ async function chatQueue() {
   // keep the thinking indicator below the freshly queued message
   const t = chatMsgs.querySelector(".msg.think");
   if (t) t.before(b);
+  chatStick(true);
   chatInput.value = "";
   chatSendBtn();
   try {
