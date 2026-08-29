@@ -665,6 +665,7 @@ td .mono, td.mono { user-select: text; }
   border: 1px solid var(--g500); margin: -2px 24px 10px 11px; padding: 5px 8px;
   max-height: 130px; overflow: auto; white-space: pre-wrap; overflow-wrap: break-word; }
 .msg.err { background: #f6dddd; border: 1px solid #a33; color: #7a1010; padding: 5px 9px; white-space: pre-wrap; }
+.err-act { margin-top: 6px; }
 .msg.think { color: #777; }
 .msg.think::after { content: "…"; animation: think 1.2s steps(4) infinite; display: inline-block;
   overflow: hidden; vertical-align: bottom; width: 0; }
@@ -4653,6 +4654,22 @@ function addMsg(cls, text) {
   chatStick(true);
   return d;
 }
+// a run that stopped (restart, Stop button, the turn cap) left its task
+// resumable — those error bubbles carry a one-tap Continue
+function addErrMsg(text) {
+  const d = addMsg("err", text);
+  if (!/^stopped/.test(text)) return d;
+  const btn = el("button", { class: "btn" }, "Continue");
+  const act = el("div", { class: "err-act" }, btn);
+  btn.onclick = () => {
+    if (chatBusy) return;
+    act.remove();
+    chatSend("continue");
+  };
+  d.append(act);
+  chatStick(true);
+  return d;
+}
 // assistant markdown: marked parses, DOMPurify strips anything dangerous
 marked.use({ gfm: true, breaks: true });
 DOMPurify.addHook("afterSanitizeAttributes", n => {
@@ -4917,7 +4934,7 @@ async function pumpChat(resp, ac) {
     // plan calls render as the checklist block, not tool lines
     else if (ev.type === "tool_call") { if (ev.name !== "plan") toolDots.push(addToolCall(ev.summary)); }
     else if (ev.type === "tool_result") { if (ev.name !== "plan") { setToolDot(toolDots.shift(), ev.output || ""); addToolOut(ev.output || ""); } }
-    else if (ev.type === "error") addMsg("err", ev.error);
+    else if (ev.type === "error") addErrMsg(ev.error);
     if (ev.type !== "done") { chatMsgs.append(think); chatStick(); }
   };
   let dropped = false;
@@ -5033,14 +5050,16 @@ async function attachChat(id) {
   await pumpChat(resp, ac);
   chatInput.focus();
 }
-async function chatSend() {
-  const text = chatInput.value.trim();
+// msg sends that text (the Continue button); without it the input box is
+// consumed as before, so a typed draft never gets clobbered by a button.
+async function chatSend(msg) {
+  const text = (msg || chatInput.value).trim();
   if (!text || chatBusy) return;
   chatSel++; // a pending session load must not render over this send
   const hint = chatMsgs.querySelector(".chat-hint");
   if (hint) hint.remove();
   addMsg("user", text);
-  chatInput.value = "";
+  if (!msg) chatInput.value = "";
   const ac = new AbortController();
   chatAbort = ac;
   chatBusy = true;
