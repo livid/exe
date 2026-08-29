@@ -598,7 +598,10 @@ td .mono, td.mono { user-select: text; }
 /* the VM the session list is scoped to, with an × back to all sessions */
 .chat-scope { display: flex; align-items: center; gap: 4px; padding: 1px 1px 1px 8px; border: 1px solid #999; background: #e6e6e6; }
 .chat-scope .vm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; font-size: 11px; }
-.chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+/* min-height 0: in mobile's column chat-wrap the default min-height:auto
+   would grow chat-main to fit the whole transcript, silently moving the
+   scrolling to .win-body where chatStick never reaches */
+.chat-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .chat-msgs { flex: 1; overflow-y: auto; background: #fff; border: 1px solid var(--black);
   padding: 10px; user-select: text;
   box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
@@ -4629,10 +4632,20 @@ function chatHint() {
       : "This chat can operate exe for you: create and manage VMs, run commands inside them, build things, and publish ports to the web.",
     el("br"), el("br"), chatScope ? "Try: “what's listening in here?”" : "Try: “what's running right now?”"));
 }
+// chatFollow remembers whether the view is glued to the newest content:
+// true at (or near) the bottom, cleared when the user scrolls up. Content
+// growth fires no scroll event, so the flag survives a streaming burst
+// taller than any distance threshold measured after the fact.
+let chatFollow = true;
+chatMsgs.addEventListener("scroll", () => {
+  chatFollow = chatMsgs.scrollHeight - chatMsgs.scrollTop - chatMsgs.clientHeight < 40;
+});
 function chatStick(force) {
   // during streaming only follow the bottom if the user hasn't scrolled up
-  if (force || chatMsgs.scrollHeight - chatMsgs.scrollTop - chatMsgs.clientHeight < 40)
+  if (force || chatFollow) {
     chatMsgs.scrollTop = chatMsgs.scrollHeight;
+    chatFollow = true;
+  }
 }
 function addMsg(cls, text) {
   const d = el("div", { class: "msg " + cls }, text);
