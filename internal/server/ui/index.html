@@ -651,8 +651,8 @@ td .mono, td.mono { user-select: text; }
   background: #b8b8b0; border: 1px solid #808078; }
 .tool-dot.ok { background: #4a9e4a; border-color: #1e601e; }
 .tool-dot.fail { background: #c84a3a; border-color: #7a1010; }
-/* the agent's plan: one checklist block that updates in place as the model
-   re-posts it with checkmarks */
+/* the agent's plan: checklist snapshots that follow the run down the
+   transcript as the model re-posts it with checkmarks */
 .msg.plan { border: 1px solid var(--g600); background: #f4f4ef; padding: 7px 10px 8px;
   margin: 0 24px 10px 0; box-shadow: inset 1px 1px 0 #fff; }
 .plan-title { font-weight: bold; font-size: 11px; margin-bottom: 5px; }
@@ -4731,12 +4731,14 @@ function chatConfirmClear() {
   clearTimeout(c.timer);
   if (c.open) cfmClose(false);
 }
-// ---- the plan checklist: one block, updated in place ----
-// Each plan call carries the complete checklist, so the block re-renders
-// wholesale; a wiped transcript (session switch) just grows a fresh one.
+// ---- the plan checklist: snapshots along the transcript ----
+// Each plan call carries the complete checklist. It re-renders in place only
+// while its block is still the newest content; once other messages have
+// landed below it, the next update grows a fresh snapshot there, so progress
+// shows up between turns instead of only at the top.
 let planBlock = null;
 function renderPlan(text) {
-  if (!planBlock || !planBlock.isConnected) {
+  if (!planBlock || !planBlock.isConnected || planBlock !== chatMsgs.lastElementChild) {
     planBlock = el("div", { class: "msg plan" });
     chatMsgs.append(planBlock);
   }
