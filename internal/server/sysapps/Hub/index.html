@@ -517,6 +517,11 @@ function profileDialog(needName) {
     value: myProfile ? myProfile.name : (who ? who.name : "") });
   const bio = el("input", { type: "text", maxlength: 200,
     value: myProfile ? (myProfile.bio || "") : "" });
+  // focusing (tab or the auto-focus below) lands the caret at the end of
+  // the existing text; a mouse click still places it where clicked
+  for (const inp of [name, bio])
+    inp.addEventListener("focus", () =>
+      inp.setSelectionRange(inp.value.length, inp.value.length));
   const err = el("div", { class: "err" },
     needName ? "Pick a display name before your first post." : "");
   const avaBox = el("div", { class: "ava-row" });
