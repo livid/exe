@@ -12,6 +12,7 @@
 package server
 
 import (
+	"embed"
 	"encoding/json"
 	"errors"
 	"io"
@@ -29,6 +30,43 @@ import (
 
 	"exe/internal/peer"
 )
+
+// System apps ship inside the binary and appear on every desktop without
+// any install step; a same-named bundle in ~/.exe/apps or an apps_dir
+// overrides them (disk roots win name collisions, embedded is last).
+//
+//go:embed all:sysapps
+var sysAppsFS embed.FS
+
+func sysAppExists(name string) bool {
+	if !validAppName(name) {
+		return false
+	}
+	_, err := fs.Stat(sysAppsFS, "sysapps/"+name+"/index.html")
+	return err == nil
+}
+
+func loadSysAppMeta(name string) (*appMeta, error) {
+	b, err := fs.ReadFile(sysAppsFS, "sysapps/"+name+"/app.json")
+	if err != nil {
+		return nil, err
+	}
+	m := &appMeta{}
+	if err := json.Unmarshal(b, m); err != nil {
+		return nil, err
+	}
+	if !sysAppExists(name) {
+		return nil, errors.New("no index.html")
+	}
+	m.Name = name
+	if m.Title == "" {
+		m.Title = name
+	}
+	if m.Icon != "" && !filepath.IsLocal(m.Icon) {
+		m.Icon = ""
+	}
+	return m, nil
+}
 
 func (s *Server) appsDir() string      { return filepath.Join(s.StateDir, "apps") }
 func (s *Server) workspaceDir() string { return filepath.Join(s.StateDir, "workspace") }
@@ -151,6 +189,20 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 			apps = append(apps, m)
 		}
 	}
+	if entries, err := fs.ReadDir(sysAppsFS, "sysapps"); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() || seen[e.Name()] {
+				continue
+			}
+			m, err := loadSysAppMeta(e.Name())
+			if err != nil {
+				log.Printf("apps: skipping embedded %s: %v", e.Name(), err)
+				continue
+			}
+			seen[e.Name()] = true
+			apps = append(apps, m)
+		}
+	}
 	sort.Slice(apps, func(i, j int) bool { return apps[i].Title < apps[j].Title })
 	writeJSON(w, http.StatusOK, apps)
 }
@@ -164,6 +216,12 @@ func (s *Server) appStatic() http.Handler {
 		name, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/apps/"), "/")
 		root, ok := s.findAppRoot(name)
 		if !ok {
+			if sysAppExists(name) {
+				sub, _ := fs.Sub(sysAppsFS, "sysapps")
+				w.Header().Set("Cache-Control", "no-cache")
+				http.StripPrefix("/apps/", http.FileServerFS(sub)).ServeHTTP(w, r)
+				return
+			}
 			http.NotFound(w, r)
 			return
 		}
@@ -199,7 +257,7 @@ func scopedPath(root, rel string) (string, error) {
 // to joined nodes like any app data.
 func (s *Server) appDataRoot(name string) (string, error) {
 	if name != "System" {
-		if _, ok := s.findAppRoot(name); !ok {
+		if _, ok := s.findAppRoot(name); !ok && !sysAppExists(name) {
 			return "", errors.New("no such app")
 		}
 	}

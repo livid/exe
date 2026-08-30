@@ -1,0 +1,5 @@
+{
+  "title": "Hub",
+  "icon": "icon.svg",
+  "window": { "width": 520, "height": 560, "grow": true }
+}
