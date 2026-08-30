@@ -104,6 +104,11 @@ canvas.ava-big { image-rendering: pixelated; }
 #dlg label { font-size: 11px; }
 #dlg .btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 #dlg .err { color: var(--red); font-size: 11px; min-height: 14px; margin-top: 6px; }
+/* hub-info rows: right-aligned labels, selectable values */
+.irow { display: flex; gap: 8px; margin: 0 0 6px; align-items: baseline; }
+.ilab { width: 70px; flex: none; font-size: 11px; color: #555; text-align: right; }
+.ival { flex: 1; min-width: 0; user-select: text; cursor: text; overflow-wrap: break-word; }
+.ival.mono { font: 10px/1.5 var(--mono); }
 
 #status { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
   background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
@@ -183,7 +188,7 @@ canvas.ava-big { image-rendering: pixelated; }
 </div>
 
 <div id="status">
-  <span id="st-hub">&#8230;</span>
+  <span id="st-hub" title="Hub Info&#8230;">&#8230;</span>
   <span id="st-gate"></span>
   <button class="ghost sm" id="switch">Hub&#8230;</button>
 </div>
@@ -467,6 +472,41 @@ function dialog(children) {
   $("#veil").classList.add("on");
   return () => $("#veil").classList.remove("on");
 }
+
+// the hub URL as the HTTP multiaddr another hub's admin would peer.add
+function toMultiaddr(u) {
+  const url = new URL(u);
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const port = url.port || (url.protocol === "https:" ? "443" : "80");
+  const proto = /^\d+\.\d+\.\d+\.\d+$/.test(host) ? "ip4" : host.includes(":") ? "ip6" : "dns4";
+  return "/" + proto + "/" + host + "/tcp/" + port + "/" + (url.protocol === "https:" ? "https" : "http");
+}
+
+// info is fetched BEFORE the dialog shows so it opens at its final size
+// (the desktop About window sets the pattern)
+async function hubInfoDialog() {
+  if (!hub) return;
+  let info;
+  try { info = await hget("/v1/hub"); } catch (e) { say("Hub unreachable: " + e.message, true); return; }
+  hubInfo = info;
+  const row = (label, val, mono) => el("div", { class: "irow" },
+    el("span", { class: "ilab" }, label),
+    el("span", { class: "ival" + (mono ? " mono" : "") }, val));
+  const st = info.stats;
+  const ok = el("button", { class: "ghost" }, "OK");
+  const close = dialog([
+    el("h2", {}, "Hub Info"),
+    row("Address", hub),
+    row("Multiaddr", toMultiaddr(hub), true),
+    row("Hub id", info.id, true),
+    row("Public key", info.pubkey, true),
+    row("Gate", info.gate && info.gate.mode === "token" ? "token-gated" : "open"),
+    row("Users", st ? st.profiles.toLocaleString() : "—"),
+    row("Posts", st ? st.posts.toLocaleString() : "—"),
+    el("div", { class: "btns" }, ok)]);
+  ok.onclick = close;
+}
+$("#st-hub").onclick = hubInfoDialog;
 
 function hubDialog(firstRun) {
   const input = el("input", { type: "text", placeholder: "http://hub.example:7788",
