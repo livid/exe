@@ -67,6 +67,11 @@ textarea { resize: none; }
 .p-head { display: flex; align-items: baseline; gap: 6px; }
 .p-ava { width: 14px; height: 14px; flex: none; align-self: center;
   border: 1px solid var(--black); image-rendering: pixelated; }
+img.p-ava { image-rendering: auto; object-fit: cover; background: #fff; }
+.ava-row { display: flex; align-items: center; gap: 8px; }
+.ava-big { width: 32px; height: 32px; border: 1px solid var(--black); background: #fff;
+  image-rendering: auto; object-fit: cover; }
+canvas.ava-big { image-rendering: pixelated; }
 .p-name { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-id { font: 10px var(--mono); color: #999; }
 .p-time { font-size: 10px; color: #777; margin-left: auto; flex: none; }
@@ -272,9 +277,16 @@ function identicon(id) {
   return cvs;
 }
 
+function avatarEl(id, cid, cls) {
+  if (cid) return el("img", { class: cls || "p-ava", src: hub + "/v1/embed/" + cid, alt: "" });
+  const c = identicon(id);
+  if (cls) c.className = cls;
+  return c;
+}
+
 function renderPost(p, opts = {}) {
   const head = el("div", { class: "p-head" },
-    identicon(p.author),
+    avatarEl(p.author, p.avatar),
     el("span", { class: "p-name" }, p.author_name || "—"),
     el("span", { class: "p-id" }, p.author),
     el("span", { class: "p-time" }, fmtTime(p.received)));
@@ -500,16 +512,42 @@ function hubDialog(firstRun) {
 $("#switch").onclick = () => hubDialog(false);
 
 function profileDialog(needName) {
+  let avatarCid = myProfile ? (myProfile.avatar || "") : "";
   const name = el("input", { type: "text", maxlength: 64,
     value: myProfile ? myProfile.name : (who ? who.name : "") });
   const bio = el("input", { type: "text", maxlength: 200,
     value: myProfile ? (myProfile.bio || "") : "" });
   const err = el("div", { class: "err" },
     needName ? "Pick a display name before your first post." : "");
+  const avaBox = el("div", { class: "ava-row" });
+  const pick = el("button", { class: "ghost" }, "Choose Picture…");
+  const file = el("input", { type: "file", accept: "image/*", hidden: "" });
+  const renderAva = () =>
+    avaBox.replaceChildren(avatarEl(who ? who.id : "0", avatarCid, "ava-big"), pick, file);
+  renderAva();
+  pick.onclick = () => file.click();
+  file.onchange = async e => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > 8 << 20) { err.textContent = "Image is over 8MB."; return; }
+    pick.disabled = true;
+    err.textContent = "";
+    try {
+      const r = await api("/v1/hub/avatar?hub=" + encodeURIComponent(hub),
+        { method: "POST", body: f });
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(out.error || "HTTP " + r.status);
+      avatarCid = out.cid; // the hub minted a 128×128 PNG (alpha kept)
+      renderAva();
+    } catch (e2) { err.textContent = e2.message; }
+    pick.disabled = false;
+  };
   const save = el("button", { class: "ghost" }, "Save");
   const cancel = el("button", { class: "ghost" }, "Cancel");
   const close = dialog([
     el("h2", {}, "Your Profile"),
+    el("div", { class: "row" }, el("label", {}, "Picture"), avaBox),
     el("div", { class: "row" }, el("label", {}, "Display name"), name),
     el("div", { class: "row" }, el("label", {}, "Bio"), bio),
     el("div", { style: "font-size:11px;color:#555" },
@@ -520,11 +558,14 @@ function profileDialog(needName) {
   save.onclick = async () => {
     if (!name.value.trim()) { err.textContent = "A name is required."; return; }
     save.disabled = true;
+    const body = { name: name.value.trim(), bio: bio.value.trim() };
+    if (avatarCid) body.avatar = avatarCid;
     try {
-      await publish("profile.set", { name: name.value.trim(), bio: bio.value.trim() });
-      myProfile = { name: name.value.trim(), bio: bio.value.trim() };
+      await publish("profile.set", body);
+      myProfile = { name: body.name, bio: body.bio, avatar: avatarCid };
       close();
       say("");
+      loadFeed(); // own posts pick up the new picture
     } catch (e) { err.textContent = e.message; save.disabled = false; }
   };
   setTimeout(() => name.focus(), 50);

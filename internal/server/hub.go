@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -123,7 +124,13 @@ func (s *Server) handleHubPublish(w http.ResponseWriter, r *http.Request) {
 
 // handleHubUpload signs the body digest and forwards the bytes for the
 // hub to pin; the response (cid, sniffed mime, size) relays unchanged.
+// /v1/hub/avatar rides the same path to the hub's avatar minter (which
+// crops/resizes to a 128×128 PNG before pinning).
 func (s *Server) handleHubUpload(w http.ResponseWriter, r *http.Request) {
+	target := "/v1/upload"
+	if strings.HasSuffix(r.URL.Path, "/avatar") {
+		target = "/v1/avatar"
+	}
 	hub, err := hubURL(r.URL.Query().Get("hub"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -143,7 +150,7 @@ func (s *Server) handleHubUpload(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256(body)
 	sig := id.Sign([]byte(hubUploadPrefix + ts + "\n" + hex.EncodeToString(sum[:])))
 
-	req, err := http.NewRequest("POST", hub+"/v1/upload", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", hub+target, bytes.NewReader(body))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

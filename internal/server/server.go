@@ -144,6 +144,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/hub/whoami", s.handleHubWhoami)
 	mux.HandleFunc("POST /v1/hub/publish", s.handleHubPublish)
 	mux.HandleFunc("POST /v1/hub/upload", s.handleHubUpload)
+	mux.HandleFunc("POST /v1/hub/avatar", s.handleHubUpload)
 	mux.HandleFunc("GET /v1/apps", s.handleApps)
 	mux.HandleFunc("GET /v1/apps/events", s.handleAppDataEvents)
 	mux.HandleFunc("GET /v1/apps/{app}/data", s.handleAppDataList)
