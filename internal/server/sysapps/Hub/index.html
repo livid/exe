@@ -335,6 +335,7 @@ function renderPost(p, opts = {}) {
     el("span", { class: "p-id" }, p.author),
     el("span", { class: "p-time" }, fmtTime(p.received)));
   const node = el("div", { class: "post" + (opts.focus ? " focus" : "") }, head);
+  node.dataset.id = p.id;
   if (p.text) node.append(el("div", { class: "p-text" }, p.text));
   if (p.embeds && p.embeds.length) {
     const box = el("div", { class: "p-embeds" });
@@ -358,7 +359,7 @@ function renderPost(p, opts = {}) {
       up.onclick = e => { e.stopPropagation(); openThread(p.reply_to); };
       foot.append(up);
     }
-    const rep = el("span", { class: "p-replies" },
+    const rep = el("span", { class: "p-replies", "data-count": p.replies || 0 },
       p.replies ? p.replies + (p.replies === 1 ? " reply" : " replies") : "reply");
     foot.append(rep);
     node.style.cursor = "default";
@@ -442,7 +443,51 @@ function showFeed() {
   loadFeed();
 }
 $("#back").onclick = showFeed;
-$("#refresh").onclick = () => view.kind === "thread" ? openThread(view.id) : loadFeed();
+const refreshView = () => view.kind === "thread" ? openThread(view.id) : loadFeed();
+$("#refresh").onclick = refreshView;
+
+// ---- live updates ----
+// The hub streams post activity over SSE; events carry ids only, the
+// content comes from the tested /v1/post render path. Everything in the
+// list is keyed by data-id, so inserts dedupe against reloads racing the
+// stream, and a reconnect just refetches the view (drops absorbed).
+let es = null, esDown = false;
+function connectEvents() {
+  if (es) es.close();
+  es = new EventSource(hub + "/v1/events");
+  es.onopen = () => { if (esDown) { esDown = false; refreshView(); } };
+  es.onerror = () => { esDown = true; };
+  es.onmessage = async ev => {
+    let m;
+    try { m = JSON.parse(ev.data); } catch (e) { return; }
+    const seen = id => feedEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (m.type === "post.delete") { seen(m.id)?.remove(); return; }
+    if (m.type !== "post.create" || seen(m.id)) return;
+    if (view.kind === "thread") {
+      if (m.reply_to !== view.id) return;
+      const out = await hget("/v1/post/" + m.id);
+      if (!seen(m.id)) feedEl.append(renderPost(out.post, { inThread: true }));
+      return;
+    }
+    if (m.reply_to) { // not shown in the feed, but its parent's count is
+      const c = seen(m.reply_to)?.querySelector("[data-count]");
+      if (c) {
+        const n = +c.dataset.count + 1;
+        c.dataset.count = n;
+        c.textContent = n + (n === 1 ? " reply" : " replies");
+      }
+      return;
+    }
+    const out = await hget("/v1/post/" + m.id);
+    if (seen(m.id)) return;
+    feedEl.querySelector(".muted")?.remove();
+    const node = renderPost(out.post);
+    const stick = feedEl.scrollTop;
+    feedEl.prepend(node);
+    // reading further down? hold the viewport still under the insert
+    if (stick > 0) feedEl.scrollTop = stick + node.offsetHeight;
+  };
+}
 
 // ---- composing ----
 function renderChips() {
@@ -691,6 +736,7 @@ async function connected() {
     try { myProfile = await hget("/v1/profile/" + who.id); } catch (e) {}
   }
   showFeed();
+  connectEvents();
   if (!myProfile) say("No profile yet — set a display name via Profile…");
 }
 
