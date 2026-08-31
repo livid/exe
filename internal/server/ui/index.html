@@ -1759,6 +1759,8 @@ function closeWin(w) {
   if (w.id === "win-log") stopLogStream();
   // a closed Terminal is gone for good: end the shell and drop the window
   if (w.classList.contains("term-window")) { w._teardown(); w.remove(); }
+  // an explicit close means this tab no longer restores Claude on reload
+  if (w.id === "win-claude") sessionStorage.removeItem("exe_claude_open");
   if (IS_MOBILE) {
     if (!MOB_DIALOG.has(w.id)) {
       const prev = document.getElementById(mobileStack.pop() || "");
@@ -2136,6 +2138,10 @@ function winRestore() {
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem("exe_winstate") || "null"); } catch (e) {}
   if (cached) applyWinState(cached); else openWin("#win-vms");
+  // the tab that had the Claude window open gets it back after a reload —
+  // per-tab (sessionStorage), so other tabs and browsers never auto-open
+  // and steal the tmux session from whoever holds it
+  if (sessionStorage.getItem("exe_claude_open")) openHostTermWin("claude");
   j("/v1/ui/state").then(r => {
     winRev = r.rev || 0;
     if (r.state) {
@@ -4151,6 +4157,7 @@ function openHostTermWin(app) {
     // (a disconnected window is closed first, then reopened to reconnect)
     const old = document.getElementById("win-claude");
     if (old) { openWin(old); return; }
+    sessionStorage.setItem("exe_claude_open", "1"); // this tab restores it on reload
   }
   const n = isClaude ? 0 : ++termSeq;
   const w = el("div", { class: "window grow term-window", id: isClaude ? "win-claude" : "win-term-" + n });
