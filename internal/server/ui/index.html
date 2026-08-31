@@ -1961,10 +1961,17 @@ const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatW
 let winApplying = false; // applying a stored/remote snapshot — don't echo it back
 let winDragging = null;  // window under the local pointer — remote moves lose
 let winRev = 0;
+// last-known Claude Code window geometry: the tmux session behind it is
+// persistent, so its geometry rides the snapshot even while the window is
+// closed and the next open puts it back where it was left
+let claudeGeom = null;
 
 function winSnapshot() {
   const st = {};
   document.querySelectorAll("#desktop .window").forEach(w => {
+    // Terminal windows are one-off live sessions under ephemeral ids — only
+    // the Claude Code window (one persistent session, stable id) is saved
+    if (w.id.startsWith("win-term-")) return;
     // style.*, not offset*: hidden windows are display:none, which reads 0
     st[w.id] = {
       l: parseInt(w.style.left) || 0, t: parseInt(w.style.top) || 0,
@@ -1972,10 +1979,14 @@ function winSnapshot() {
       z: +w.style.zIndex || 0,
       open: !w.hidden, shaded: w.classList.contains("shaded"),
     };
-    // app, Finder, editor, image, chat and terminal windows are also resizable
-    const g = w.querySelector(".app-frame, .finder-icons, .ed-text, .iv-box, .chat-wrap");
+    // app, Finder, editor, image, chat and Claude windows are also resizable
+    const g = w.querySelector(".app-frame, .finder-icons, .ed-text, .iv-box, .chat-wrap, .hostterm-box");
     if (g) st[w.id].h = parseInt(g.style.height) || g.offsetHeight || 0;
   });
+  // the Claude window is removed from the DOM on close, so its last
+  // geometry is carried forward instead of dropped from the snapshot
+  if (st["win-claude"]) claudeGeom = st["win-claude"];
+  else if (claudeGeom) st["win-claude"] = { ...claudeGeom, open: false };
   st["win-log"].h = parseInt($("#log-out").style.height) || $("#log-out").offsetHeight || 380;
   st["win-news"].h = parseInt($("#news-list").style.height) || $("#news-list").offsetHeight || 380;
   st["win-docs"].h = parseInt($("#docs-body").style.height) || $("#docs-body").offsetHeight || 420;
@@ -1992,6 +2003,9 @@ function winSnapshot() {
 }
 function applyWinState(st) {
   if (!st || IS_MOBILE) return; // snapshots describe the spatial desktop, not the phone view
+  // remember the Claude window's geometry for its next open — never auto-open
+  // it: connecting takes the tmux session over from whichever browser has it
+  if (st["win-claude"]) claudeGeom = st["win-claude"];
   winApplying = true;
   try {
     // pass 1: open/close (openers bump z and .front; geometry fixes that after)
@@ -2058,6 +2072,13 @@ function applyWinState(st) {
       if (id.startsWith("win-app-") && v.h) {
         const fr = w.querySelector(".app-frame");
         if (fr) fr.style.height = Math.max(120, Math.min(window.innerHeight - 120, v.h)) + "px";
+      }
+      if (id === "win-claude") {
+        if (v.h) {
+          const g = w.querySelector(".hostterm-box");
+          if (g) g.style.height = Math.max(160, Math.min(window.innerHeight - 170, v.h)) + "px";
+        }
+        if (w._fit) w._fit(); // xterm refits to the remotely applied geometry
       }
     }
     zTop = Math.max(zTop, maxZ);
@@ -4121,14 +4142,32 @@ let termSeq = 0;
 // app === "claude" opens the Claude Code CLI instead of a shell; on hosts
 // with tmux the daemon keeps one persistent session behind the icon, so
 // every claude window is the same conversation (opening a second one takes
-// it over from the first)
+// it over from the first). Because the session outlives its window, the
+// Claude window keeps a stable id and reopens at its last geometry.
 function openHostTermWin(app) {
-  const n = ++termSeq;
-  const w = el("div", { class: "window grow term-window", id: "win-term-" + n });
+  const isClaude = app === "claude";
+  if (isClaude) {
+    // one session, one window: a live window just comes forward, and a
+    // disconnected one is replaced by the fresh takeover
+    const old = document.getElementById("win-claude");
+    if (old) {
+      if (old._ws && old._ws.readyState === 1) { openWin(old); return; }
+      closeWin(old);
+    }
+  }
+  const n = isClaude ? 0 : ++termSeq;
+  const w = el("div", { class: "window grow term-window", id: isClaude ? "win-claude" : "win-term-" + n });
   const open = document.querySelectorAll("#desktop .term-window").length;
   w.style.left = (150 + open * 26) + "px";
   w.style.top = (100 + open * 22) + "px";
   w.style.width = "640px";
+  if (isClaude && claudeGeom) {
+    // last saved geometry, same clamps as applyWinState pass 2
+    const v = claudeGeom;
+    if (v.w) w.style.width = Math.max(400, Math.min(window.innerWidth - 24, v.w)) + "px";
+    if (v.l !== undefined) w.style.left = Math.min(window.innerWidth - 60, Math.max(60 - (v.w || 640), v.l)) + "px";
+    if (v.t !== undefined) w.style.top = Math.min(window.innerHeight - 46, Math.max(0, v.t)) + "px";
+  }
   w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
     <div class="title"></div>
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
@@ -4140,6 +4179,10 @@ function openHostTermWin(app) {
   w.querySelector(".title").textContent = app === "claude" ? "Claude Code"
     : n === 1 ? "Terminal" : "Terminal " + n;
   const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status");
+  // saved height goes on before fit() so the terminal opens at the right rows
+  // (desktop only — mobile keeps its fullscreen 100% height)
+  if (isClaude && claudeGeom && claudeGeom.h && !IS_MOBILE)
+    box.style.height = Math.max(160, Math.min(window.innerHeight - 170, claudeGeom.h)) + "px";
   box.addEventListener("wheel", e => e.preventDefault(), { passive: false });
   $("#desktop").append(w);
   initWindow(w);
@@ -4186,6 +4229,8 @@ function openHostTermWin(app) {
   term.onData(d => { if (ws.readyState === 1) ws.send(enc.encode(d)); });
   window.addEventListener("resize", resize);
   wireGrow(w.querySelector(".grow-box"), w, box, 400, { minH: 160, onMove: resize });
+  w._ws = ws;     // openHostTermWin: live-session check on reopen
+  w._fit = resize; // applyWinState: refit after a remote geometry change
   w._teardown = () => {
     window.removeEventListener("resize", resize);
     ws.onclose = null;
