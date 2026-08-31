@@ -4147,13 +4147,10 @@ let termSeq = 0;
 function openHostTermWin(app) {
   const isClaude = app === "claude";
   if (isClaude) {
-    // one session, one window: a live window just comes forward, and a
-    // disconnected one is replaced by the fresh takeover
+    // one session, one window: reopening the icon just brings it forward
+    // (a disconnected window is closed first, then reopened to reconnect)
     const old = document.getElementById("win-claude");
-    if (old) {
-      if (old._ws && old._ws.readyState === 1) { openWin(old); return; }
-      closeWin(old);
-    }
+    if (old) { openWin(old); return; }
   }
   const n = isClaude ? 0 : ++termSeq;
   const w = el("div", { class: "window grow term-window", id: isClaude ? "win-claude" : "win-term-" + n });
@@ -4229,7 +4226,6 @@ function openHostTermWin(app) {
   term.onData(d => { if (ws.readyState === 1) ws.send(enc.encode(d)); });
   window.addEventListener("resize", resize);
   wireGrow(w.querySelector(".grow-box"), w, box, 400, { minH: 160, onMove: resize });
-  w._ws = ws;     // openHostTermWin: live-session check on reopen
   w._fit = resize; // applyWinState: refit after a remote geometry change
   w._teardown = () => {
     window.removeEventListener("resize", resize);
