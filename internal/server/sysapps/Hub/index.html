@@ -109,6 +109,15 @@ canvas.ava-big { image-rendering: pixelated; }
 .ilab { width: 70px; flex: none; font-size: 11px; color: #555; text-align: right; }
 .ival { flex: 1; min-width: 0; user-select: text; cursor: text; overflow-wrap: break-word; }
 .ival.mono { font: 10px/1.5 var(--mono); }
+.ival.copy { color: var(--hl); cursor: pointer; text-decoration: underline; }
+.ival.copy:active { color: #000; }
+
+/* toast — the desktop's #status-bar pattern */
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #ffffc9; color: #000; border: 1px solid var(--black); padding: 5px 14px;
+  font-size: 12px; box-shadow: inset 1px 1px 0 #fff, 2px 2px 0 var(--black);
+  opacity: 0; transition: opacity .15s; pointer-events: none; max-width: 90vw; z-index: 20; }
+#toast.show { opacity: 1; }
 
 #status { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
   background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
@@ -193,6 +202,7 @@ canvas.ava-big { image-rendering: pixelated; }
   <button class="ghost sm" id="switch">Hub&#8230;</button>
 </div>
 
+<div id="toast"></div>
 <div id="veil">
   <div id="dlg"></div>
 </div>
@@ -246,6 +256,26 @@ const feedEl = $("#feed"), cStatus = $("#c-status");
 function say(msg, isErr) {
   cStatus.textContent = msg || "";
   cStatus.classList.toggle("err", !!isErr);
+}
+
+function toast(msg) {
+  const b = $("#toast");
+  b.textContent = msg;
+  b.classList.add("show");
+  clearTimeout(b._t);
+  b._t = setTimeout(() => b.classList.remove("show"), 3500);
+}
+async function copyText(text, label) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; }
+  catch (e) { // plain-http origins have no clipboard API — fall back to execCommand
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { ok = document.execCommand("copy"); } catch (e2) {}
+    ta.remove();
+  }
+  toast(ok ? "Copied " + (label || text) : "Copy failed — select the text and copy manually");
 }
 
 // ---- hub reads (public, CORS-open) ----
@@ -489,17 +519,24 @@ async function hubInfoDialog() {
   let info;
   try { info = await hget("/v1/hub"); } catch (e) { say("Hub unreachable: " + e.message, true); return; }
   hubInfo = info;
-  const row = (label, val, mono) => el("div", { class: "irow" },
-    el("span", { class: "ilab" }, label),
-    el("span", { class: "ival" + (mono ? " mono" : "") }, val));
+  const row = (label, val, mono, copyAs) => {
+    const v = el("span", { class: "ival" + (mono ? " mono" : "") }, val);
+    if (copyAs) {
+      v.classList.add("copy");
+      v.title = "Click to copy";
+      // a drag-select ends in a click too; only copy when nothing is selected
+      v.onclick = () => { if (getSelection().isCollapsed) copyText(val, copyAs); };
+    }
+    return el("div", { class: "irow" }, el("span", { class: "ilab" }, label), v);
+  };
   const st = info.stats;
   const ok = el("button", { class: "ghost" }, "OK");
   const close = dialog([
     el("h2", {}, "Hub Info"),
-    row("Address", hub),
-    row("Multiaddr", toMultiaddr(hub), true),
-    row("Hub id", info.id, true),
-    row("Public key", info.pubkey, true),
+    row("Address", hub, false, "address"),
+    row("Multiaddr", toMultiaddr(hub), true, "multiaddr"),
+    row("Hub id", info.id, true, "hub id"),
+    row("Public key", info.pubkey, true, "public key"),
     row("Gate", info.gate && info.gate.mode === "token" ? "token-gated" : "open"),
     row("Users", st ? st.profiles.toLocaleString() : "—"),
     row("Posts", st ? st.posts.toLocaleString() : "—"),
