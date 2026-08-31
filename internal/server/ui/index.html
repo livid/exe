@@ -2656,6 +2656,10 @@ window.addEventListener("message", e => {
     // the app selected the item a search result named — stop repeating
     clearInterval(revealTimer);
     revealTimer = null;
+  } else if (e.data.exe === "view-image" && isImageURL(e.data.url || "")) {
+    // apps have no window chrome of their own, so a clicked picture (a hub
+    // embed, say) opens in a desktop PictureViewer window via the bridge
+    openImageWin(e.data.url, w, typeof e.data.name === "string" ? e.data.name : "");
   } else if (e.data.exe === "grow-start" && !IS_MOBILE) {
     appGrow = { win: w, frame: fr, w: w.offsetWidth, h: fr.offsetHeight };
     winDragging = w;
@@ -3595,7 +3599,9 @@ async function loadEditor(w) {
 // ---- image viewer windows, modeled on PictureViewer ----
 // Pictures double-clicked in a Finder window open here instead of a browser
 // tab, one spatial window per file (id win-iv-<encoded path>, geometry in
-// the snapshot). SVG stays with the text editor: it's markup.
+// the snapshot). SVG stays with the text editor: it's markup. An absolute
+// http(s) path is a foreign picture (a hub embed via the app bridge):
+// fetched bare — the desktop token never leaves this origin.
 const IMG_EXT = new Set("png jpg jpeg gif webp bmp ico avif".split(" "));
 function isImageFile(name) {
   const dot = name.lastIndexOf(".");
@@ -3606,7 +3612,8 @@ function isArchiveFile(name) {
   const dot = name.lastIndexOf(".");
   return dot > 0 && ARC_EXT.has(name.slice(dot + 1).toLowerCase());
 }
-function openImageWin(path, fromWin) {
+const isImageURL = src => /^https?:\/\//.test(src);
+function openImageWin(path, fromWin, name) {
   const id = "win-iv-" + encodeURIComponent(path);
   let w = document.getElementById(id);
   if (!w) {
@@ -3631,8 +3638,10 @@ function openImageWin(path, fromWin) {
         <div class="iv-box"></div>
         ${GROW_TILE}
       </div>`;
-    w.querySelector(".title").textContent = path.split("/").pop();
-    w.querySelector(".iv-path").textContent = "Workspace :" + path.split("/").join(" :");
+    w.querySelector(".title").textContent = name || path.split("/").pop();
+    w.querySelector(".iv-path").textContent = isImageURL(path)
+      ? new URL(path).host + " :" + (name || path.split("/").pop())
+      : "Workspace :" + path.split("/").join(" :");
     w.dataset.path = path;
     wireGrow(w.querySelector(".grow-box"), w, w.querySelector(".iv-box"), 240, { minH: 120 });
     $("#desktop").append(w);
@@ -3644,7 +3653,8 @@ function openImageWin(path, fromWin) {
 async function loadImage(w) {
   const path = w.dataset.path, box = w.querySelector(".iv-box"), dims = w.querySelector(".iv-dims");
   try {
-    const r = await api(wsUrl(path));
+    const r = isImageURL(path) ? await fetch(path) : await api(wsUrl(path));
+    if (!r.ok) throw new Error("HTTP " + r.status); // bare fetch — api() already threw
     const blob = await r.blob();
     if (w._imgURL) URL.revokeObjectURL(w._imgURL); // reopen refetches — drop the old blob
     w._imgURL = URL.createObjectURL(blob);

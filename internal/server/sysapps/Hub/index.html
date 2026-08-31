@@ -79,7 +79,7 @@ canvas.ava-big { image-rendering: pixelated; }
   user-select: text; cursor: text; }
 .p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; }
 .p-embeds img { max-width: 180px; max-height: 140px; border: 1px solid var(--black);
-  background: var(--g300); }
+  background: var(--g300); cursor: pointer; }
 .p-file { font-size: 11px; border: 1px solid var(--black); background: var(--g200); padding: 2px 8px; }
 .p-foot { margin: 5px 0 0 22px; display: flex; gap: 10px; align-items: center; }
 .p-replies { font-size: 10px; color: var(--hl); }
@@ -319,6 +319,15 @@ function avatarEl(id, cid, cls) {
   return c;
 }
 
+// a clicked picture opens in the desktop's PictureViewer window (the same
+// viewer Finder uses) through the app bridge; standalone, a plain new tab
+function viewImage(em) {
+  const url = hub + "/v1/embed/" + em.cid;
+  if (window.parent !== window)
+    parent.postMessage({ exe: "view-image", url, name: em.filename || em.alt || "" }, location.origin);
+  else window.open(url, "_blank");
+}
+
 function renderPost(p, opts = {}) {
   const head = el("div", { class: "p-head" },
     avatarEl(p.author, p.avatar),
@@ -331,7 +340,9 @@ function renderPost(p, opts = {}) {
     const box = el("div", { class: "p-embeds" });
     for (const em of p.embeds) {
       if ((em.mime || "").startsWith("image/")) {
-        box.append(el("img", { src: hub + "/v1/embed/" + em.cid, alt: em.alt || "", loading: "lazy" }));
+        const img = el("img", { src: hub + "/v1/embed/" + em.cid, alt: em.alt || "", loading: "lazy" });
+        img.onclick = e => { e.stopPropagation(); viewImage(em); };
+        box.append(img);
       } else {
         const a = el("a", { class: "p-file", href: hub + "/v1/embed/" + em.cid, target: "_blank" },
           em.filename || em.mime);
