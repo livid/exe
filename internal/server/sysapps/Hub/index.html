@@ -457,12 +457,16 @@ function renderChips() {
     box.append(chip);
   }
   $("#attach").disabled = attachments.length >= 4;
+  updatePostBtn();
+}
+function updatePostBtn() {
+  $("#post").disabled = !$("#text").value.trim() && !attachments.length;
 }
 
 $("#attach").onclick = () => $("#file").click();
-$("#file").onchange = async e => {
-  for (const f of e.target.files) {
-    if (attachments.length >= 4) break;
+async function addFiles(files) {
+  for (const f of files) {
+    if (attachments.length >= 4) { say("Up to 4 attachments per post", true); break; }
     if (f.size > 8 << 20) { say(f.name + " is over 8MB", true); continue; }
     say("Uploading " + f.name + "…");
     try {
@@ -474,9 +478,22 @@ $("#file").onchange = async e => {
       say("");
     } catch (err) { say(err.message, true); }
   }
-  e.target.value = "";
   renderChips();
+}
+$("#file").onchange = e => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  addFiles(files);
 };
+// a pasted image (screenshot, copied picture) attaches like a chosen file
+document.addEventListener("paste", e => {
+  if ($("#veil").classList.contains("on")) return; // dialogs paste normally
+  const files = [...e.clipboardData.items]
+    .filter(it => it.kind === "file").map(it => it.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  addFiles(files);
+});
 
 async function doPost() {
   const text = $("#text").value.trim();
@@ -496,15 +513,13 @@ async function doPost() {
     say("");
     view.kind === "thread" ? openThread(view.id) : loadFeed();
   } catch (e) { say(e.message, true); }
-  $("#post").disabled = false;
+  updatePostBtn();
 }
 $("#post").onclick = doPost;
 $("#text").addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); doPost(); }
 });
-$("#text").addEventListener("input", () => {
-  $("#post").disabled = !$("#text").value.trim() && !attachments.length;
-});
+$("#text").addEventListener("input", updatePostBtn);
 
 // ---- dialogs ----
 function dialog(children) {
