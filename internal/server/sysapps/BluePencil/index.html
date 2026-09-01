@@ -27,7 +27,6 @@ button.ghost:active { background: #666; color: #fff;
   box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
     inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
 button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
-button.ghost.sm { padding: 1px 8px; font-size: 10px; border-radius: 3px; height: auto; }
 
 textarea, select { font: inherit; color: var(--black); }
 textarea { background: #fff; border: 1px solid var(--black); padding: 5px 7px; border-radius: 0;
@@ -42,8 +41,16 @@ select { background: var(--g300); border: 1px solid var(--black); border-radius:
 select:focus { outline: none; }
 
 /* two document fields of equal height: what you wrote, and what the
-   pencil made of it. Both keep the bar on so the layout never shifts. */
-#wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+   pencil made of it. Both keep the bar on so the layout never shifts.
+   12px margins all round: the HIG's distance between a push button and
+   any edge of its window, kept consistent for the fields. */
+#wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+/* the button row, laid out per the HIG (Dialog Box Guidelines, push
+   button layout): in the lower right, a set of one width (58px, the
+   OK/Cancel standard), 12px between buttons, 12px below the field and
+   above the status line. Never on the status line itself. */
+#actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 4px; }
+#actions button.ghost { width: 58px; padding-left: 0; padding-right: 0; }
 #src { flex: 1; min-height: 0; width: 100%; font: 12px/1.5 var(--font);
   overflow-y: scroll; overflow-x: hidden; }
 #out { flex: 1; min-height: 0; background: #fff; border: 1px solid var(--black); padding: 5px 7px;
@@ -72,7 +79,7 @@ select:focus { outline: none; }
 #dlg h2 { font-size: 12px; margin: 0 0 10px; }
 #dlg .row { margin: 0 0 8px; display: flex; flex-direction: column; gap: 3px; }
 #dlg label { font-size: 11px; }
-#dlg label.check { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 4px; }
+#dlg label.check { display: flex; align-items: center; gap: 5px; font-size: 12px; margin-top: 4px; }
 /* a Platinum check box: sunken white square, a black check when on */
 #dlg input[type=checkbox] { appearance: none; margin: 0; width: 12px; height: 12px; flex: none;
   background: #fff; border: 1px solid var(--black);
@@ -153,13 +160,15 @@ select:focus { outline: none; }
 <div id="wrap">
   <textarea id="src" placeholder="Type or paste your text here." spellcheck="false"></textarea>
   <div id="out"></div>
+  <div id="actions">
+    <button class="ghost" id="copy" disabled>Copy</button>
+    <button class="ghost" id="accept" disabled>Accept</button>
+  </div>
 </div>
 
 <div id="status">
   <span id="st-state">Ready</span>
   <span id="st-model" title="Options&#8230;">&#8230;</span>
-  <button class="ghost sm" id="copy" disabled>Copy</button>
-  <button class="ghost sm" id="accept" disabled>Accept</button>
 </div>
 
 <div id="toast"></div>
