@@ -1625,6 +1625,8 @@ const IS_MOBILE = new URLSearchParams(location.search).has("mobile")
   : /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent)
     || (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 700);
 if (IS_MOBILE) document.body.classList.add("mobile");
+// the terminal menus word their key hints for the client's keyboard
+const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "");
 // iOS Safari auto-zooms into focused inputs whose font is under 16px;
 // maximum-scale=1 disables only that auto-zoom (pinch zoom still works
 // since iOS 10), keeping the 12px Platinum type. Scoped to iOS — the same
@@ -4145,6 +4147,48 @@ $("#term-open").onclick = () => {
 // sessions, so they are never restored from the layout snapshot, and
 // closing one ends its shell and removes the window for good. ----
 let termSeq = 0;
+
+// ---- terminal contextual menu: Copy / Paste / Select All ----
+// Claude Code turns on any-event mouse tracking, which hands the mouse to
+// the app: a plain drag is reported instead of selecting (Shift+drag /
+// Option+drag still select), and every report counts as input, which
+// clears the selection — a right press does it, and so does each hover
+// move as the pointer crosses a cell. Two capture-phase listeners, ahead of
+// xterm's own, keep a selection alive long enough to use: right presses
+// never reach xterm (they open the menu instead), and hover moves are
+// swallowed while something is selected. Clicks, keys and the wheel still
+// clear it as before, and the app sees every other event unchanged.
+function wireTermMenu(w, box, term) {
+  box.addEventListener("mousedown", e => { if (e.button === 2) e.stopPropagation(); }, true);
+  box.addEventListener("mousemove", e => { if (!e.buttons && term.hasSelection()) e.stopPropagation(); }, true);
+  box.addEventListener("contextmenu", e => {
+    e.preventDefault(); e.stopPropagation();
+    focusWin(w); // the swallowed right press would normally have raised the window
+    // keys go to the menu while it is up (Escape must dismiss it, not reach
+    // the app); the terminal gets focus back however the menu closes
+    term.blur();
+    const sel = term.getSelection();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: "Copy", dis: !sel, act: async () => { await copyText(sel, "selection"); term.focus(); } },
+      { label: "Paste", act: () => termPaste(term) },
+      "-",
+      { label: "Select All", act: () => term.selectAll() },
+    ], () => term.focus());
+  }, true);
+}
+// Paste goes through the async clipboard API, which plain-http origins
+// don't have (and https asks permission once) — failing that, the
+// browser's own paste keys still reach xterm
+async function termPaste(term) {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) term.paste(text);
+  } catch (e) {
+    toast("Couldn't read the clipboard — paste with " + (IS_MAC ? "⌘V" : "Shift+Insert") + " instead");
+  }
+  term.focus();
+}
+
 // app === "claude" opens the Claude Code CLI instead of a shell; on hosts
 // with tmux the daemon keeps one persistent session behind the icon, so
 // every claude window is the same conversation (opening a second one takes
@@ -4196,10 +4240,15 @@ function openHostTermWin(app) {
     fontSize: 12, cursorBlink: true,
     fontFamily: '"MesloLGS NF", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace',
     theme: { background: "#000000" },
+    // while an app tracks the mouse (Claude Code does) xterm only selects
+    // with a modifier: Shift+drag on Windows/Linux, and on the Mac only
+    // Option+drag — and only with this flag set
+    macOptionClickForcesSelection: true,
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(box);
+  wireTermMenu(w, box, term);
   box.querySelector(".xterm-viewport").classList.add("vflush");
   fit.fit();
   const proto = location.protocol === "https:" ? "wss" : "ws";
