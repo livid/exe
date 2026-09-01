@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/ui/vendor/xterm.css">
 <script src="/ui/vendor/xterm.js"></script>
 <script src="/ui/vendor/xterm-addon-fit.js"></script>
+<script src="/ui/vendor/xterm-addon-web-links.js"></script>
 <script src="/ui/vendor/marked.min.js"></script>
 <script src="/ui/vendor/purify.min.js"></script>
 <style>
@@ -4105,18 +4106,43 @@ function termSpacerFix(box, t) {
   const h = Math.floor(vp.getBoundingClientRect().height) + "px";
   if (sa.style.height !== h) sa.style.height = h;
 }
+// ---- every terminal (VM console, Terminal and Claude Code windows) comes
+// from here so they look and behave alike. Links: an http(s) URL in the
+// text — across wrapped lines too — underlines under the pointer and a
+// click opens it in a new tab (a plain click, so touch can follow it;
+// a drag that leaves the link is not a click). OSC 8 hyperlinks (ls
+// --hyperlink, gh …) open the same way instead of xterm's confirm()
+// dialog. xterm spots the click on its own screen listeners, so links
+// work under mouse tracking too — the app still sees the press as usual.
+function newTerm() {
+  const term = new Terminal({
+    fontSize: 12, cursorBlink: true,
+    fontFamily: '"MesloLGS NF", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace',
+    theme: { background: "#000000" },
+    // while an app tracks the mouse (Claude Code does) xterm only selects
+    // with a modifier: Shift+drag on Windows/Linux, and on the Mac only
+    // Option+drag — and only with this flag set
+    macOptionClickForcesSelection: true,
+    linkHandler: { activate: (e, uri) => openTermLink(uri) },
+  });
+  term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => openTermLink(uri)));
+  return term;
+}
+// a blank tab first, its opener cut, then the navigation: the linked page
+// never gets a handle back on the desktop (which may be running on a token)
+function openTermLink(uri) {
+  const w = window.open();
+  if (!w) { toast("The browser blocked the new tab for " + uri); return; }
+  try { w.opener = null; } catch (e) {}
+  w.location.href = uri;
+}
 $("#term-close").onclick = closeTerm;
 $("#term-open").onclick = () => {
   closeTerm();
   $("#term-hint").hidden = true;
   const box = $("#term-box");
   box.hidden = false;
-  term = new Terminal({
-    fontSize: 12, cursorBlink: true,
-    fontFamily: '"MesloLGS NF", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace',
-    theme: { background: "#000000" },
-    macOptionClickForcesSelection: true, // see the host Terminal window
-  });
+  term = newTerm();
   fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
   term.open(box);
@@ -4245,15 +4271,7 @@ function openHostTermWin(app) {
   initWindow(w);
   openWin(w);
 
-  const term = new Terminal({
-    fontSize: 12, cursorBlink: true,
-    fontFamily: '"MesloLGS NF", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace',
-    theme: { background: "#000000" },
-    // while an app tracks the mouse (Claude Code does) xterm only selects
-    // with a modifier: Shift+drag on Windows/Linux, and on the Mac only
-    // Option+drag — and only with this flag set
-    macOptionClickForcesSelection: true,
-  });
+  const term = newTerm();
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(box);
