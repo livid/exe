@@ -109,9 +109,23 @@ a { color: #202a87; text-decoration: underline; }
 
 /* ---------- desktop icons ---------- */
 #desktop { position: fixed; inset: 20px 0 0 0; }
-#icons { position: absolute; top: 14px; right: 8px; bottom: 190px;
-  display: flex; flex-direction: column; flex-wrap: wrap-reverse; align-content: flex-end;
-  gap: 16px 8px; z-index: 1; }
+/* Both icon groups share one rail: a column that the pointer passes straight
+   through (only the icons themselves are hit), with the system icons pinned
+   at its bottom and #icons taking whatever height is left above them — so
+   however many system icons show, the main group's column ends one 16px
+   pitch above the top one and can never run into it. The rail spans the
+   desktop so #icons has a definite width: a column-wrap flex container that
+   is merely shrink-wrapped gets one column's width and spills the rest
+   off-screen. */
+#rail { position: absolute; inset: 14px 8px 16px 8px; z-index: 1; pointer-events: none;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 16px; }
+#rail .dicon { pointer-events: auto; }
+/* top-anchored, filling the rightmost column first and wrapping leftward;
+   under wrap-reverse the cross-start is the right edge, so flex-start packs
+   the columns against the rail */
+#icons { flex: 1; min-height: 0; align-self: stretch;
+  display: flex; flex-direction: column; flex-wrap: wrap-reverse; align-content: flex-start;
+  gap: 16px 8px; }
 .dicon { width: 82px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .dicon svg { filter: drop-shadow(1px 1px 0 rgba(0,0,0,.4)); }
 /* integer line-height: the inherited 1.45 makes the label 15.9375px tall,
@@ -123,11 +137,10 @@ a { color: #202a87; text-decoration: underline; }
 .dicon img { width: 32px; height: 32px; image-rendering: pixelated;
   filter: drop-shadow(1px 1px 0 rgba(0,0,0,.4)); }
 .dicon.sel img { filter: brightness(.55) saturate(1.3) drop-shadow(1px 1px 0 rgba(0,0,0,.4)); }
-/* system icons (Chat, Trash) live in their own bottom-anchored column on
-   the same 8px rail and 16px rhythm as #icons, so both groups share one
+/* system icons (Newsfeed, Chat, Trash) in their own bottom-anchored column
+   on the same 8px rail and 16px rhythm as #icons, so both groups share one
    center axis and pitch; hiding Chat keeps Trash pinned at the bottom */
-#sys-icons { position: absolute; bottom: 16px; right: 8px; z-index: 1;
-  display: flex; flex-direction: column; gap: 16px; }
+#sys-icons { flex: none; display: flex; flex-direction: column; gap: 16px; }
 
 /* ---------- window chrome (macthemes.garden-accurate) ---------- */
 .window {
@@ -819,8 +832,7 @@ td .mono, td.mono { user-select: text; }
    windows the way a phone OS switches apps. Desktop icons become a
    home-screen grid and everything opens on a single tap. */
 body.mobile { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-body.mobile #icons { left: 8px; right: 8px; top: 14px; bottom: 130px;
-  flex-flow: row wrap; align-content: flex-start; justify-content: flex-start; gap: 18px 6px; }
+body.mobile #icons { flex-flow: row wrap; align-content: flex-start; justify-content: flex-start; gap: 18px 6px; }
 body.mobile #desktop .window { position: fixed; inset: 20px 0 0 0 !important;
   width: auto !important; min-width: 0; box-shadow: none;
   border-top: 0; /* the menu bar's bottom border is the separator — two stacked black lines otherwise */
@@ -930,6 +942,7 @@ body.mobile th.sorted {
 <div class="dropdown" id="ctx-menu" hidden></div>
 
 <div id="desktop">
+  <div id="rail">
   <div id="icons"></div>
   <div id="sys-icons">
     <!-- newspaper in the same pixel style: masthead, photo block, text
@@ -960,6 +973,7 @@ body.mobile th.sorted {
       <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges"><rect x="13.5" y="2.5" width="5" height="2" fill="#C8C3B8" stroke="#000"/><rect x="8.5" y="4.5" width="15" height="3" fill="#DAD5CA" stroke="#000"/><rect x="9.5" y="7.5" width="13" height="21" fill="#C8C3B8" stroke="#000"/><path d="M12.5 10v16M15.5 10v16M18.5 10v16M21.5 10v16" stroke="#8B867B"/></svg>
       <span class="lbl">Trash</span>
     </div>
+  </div>
   </div>
 
   <!-- Virtual Machines -->
@@ -3997,7 +4011,7 @@ async function loadImage(w) {
   } catch (e) { dims.textContent = e.message; }
 }
 $("#desktop").addEventListener("mousedown", e => {
-  if (e.target === $("#desktop") || e.target === $("#icons")) {
+  if (e.target === $("#desktop")) {
     selectedIcon = null;
     document.querySelectorAll(".dicon").forEach(d => d.classList.remove("sel"));
   }
