@@ -433,28 +433,46 @@ function placeholders(n) {
   return frag;
 }
 
+// Older pages load themselves: a placeholder row sits under the last post
+// and the next page is fetched the moment it scrolls into view, so the
+// list reads as one continuous feed. observe() always reports once, so
+// re-arming after a page that left the row in view fetches the next one.
+const moreEl = el("div", { class: "ph", id: "more" },
+  el("div", { class: "bar w40" }), el("div", { class: "bar w80" }));
+const moreIO = new IntersectionObserver(entries => {
+  if (entries.some(e => e.isIntersecting)) loadFeed(true);
+}, { root: feedEl, rootMargin: "0px 0px 80px 0px" });
+let loadingMore = false;
+function watchMore() {
+  feedEl.append(moreEl);
+  moreIO.unobserve(moreEl);
+  moreIO.observe(moreEl);
+}
+
 async function loadFeed(more) {
-  if (!more) {
+  if (more) {
+    if (loadingMore || view.kind !== "feed" || !moreEl.isConnected) return;
+    loadingMore = true;
+  } else {
     feedEl.replaceChildren(placeholders(6));
     oldestId = "";
-  } else {
-    feedEl.querySelector("#more")?.remove();
   }
   try {
     const q = oldestId ? "?limit=" + PAGE + "&before=" + oldestId : "?limit=" + PAGE;
     const out = await hget("/v1/feed" + q);
+    if (more && (view.kind !== "feed" || !moreEl.isConnected)) return; // view moved on
+    moreEl.remove();
     if (!more) feedEl.replaceChildren();
     if (!out.posts.length && !more)
       feedEl.append(el("div", { class: "muted" }, "Nothing here yet. Say something!"));
     for (const p of out.posts) feedEl.append(renderPost(p));
     if (out.posts.length) oldestId = out.posts[out.posts.length - 1].id;
-    if (out.posts.length === PAGE) {
-      const b = el("button", { class: "ghost", id: "more", style: "margin:8px" }, "Load More");
-      b.onclick = () => loadFeed(true);
-      feedEl.append(b);
-    }
+    if (out.posts.length === PAGE) watchMore();
   } catch (e) {
     if (!more) feedEl.replaceChildren(el("div", { class: "muted" }, "Load failed: " + e.message));
+    else setTimeout(() => { if (view.kind === "feed" && moreEl.isConnected) watchMore(); }, 3000);
+  } finally {
+    if (more) loadingMore = false;
   }
 }
 
