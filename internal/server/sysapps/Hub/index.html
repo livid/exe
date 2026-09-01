@@ -461,6 +461,18 @@ function connectEvents() {
     let m;
     try { m = JSON.parse(ev.data); } catch (e) { return; }
     const seen = id => feedEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (m.type === "profile.set") { // live name/avatar refresh on visible posts
+      let prof;
+      try { prof = await hget("/v1/profile/" + m.author); } catch (e) { return; }
+      for (const post of feedEl.querySelectorAll(".post")) {
+        const head = post.querySelector(".p-head");
+        if (!head || head.querySelector(".p-id")?.textContent !== m.author) continue;
+        head.querySelector(".p-ava")?.replaceWith(avatarEl(m.author, prof.avatar));
+        head.querySelector(".p-name").textContent = prof.name || "—";
+      }
+      if (who && m.author === who.id) myProfile = prof; // Profile… reopens fresh
+      return;
+    }
     if (m.type === "post.delete") { seen(m.id)?.remove(); return; }
     if (m.type !== "post.create" || seen(m.id)) return;
     if (view.kind === "thread") {
