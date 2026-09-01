@@ -414,13 +414,19 @@ func chatHTTP(ctx context.Context, cfg Config, msgs []Message, tools []Tool, str
 		resp.Body.Close()
 		// The configured effort doesn't fit this model or this Ollama
 		// version ("does not support thinking", "invalid think value",
-		// unknown field on old servers). The setting is best-effort:
-		// drop it and run the request the way every model accepts.
+		// unknown field on old servers). The setting is best-effort: a
+		// rejected level first becomes plain think=true, so a model that
+		// only knows on/off still thinks, and only then is the field
+		// dropped to run the request the way every model accepts.
 		if creq.Think != nil && resp.StatusCode == http.StatusBadRequest &&
 			strings.Contains(strings.ToLower(string(raw)), "think") {
-			log.Printf("ollama %s: rejected think=%v (%s); retrying without it",
-				cfg.Model, creq.Think, sshexec.Truncate(string(raw), 200))
-			creq.Think = nil
+			var next any
+			if lvl, isLevel := creq.Think.(string); isLevel && lvl != "" {
+				next = true
+			}
+			log.Printf("ollama %s: rejected think=%v (%s); retrying with think=%v",
+				cfg.Model, creq.Think, sshexec.Truncate(string(raw), 200), next)
+			creq.Think = next
 			continue
 		}
 		if RetryStatus(resp.StatusCode) && attempt < maxAttempts-1 {

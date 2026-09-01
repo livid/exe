@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -99,5 +101,45 @@ func TestExecToolMalformed(t *testing.T) {
 	tc.Function.Arguments = []byte(`{"path":"/tmp/x"}`)
 	if out := execTool(context.Background(), sshexec.Target{}, tc, logf); !strings.Contains(out, "content") {
 		t.Fatalf("write_file without content = %q", out)
+	}
+}
+
+// A rejected thinking level steps down to think=true before the field is
+// dropped, so a model that only knows on/off keeps thinking; one that
+// cannot think at all still gets its answer on the third try.
+func TestChatThinkFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		accept func(think any) bool
+		want   []any
+	}{
+		{"levels rejected, bool accepted", func(th any) bool { _, s := th.(string); return !s }, []any{"max", true}},
+		{"no thinking at all", func(th any) bool { return th == nil }, []any{"max", true, nil}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var seen []any
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var req map[string]any
+				json.NewDecoder(r.Body).Decode(&req)
+				seen = append(seen, req["think"])
+				if !tc.accept(req["think"]) {
+					http.Error(w, `{"error":"invalid think value"}`, http.StatusBadRequest)
+					return
+				}
+				fmt.Fprintln(w, `{"message":{"role":"assistant","content":"ok"},"done":true}`)
+			}))
+			defer srv.Close()
+			resp, err := Chat(context.Background(), Config{BaseURL: srv.URL, Model: "m", Effort: "max"},
+				[]Message{{Role: "user", Content: "hi"}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.Message.Content != "ok" {
+				t.Fatalf("content = %q", resp.Message.Content)
+			}
+			if fmt.Sprint(seen) != fmt.Sprint(tc.want) {
+				t.Fatalf("think values seen = %v, want %v", seen, tc.want)
+			}
+		})
 	}
 }

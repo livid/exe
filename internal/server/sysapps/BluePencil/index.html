@@ -450,15 +450,16 @@ async function pass() {
 // proofreading wants the likeliest correction, and the same one every
 // time — at the default temperature a model will sometimes wander down
 // the "nothing to fix" path and echo the passage. Thinking is asked for
-// at its lowest level rather than switched off: a reasoning model told
-// not to think (glm-5.3) reasons out loud instead, and the whole chain
-// arrives as content; at "low" it stays in Ollama's thinking channel,
-// which is never shown, and the answer comes faster than with thinking
-// off. Models without levels get the daemon's fallback (no think field).
+// at Ollama's highest level, "max": the best reading of the passage is
+// worth the wait, and it must never be switched off — a reasoning model
+// told not to think (glm-5.3) reasons out loud instead, and the whole
+// chain arrives as content; at any level it stays in Ollama's thinking
+// channel, which is never shown. Models without levels get the daemon's
+// fallback: think=true, then no think field at all.
 async function complete(text, signal, onDelta) {
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system: SYSTEM, prompt: ask(text), model: cfg.model || "", effort: "low",
+    body: JSON.stringify({ system: SYSTEM, prompt: ask(text), model: cfg.model || "", effort: "max",
       options: { temperature: 0 } }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
