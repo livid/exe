@@ -3434,10 +3434,11 @@ $("#ma-icons").addEventListener("click", e => {
 
 // ---- Finder contextual menu, styled from a real OS 9 capture ----
 const ctxMenu = $("#ctx-menu");
-// open hierarchical submenu panels, outermost first (depth 1, 2, …); the
-// root #ctx-menu is depth 0. ctxGuardUntil: see the mousedown closer below.
-let ctxPanels = [], ctxHoverT = null, ctxGuardUntil = 0;
-function ctxCloseSubs(depth) {
+// Open hierarchical submenu panels, outermost first: ctxPanels[k] is the
+// panel at depth k+1, the root #ctx-menu being depth 0. ctxGuardUntil: see
+// the mousedown closer below.
+let ctxPanels = [], ctxGuardUntil = 0;
+function ctxCloseSubs(depth) { // close every panel deeper than depth
   while (ctxPanels.length > depth) {
     const p = ctxPanels.pop();
     p._owner.classList.remove("open");
@@ -3445,7 +3446,7 @@ function ctxCloseSubs(depth) {
   }
 }
 function hideCtxMenu() {
-  clearTimeout(ctxHoverT);
+  ctxHoldClear();
   if (ctxMenu.hidden) return;
   ctxCloseSubs(0);
   ctxMenu.hidden = true;
@@ -3453,21 +3454,60 @@ function hideCtxMenu() {
   ctxMenu._onclose = null;
   if (f) f();
 }
+// Hovering an item acts at once — a submenu opens, a plain item closes any
+// deeper panels — as on NeXTSTEP, with one exception: when a submenu is
+// already open and the pointer is heading for it (toward its side, or inside
+// the wedge from where it left the parent item to the panel's near edge),
+// the switch is held so the diagonal trip across the siblings doesn't swap
+// the panel away. The hold runs the moment the pointer turns off course or
+// after 300ms if it stops, and is dropped once the pointer reaches the panel.
+let ctxHold = null, ctxHoldT = null, ctxLast = null;
+function ctxHoldClear() { clearTimeout(ctxHoldT); ctxHold = null; }
+function ctxHoldRun() { const h = ctxHold; ctxHoldClear(); if (h) h.fn(); }
+function ctxHover(e, depth, fn) {
+  ctxHoldClear();
+  const open = ctxPanels[depth]; // the panel this move would replace or close
+  const pt = { x: e.clientX, y: e.clientY };
+  if (open && open._owner !== e.currentTarget) {
+    ctxHold = { fn, panel: open, anchor: ctxLast || pt };
+    if (ctxOnCourse(pt)) { ctxHoldT = setTimeout(ctxHoldRun, 300); return; }
+    ctxHold = null;
+  }
+  fn();
+}
+const inRect = (pt, r) => pt.x >= r.left && pt.x <= r.right && pt.y >= r.top && pt.y <= r.bottom;
+function ctxOnCourse(pt) {
+  const { panel, anchor } = ctxHold, r = panel.getBoundingClientRect();
+  if (inRect(pt, r)) return true;
+  const toward = panel._side === "right" ? pt.x - anchor.x : anchor.x - pt.x;
+  if (toward > 0 && toward >= Math.abs(pt.y - anchor.y)) return true;
+  const x = panel._side === "right" ? r.left : r.right, b = { x, y: r.top - 8 }, c = { x, y: r.bottom + 8 };
+  const side = (p, q, o) => (p.x - o.x) * (q.y - o.y) - (q.x - o.x) * (p.y - o.y);
+  const d1 = side(pt, anchor, b), d2 = side(pt, b, c), d3 = side(pt, c, anchor);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+document.addEventListener("mousemove", e => {
+  if (ctxMenu.hidden) return;
+  const pt = { x: e.clientX, y: e.clientY };
+  if (ctxHold) {
+    if (inRect(pt, ctxHold.panel.getBoundingClientRect())) ctxHoldClear(); // made it
+    else if (!ctxOnCourse(pt)) ctxHoldRun();
+  }
+  ctxLast = pt;
+});
 // Items: { label, act, dis } is a command, { label, items } a submenu, "-"
-// (or { sep: true }) a separator. Submenus open on hover after an OS 9-style
-// pause — a click opens them too, for touch — to the right of the parent,
-// overlapping it by 3px with the first item level with the parent item, or
-// to the left when there's no room. Hovering a plain item closes deeper
-// panels, so the pointer can wander without the menu flickering.
+// (or { sep: true }) a separator. Submenus open on hover (a click opens them
+// too, for touch) to the right of the parent, overlapping it by 3px with the
+// first item level with the parent item, or to the left when there's no room.
 function ctxFill(panel, items, depth) {
   panel.replaceChildren();
   for (const it of items) {
     if (it === "-" || it.sep) { panel.append(el("div", { class: "dd-sep" })); continue; }
     const sub = !it.dis && Array.isArray(it.items);
     const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") }, it.label);
-    const open = sub ? () => ctxOpenSub(d, panel, it.items, depth + 1) : () => ctxCloseSubs(depth + 1);
-    d.addEventListener("mouseenter", () => { clearTimeout(ctxHoverT); ctxHoverT = setTimeout(open, 120); });
-    if (sub) d.addEventListener("click", e => { e.stopPropagation(); clearTimeout(ctxHoverT); open(); });
+    const act = sub ? () => ctxOpenSub(d, panel, it.items, depth + 1) : () => ctxCloseSubs(depth);
+    d.addEventListener("mouseenter", e => ctxHover(e, depth, act));
+    if (sub) d.addEventListener("click", e => { e.stopPropagation(); ctxHoldClear(); act(); });
     else if (!it.dis) d.addEventListener("click", () => { hideCtxMenu(); it.act(); });
     panel.append(d);
   }
@@ -3484,13 +3524,15 @@ function ctxOpenSub(item, parent, items, depth) {
   item.classList.add("open");
   const pr = parent.getBoundingClientRect(), ir = item.getBoundingClientRect(), r = p.getBoundingClientRect();
   let left = pr.right - 3;
-  if (left + r.width > window.innerWidth - 4) left = Math.max(0, pr.left - r.width + 3);
+  p._side = "right";
+  if (left + r.width > window.innerWidth - 4) { left = Math.max(0, pr.left - r.width + 3); p._side = "left"; }
   p.style.left = left + "px";
   p.style.top = Math.max(0, Math.min(ir.top - 3, window.innerHeight - r.height - 4)) + "px";
 }
 function showCtxMenu(x, y, items, onclose) {
   hideCtxMenu();
   ctxMenu._onclose = onclose || null;
+  ctxLast = { x, y };
   ctxFill(ctxMenu, items, 0);
   ctxMenu.hidden = false;
   const r = ctxMenu.getBoundingClientRect();
