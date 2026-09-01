@@ -120,6 +120,14 @@ func (p *Proxy) Handler() http.Handler {
 			pr.SetXForwarded()
 			// Keep the public hostname so apps see the real Host.
 			pr.Out.Host = pr.In.Host
+			// cloudflared hands the tunnel's requests over plain HTTP, so
+			// SetXForwarded would call every published site "http"; keep
+			// the scheme the edge reported (Cloudflare sends
+			// X-Forwarded-Proto: https), so an app behind exe expose builds
+			// https links to itself.
+			if proto := pr.In.Header.Get("X-Forwarded-Proto"); proto != "" {
+				pr.Out.Header.Set("X-Forwarded-Proto", proto)
+			}
 		},
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
