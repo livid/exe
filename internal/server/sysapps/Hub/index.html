@@ -578,12 +578,16 @@ function updatePostBtn() {
 
 // ---- pictures are scrubbed before they leave the browser ----
 // A photo straight off a phone carries EXIF: where it was taken (GPS) and,
-// for an iPhone original, 12–48 megapixels nobody needs in a feed. So before
+// for a camera original, 12–200 megapixels nobody needs in a feed. So before
 // upload: GPS is zeroed in place (the bytes are otherwise untouched, keeping
-// orientation, colour profile and quality), and an iPhone original is halved
-// in width and height via a canvas re-encode, which drops every tag. A file
-// the browser cannot decode but would have to change is refused, not posted.
-const IPHONE_ORIGINAL_EDGE = 2500; // px; an iOS "Large" export stops at 2048
+// orientation, colour profile and quality), and an original is halved in
+// width and height via a canvas re-encode, which drops every tag — halved
+// again while its long edge is still past 4096px, so a 200MP Android shot
+// lands where a 48MP iPhone one does. Screenshots and exports (no camera
+// make) keep their size. A file the browser cannot decode but would have to
+// change is refused, not posted.
+const ORIGINAL_EDGE = 2500;   // px; a phone's "Large" export stops at 2048
+const HALVED_EDGE_MAX = 4096; // px; keep halving past this
 const CANVAS_MAX_PX = 16 << 20;    // iOS Safari's canvas ceiling
 const TIFF_TYPE_SIZE = [0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8, 4];
 
@@ -737,20 +741,23 @@ async function prepareImage(f) {
   const b = new Uint8Array(await f.arrayBuffer());
   const loc = findTiff(b);
   const info = loc ? readExif(b, loc) : { make: "", gps: [] };
-  const apple = /^apple/i.test(info.make);
   const exifGps = !info.gps || info.gps.some(e => e.tag !== 0);
   const xmpGps = indexOfAscii(b, "GPSLatitude") >= 0 || indexOfAscii(b, "GPSLongitude") >= 0;
   const png = asciiAt(b, 1, 3) === "PNG";
   const stem = f.name.replace(/\.[^.]+$/, "") || "image";
   const fresh = out => new File([out], stem + (png ? ".png" : ".jpg"), { type: out.type });
 
-  // an iPhone original goes at half size, which also drops every tag
+  // a camera original goes at half size (or a quarter, an eighth… for the
+  // giants), which also drops every tag
   let img = null;
-  if (apple || isHeic(f)) {
+  if (info.make || isHeic(f)) {
     img = await decodeImage(f);
     if (!img && isHeic(f)) throw new Error(f.name + ": this browser cannot read HEIC — export it as JPEG first");
-    if (img && apple && Math.max(img.naturalWidth, img.naturalHeight) >= IPHONE_ORIGINAL_EDGE) {
-      const out = await reencode(img, 0.5, png);
+    const edge = img ? Math.max(img.naturalWidth, img.naturalHeight) : 0;
+    if (img && info.make && edge >= ORIGINAL_EDGE) {
+      let scale = 0.5;
+      while (edge * scale > HALVED_EDGE_MAX) scale /= 2;
+      const out = await reencode(img, scale, png);
       if (!out) throw new Error("Could not shrink " + f.name);
       return fresh(out);
     }
