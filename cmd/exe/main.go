@@ -392,6 +392,14 @@ func cmdServe() error {
 	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	// Swallow SIGHUP instead of inheriting whatever came before: a daemon
+	// once launched under nohup carries SIG_IGN here, re-execs itself on
+	// in-app restart, and passes the ignore down forever — including into
+	// every Terminal-window shell, whose jobs then shrug off the hangup
+	// when their window closes (exec resets a *caught* handler to the
+	// default, but keeps an ignored one). Catching it keeps the daemon
+	// itself immune to terminal hangups and starts children clean.
+	signal.Notify(make(chan os.Signal, 1), syscall.SIGHUP)
 	wait := func() error {
 		select {
 		case err := <-errc:

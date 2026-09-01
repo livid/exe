@@ -4056,6 +4056,7 @@ let term = null, termWS = null, fitAddon = null;
 // screen the cursor hovers, so it is never in the browser's scroll chain);
 // swallow the default here or leftover wheel deltas scroll the window body.
 $("#term-box").addEventListener("wheel", e => e.preventDefault(), { passive: false });
+wireTermMenu($("#win-detail"), $("#term-box"), () => term);
 function closeTerm() {
   window.removeEventListener("resize", termResize);
   if (termWS) { termWS.onclose = null; try { termWS.close(); } catch (e) {} termWS = null; }
@@ -4114,6 +4115,7 @@ $("#term-open").onclick = () => {
     fontSize: 12, cursorBlink: true,
     fontFamily: '"MesloLGS NF", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace',
     theme: { background: "#000000" },
+    macOptionClickForcesSelection: true, // see the host Terminal window
   });
   fitAddon = new FitAddon.FitAddon();
   term.loadAddon(fitAddon);
@@ -4158,10 +4160,17 @@ let termSeq = 0;
 // never reach xterm (they open the menu instead), and hover moves are
 // swallowed while something is selected. Clicks, keys and the wheel still
 // clear it as before, and the app sees every other event unchanged.
-function wireTermMenu(w, box, term) {
+// termOf returns the box's current Terminal: the VM console box outlives
+// its Terminal (Open creates a new one each time), so it is wired once.
+function wireTermMenu(w, box, termOf) {
   box.addEventListener("mousedown", e => { if (e.button === 2) e.stopPropagation(); }, true);
-  box.addEventListener("mousemove", e => { if (!e.buttons && term.hasSelection()) e.stopPropagation(); }, true);
+  box.addEventListener("mousemove", e => {
+    const term = termOf();
+    if (term && !e.buttons && term.hasSelection()) e.stopPropagation();
+  }, true);
   box.addEventListener("contextmenu", e => {
+    const term = termOf();
+    if (!term) return;
     e.preventDefault(); e.stopPropagation();
     focusWin(w); // the swallowed right press would normally have raised the window
     // keys go to the menu while it is up (Escape must dismiss it, not reach
@@ -4248,7 +4257,7 @@ function openHostTermWin(app) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(box);
-  wireTermMenu(w, box, term);
+  wireTermMenu(w, box, () => term);
   box.querySelector(".xterm-viewport").classList.add("vflush");
   fit.fit();
   const proto = location.protocol === "https:" ? "wss" : "ws";

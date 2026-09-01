@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 )
@@ -23,11 +25,30 @@ func (s *unixShell) Resize(cols, rows int) {
 	pty.Setsize(s.f, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }
 
+// Close hangs the session up the way a terminal emulator's close box does,
+// taking the window's foreground job with it. SIGHUP goes to the shell (the
+// pty's session leader) while the master is still open, so when the shell
+// exits the kernel delivers SIGHUP to the whole foreground process group as
+// a controlling terminal still exists: a foreground `sleep` dies with its
+// window, a nohup'd job lives on, as in any terminal. Only then is the
+// master closed. The old code closed the master first and SIGKILLed just
+// the shell, which tore down that terminal before the exit and left the
+// window's children orphaned to init. SIGKILL to the process group is now
+// only the fallback for a shell that ignores the hangup. (The Claude Code
+// window's `cmd` is a tmux client, and hanging it up simply detaches,
+// leaving the persistent session for the icon to return to.)
 func (s *unixShell) Close() error {
-	err := s.f.Close()
-	s.cmd.Process.Kill()
-	s.cmd.Wait()
-	return err
+	s.cmd.Process.Signal(syscall.SIGHUP)
+	done := make(chan struct{})
+	go func() { s.cmd.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL) // pty.Start put it in its own group
+		s.cmd.Process.Kill()
+		<-done
+	}
+	return s.f.Close()
 }
 
 // startClaudeCode runs the Claude Code CLI on a pty in the project dir.
