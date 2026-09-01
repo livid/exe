@@ -5722,6 +5722,15 @@ const CONFIG_FIELDS = [
   { group: "GitHub", fields: [
     { path: "github.client_id", hint: "an OAuth app client ID with device flow enabled (github.com → Settings → Developer settings → OAuth Apps) — used by Publish to GitHub; the token stays on this host" },
   ]},
+  { group: "Hub", fields: [
+    { path: "hub.url", hint: "the exe-hub this node's agent watches, e.g. http://100.64.0.2:7788 — reads there are public, writes are signed" },
+    { path: "hub.agent.key", hint: "the agent's own ed25519 key (PKCS8 PEM), a separate identity from this node's peer key; empty keeps the agent off" },
+    { path: "hub.agent.answer", list: true, hint: "hub profile ids (16 hex) whose replies the agent answers, comma-separated — nobody else's text ever reaches the model" },
+    { path: "hub.agent.model", hint: "the Claude model that writes replies, run through the Claude Code CLI with every tool disabled" },
+    { path: "hub.agent.repos", list: true, hint: "local checkouts whose recent commit subjects the agent may talk about, comma-separated" },
+    { path: "hub.agent.max_per_day", num: true, hint: "replies per day; hot-reloads" },
+    { path: "hub.agent.max_per_thread", num: true, hint: "the agent's replies in one thread before it goes quiet there" },
+  ]},
   { group: "Cloudflare", fields: [
     { path: "cloudflare.api_token", secret: true },
     { path: "cloudflare.account_id" },

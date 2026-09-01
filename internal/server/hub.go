@@ -86,10 +86,23 @@ func (s *Server) handleHubPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resp, err := hubSend(hub, id, in.Type, in.Body)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	defer resp.Body.Close()
+	relayJSON(w, resp)
+}
+
+// hubSend numbers, signs and delivers one envelope as id: it asks the hub
+// for the author's last seq, signs the exact bytes it then sends, and
+// returns the hub's response — status and JSON body alike — for the
+// caller to relay or decode.
+func hubSend(hub string, id *peer.Identity, typ string, body json.RawMessage) (*http.Response, error) {
 	seqResp, err := hubClient.Get(hub + "/v1/seq?author=" + url.QueryEscape(id.PubKey()))
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, fmt.Errorf("hub unreachable: %w", err))
-		return
+		return nil, fmt.Errorf("hub unreachable: %w", err)
 	}
 	var seq struct {
 		Seq int64 `json:"seq"`
@@ -97,17 +110,15 @@ func (s *Server) handleHubPublish(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(seqResp.Body).Decode(&seq)
 	seqResp.Body.Close()
 	if err != nil || seqResp.StatusCode != 200 {
-		writeErr(w, http.StatusBadGateway, fmt.Errorf("hub seq: status %d", seqResp.StatusCode))
-		return
+		return nil, fmt.Errorf("hub seq: status %d", seqResp.StatusCode)
 	}
 
 	raw, err := json.Marshal(map[string]any{
-		"type": in.Type, "author": id.PubKey(), "seq": seq.Seq + 1,
-		"ts": time.Now().UnixMilli(), "body": in.Body,
+		"type": typ, "author": id.PubKey(), "seq": seq.Seq + 1,
+		"ts": time.Now().UnixMilli(), "body": body,
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
 	sig := id.Sign(append([]byte(hubPrefix), raw...))
 	msg, _ := json.Marshal(map[string]string{
@@ -115,11 +126,9 @@ func (s *Server) handleHubPublish(w http.ResponseWriter, r *http.Request) {
 	})
 	resp, err := hubClient.Post(hub+"/v1/msg", "application/json", bytes.NewReader(msg))
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, fmt.Errorf("hub unreachable: %w", err))
-		return
+		return nil, fmt.Errorf("hub unreachable: %w", err)
 	}
-	defer resp.Body.Close()
-	relayJSON(w, resp)
+	return resp, nil
 }
 
 // handleHubUpload signs the body digest and forwards the bytes for the

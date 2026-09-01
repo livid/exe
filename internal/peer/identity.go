@@ -52,9 +52,24 @@ func LoadIdentity(stateDir string) (*Identity, error) {
 	} else if err != nil {
 		return nil, err
 	}
+	return parseIdentity(b, "peer_ed25519")
+}
+
+// LoadIdentityFile reads an existing PKCS8 ed25519 PEM — an identity
+// other than the node's own, such as an agent's hub key. It never
+// generates one: a missing file is an error, not a fresh identity.
+func LoadIdentityFile(path string) (*Identity, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return parseIdentity(b, filepath.Base(path))
+}
+
+func parseIdentity(b []byte, name string) (*Identity, error) {
 	block, _ := pem.Decode(b)
 	if block == nil {
-		return nil, errors.New("peer_ed25519: not PEM")
+		return nil, errors.New(name + ": not PEM")
 	}
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
@@ -62,7 +77,7 @@ func LoadIdentity(stateDir string) (*Identity, error) {
 	}
 	priv, ok := key.(ed25519.PrivateKey)
 	if !ok {
-		return nil, errors.New("peer_ed25519: not an ed25519 key")
+		return nil, errors.New(name + ": not an ed25519 key")
 	}
 	return newIdentity(priv, priv.Public().(ed25519.PublicKey)), nil
 }

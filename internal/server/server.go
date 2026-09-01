@@ -107,10 +107,14 @@ type Server struct {
 	// Published-app icon cache: one fetch in flight per hostname (see
 	// appicons.go).
 	appIconMu sync.Map // hostname -> *sync.Mutex
+
+	// The exe-hub agent: watches a hub and answers replies (see hubagent.go).
+	hubAgent hubAgent
 }
 
 func New(cfg *config.Config, vms vmm.Manager, px *proxy.Proxy, keyPath, stateDir string) *Server {
 	s := &Server{VMs: vms, Proxy: px, KeyPath: keyPath, StateDir: stateDir}
+	s.hubAgent.kick = make(chan struct{}, 1)
 	s.cfg.Store(cfg)
 	s.ensureStateDirs()
 	return s

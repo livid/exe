@@ -207,6 +207,10 @@ func cmdServe() error {
 	// existed get theirs on boot.
 	go srv.BackfillChatMeta()
 
+	// The hub agent answers replies on the exe-hub as an identity of its
+	// own; it idles until hub.url / hub.agent.* are configured.
+	go srv.RunHubAgent(context.Background())
+
 	apiHandler := srv.Handler()
 	proxyHandler := px.Handler()
 	errc := make(chan error, 4)

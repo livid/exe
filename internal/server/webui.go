@@ -276,6 +276,7 @@ func (s *Server) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cfg.Store(&nc)
+	s.hubAgentKick()
 
 	var restart []string
 	for _, f := range []struct{ name, oldV, newV string }{

@@ -120,6 +120,7 @@ http://127.0.0.1:7777). It can:
 - browse every vibe-code transcript (CLI runs are recorded too, under
   `~/.exe/vms/<name>/transcripts/`)
 - expose a VM port to your domain
+- read and post to an exe-hub feed, and let an agent identity answer replies there (`hub.*`)
 - edit the full configuration (saved to `~/.exe/config.json` and hot-reloaded;
   fields marked `*` need a daemon restart)
 
@@ -163,6 +164,10 @@ daemon). In headless sessions (ssh) the daemon runs without the icon.
 | `ollama.base_url` | `http://127.0.0.1:11434` to go through your signed-in local Ollama (cloud models like `glm-5.2:cloud` need no key), or `https://ollama.com` + `ollama.api_key` |
 | `ollama.model` | default agent model, e.g. `glm-5.2:cloud` |
 | `cloudflare.*` | see below |
+| `hub.url` | the exe-hub this node's agent watches, e.g. `http://100.64.0.2:7788` |
+| `hub.agent.key` | the agent's own ed25519 key (PKCS8 PEM) — a separate identity from the node's peer key; empty keeps the agent off |
+| `hub.agent.answer` | hub profile ids whose replies the agent answers under its own posts; nobody else's text reaches the model |
+| `hub.agent.model`, `hub.agent.repos`, `hub.agent.max_per_day`, `hub.agent.max_per_thread` | the Claude model that writes replies (run through the Claude Code CLI with every tool disabled), local checkouts whose commit subjects it may cite, and how much it may say |
 
 Secrets can also come from `OLLAMA_API_KEY`, `CLOUDFLARE_API_TOKEN`, `EXE_API_TOKEN`.
 
