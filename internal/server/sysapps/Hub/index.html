@@ -77,6 +77,7 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-time { font-size: 10px; color: #777; margin-left: auto; flex: none; }
 .p-text { margin: 3px 0 0 22px; white-space: pre-wrap; overflow-wrap: break-word;
   user-select: text; cursor: text; }
+.p-text a { color: var(--hl); }
 .p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; }
 .p-embeds img { max-width: 180px; max-height: 140px; border: 1px solid var(--black);
   background: var(--g300); cursor: pointer; }
@@ -328,6 +329,23 @@ function viewImage(em) {
   else window.open(url, "_blank");
 }
 
+// URLs in post text become links that open in a new tab. The text is
+// split into text nodes around anchor elements — never markup — so a post
+// cannot smuggle HTML in. Same matcher as the terminal windows: http(s)
+// only, and the punctuation that usually trails a URL in prose stays text.
+const URL_RE = /https?:\/\/[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~\[\]`()<>]/g;
+function linkify(text) {
+  const out = [];
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(el("a", { href: m[0], target: "_blank", rel: "noopener" }, m[0]));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 function renderPost(p, opts = {}) {
   const head = el("div", { class: "p-head" },
     avatarEl(p.author, p.avatar),
@@ -336,7 +354,7 @@ function renderPost(p, opts = {}) {
     el("span", { class: "p-time" }, fmtTime(p.received)));
   const node = el("div", { class: "post" + (opts.focus ? " focus" : "") }, head);
   node.dataset.id = p.id;
-  if (p.text) node.append(el("div", { class: "p-text" }, p.text));
+  if (p.text) node.append(el("div", { class: "p-text" }, ...linkify(p.text)));
   if (p.embeds && p.embeds.length) {
     const box = el("div", { class: "p-embeds" });
     for (const em of p.embeds) {
