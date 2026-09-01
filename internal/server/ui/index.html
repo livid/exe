@@ -371,7 +371,7 @@ td.actions button + button { margin-left: 8px; }
 .tabbar { display: flex; align-items: flex-start; padding: 0 4px; position: relative; z-index: 2; }
 .tab {
   height: 22px; color: #000; font-size: 11px; font-weight: bold; line-height: 14px;
-  text-align: center; padding: 0 2px; position: relative;
+  text-align: center; padding: 0 2px; position: relative; white-space: nowrap;
   border-style: solid; border-width: 8px 14px 0 14px;
   /* sides drawn 1px past the bottom edge so the slant runs at full
      strength into the pane rule instead of fading out */
@@ -5696,7 +5696,7 @@ const CONFIG_FIELDS = [
     { path: "ssh_user", restart: true },
     { path: "image_url", restart: true },
   ]},
-  { group: "VM Defaults", fields: [
+  { group: "VMs", fields: [
     { path: "default_cpus", num: true },
     { path: "default_memory_mb", num: true },
     { path: "default_disk_gb", num: true },
