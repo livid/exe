@@ -182,7 +182,7 @@ canvas.ava-big { image-rendering: pixelated; }
     <span class="muted" style="padding:0" id="thread-title">Thread</span>
   </div>
   <div id="composer">
-    <textarea id="text" placeholder="What's happening?" maxlength="8000"></textarea>
+    <textarea id="text" placeholder="What's happening?"></textarea>
     <div id="chips"></div>
     <div id="c-row">
       <button class="ghost" id="attach">Attach&#8230;</button>
@@ -576,7 +576,23 @@ $("#post").onclick = doPost;
 $("#text").addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); doPost(); }
 });
-$("#text").addEventListener("input", updatePostBtn);
+// the wire limit is 8KB of UTF-8 (envelope MaxText), so count bytes, not
+// characters — 8000 chars of CJK or emoji is far past 8192 bytes, while
+// 8100 ASCII ones are fine. Over the cap, trim back to a code-point
+// boundary so no glyph is ever split.
+const MAX_TEXT = 8192, enc8 = new TextEncoder();
+$("#text").addEventListener("input", () => {
+  const ta = $("#text"), b = enc8.encode(ta.value);
+  if (b.length > MAX_TEXT) {
+    let cut = MAX_TEXT;
+    while (cut > 0 && (b[cut] & 0xc0) === 0x80) cut--; // mid-sequence byte
+    const end = ta.selectionEnd;
+    ta.value = new TextDecoder().decode(b.subarray(0, cut));
+    ta.selectionStart = ta.selectionEnd = Math.min(end, ta.value.length);
+    say("Post text is capped at 8KB", true);
+  }
+  updatePostBtn();
+});
 
 // ---- dialogs ----
 function dialog(children) {
