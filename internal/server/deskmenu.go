@@ -153,7 +153,7 @@ Cloudflare
 Help
   exe Documentation…   docs
   Agent Skill Guide…   skillguide
-  About exe…           about
+  About This Computer  about
 -
 Customize…           customize
 `

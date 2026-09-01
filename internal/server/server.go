@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -712,11 +713,18 @@ func (s *Server) handleTailscale(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"detected": false})
 }
 
-// handleHostInfo reports this host's identity for the About window: hostname,
-// machine model, LAN IPv4, and the Tailscale IPv4 when on a tailnet — plus
-// the agent CLIs installed here (agents: {claude: {dir}, codex: {dir}} —
-// the desktop shows an agent's icon only then) and the project dir their
-// sessions open in.
+// handleHostInfo reports this host for the About This Computer window:
+// hostname, machine model, LAN IPv4 and the Tailscale IPv4 when on a
+// tailnet; the OS, architecture and CPU count; the memory figures behind
+// the window's Built-in Memory and Largest Unused Block lines and the
+// state-dir disk behind its Disk Space line (bytes; 0 when a platform
+// lookup fails); the daemon's own footprint (exe_memory) for the first
+// row of its memory bars; the build stamp; plus the agent CLIs installed
+// here (agents: {claude: {dir}, codex: {dir}} — the desktop shows an
+// agent's icon only then) and the project dir their sessions open in.
+// The desktop polls it while the window is open, so nothing here may be
+// slow: the memory and disk reads are a syscall or a /proc read on Linux
+// and Windows and two short commands on macOS.
 func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	host, _ := os.Hostname()
 	ts := config.TailscaleIP()
@@ -730,9 +738,15 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 			agents[app] = map[string]any{"dir": s.agentProjectDir()}
 		}
 	}
+	mem, disk, build := hostinfo.Mem(), hostinfo.DiskUsage(s.StateDir), hostinfo.BuildInfo()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"hostname": host, "machine": hostinfo.Model(), "lan_ip": lan, "tailscale_ip": ts,
-		"agents": agents,
+		"os": hostinfo.OS(), "arch": runtime.GOARCH, "cpus": runtime.NumCPU(),
+		"memory_total": mem.Total, "memory_available": mem.Available,
+		"disk_total": disk.Total, "disk_free": disk.Free,
+		"exe_memory": hostinfo.ProcessMemory(),
+		"build":      map[string]any{"date": build.Date, "commit": build.Commit, "modified": build.Modified},
+		"agents":     agents,
 	})
 }
 

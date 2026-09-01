@@ -284,6 +284,40 @@ a { color: #202a87; text-decoration: underline; }
 .gi-grid b { text-align: right; }
 .gi-grid span { user-select: text; word-break: break-word; }
 
+/* About This Computer, after the Mac OS 9.0 box (pixel-sampled from a
+   capture): a white logo panel sunk into the platinum field (#888 and
+   #fff outer lines around a black frame), the memory lines, a rule of
+   #aaa over black, then a #eee list. A memory bar is 14px tall: #aaa
+   top/left and #fff bottom/right outer lines, a black frame, and ten
+   rows of blue-purple tube gradient (#339 → #eee highlight → #005) with
+   a #66c first column and a #339/#005 end cap. Every line is a border
+   on a nested element, so it stays one device pixel at any scale. */
+.abt-logo { margin: 4px 4px 0; border-top: 1px solid #888; border-left: 1px solid #888;
+  border-bottom: 1px solid #fff; border-right: 1px solid #fff; }
+.abt-logo-in { border: 1px solid var(--black); background: #fff; height: 86px;
+  display: flex; align-items: center; justify-content: center; gap: 20px; }
+.abt-logo-in #about-icon svg { display: block; }
+.abt-mark { font: 60px/1 "Apple Garamond", "EB Garamond", Garamond, "Hoefler Text", Georgia, "Times New Roman", serif;
+  letter-spacing: -1px; color: #000; padding-bottom: 6px; }
+.abt-info { position: relative; padding: 9px 12px 8px; line-height: 16px; }
+.abt-info b { margin-right: 4px; }
+.abt-link { position: absolute; right: 12px; bottom: 8px; color: var(--black); text-decoration: none; }
+.abt-link:hover { text-decoration: underline; }
+.abt-sep { height: 2px; border-top: 1px solid #aaa; border-bottom: 1px solid var(--black); box-sizing: border-box; }
+.abt-list { background: #eee; height: 112px; overflow-y: scroll; padding: 3px 0; }
+.abt-row { display: grid; grid-template-columns: 16px 1fr 64px 184px; align-items: center; gap: 10px;
+  height: 22px; padding: 0 10px 0 12px; }
+.abt-row .abt-ico svg, .abt-row .abt-ico img { width: 16px; height: 16px; display: block; }
+.abt-row .abt-size { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.abt-row .abt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbar { height: 14px; box-sizing: border-box; min-width: 12px;
+  border-top: 1px solid #aaa; border-left: 1px solid #aaa; border-bottom: 1px solid #fff; border-right: 1px solid #fff; }
+.mbar-in { height: 12px; box-sizing: border-box; border: 1px solid var(--black); position: relative;
+  background: linear-gradient(#333399, #6666cc 15%, #9999ff 25%, #ccccff 35%, #eeeeee 45%, #ccccff 55%, #9999ff 65%, #6666cc 75%, #333399 88%, #000055); }
+.mbar-in::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: #6666cc; }
+.mbar-in::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 2px;
+  background: linear-gradient(to right, #333399, #000055); }
+
 /* text editor windows, modeled on BBEdit 2.1.3: a platinum info bar
    (pencil, doc icon, colon-separated path, Last Saved line) over an
    unwrapped Monaco text area with both scrollbars and the grow corner */
@@ -881,10 +915,12 @@ body.mobile #search-results { height: auto; flex: 1; min-height: 0; }
    going fullscreen: centered, content-sized, dimming what's below */
 body.mobile #desktop #win-about { inset: auto !important;
   left: 50% !important; top: 50% !important; transform: translate(-50%, -50%);
-  width: min(92vw, 410px) !important; display: block;
+  width: min(92vw, 480px) !important; display: block;
   border-top: 1px solid var(--black);
   box-shadow: 2px 2px 0 var(--black), 0 0 0 100vmax rgba(0,0,0,.15); }
 body.mobile #desktop #win-about .win-frame { display: block; }
+body.mobile .abt-row { grid-template-columns: 16px 1fr 56px 34%; }
+body.mobile .abt-mark { font-size: 52px; }
 /* same rule for list headers: the #666 top row would stack a second dark
    line under the frame's black border, the #333/#444 bottom shadow rows
    would stack one onto the black bar line above the first list row, and
@@ -917,7 +953,7 @@ body.mobile th.sorted {
 </div>
 
 <div class="dropdown" id="dd-apple" hidden>
-  <div class="dd-item" data-act="about">About exe…</div>
+  <div class="dd-item" data-act="about">About This Computer</div>
 </div>
 <div class="dropdown" id="dd-file" hidden>
   <div class="dd-item" data-act="newvm">New VM…</div>
@@ -1307,23 +1343,25 @@ body.mobile th.sorted {
     </div>
   </div>
 
-  <!-- About -->
-  <div class="window" id="win-about" style="left:300px; top:110px; width:410px;" hidden>
+  <!-- About This Computer (Apple menu), laid out like OS 9's box: a sunken
+       white logo panel, the memory lines on the platinum field, and below
+       the rule one memory bar per running VM (see renderAbout) -->
+  <div class="window" id="win-about" style="left:300px; top:110px; width:480px;" hidden>
     <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
-      <div class="title">About exe</div>
-      <div class="stripe"></div></div>
+      <div class="title">About This Computer</div>
+      <div class="stripe"></div><button class="tbox shade"></button></div>
     <div class="win-frame">
-      <div class="win-body" style="text-align:center; padding:22px 18px">
-        <div id="about-icon"></div>
-        <div style="font-weight:bold; font-size:14px; margin-top:8px">exe</div>
-        <div class="muted" id="about-tagline" style="margin-top:2px">your personal cloud, right on this machine</div>
-        <div style="margin-top:12px; line-height:1.7">
-          Create a fresh Linux machine in seconds.<br>
-          Tell the agent what to build — it does the work inside.<br>
-          One click later, it's live at a real https address.
+      <div class="win-body" style="padding:0">
+        <div class="abt-logo"><div class="abt-logo-in">
+          <div id="about-icon"></div>
+          <div class="abt-mark">exe</div>
+        </div></div>
+        <div class="abt-info">
+          <div id="about-lines"></div>
+          <a class="abt-link" href="https://github.com/livid/exe" target="_blank" rel="noopener">github.com/livid/exe</a>
         </div>
-        <div style="margin-top:12px"><a href="https://github.com/livid/exe" target="_blank" rel="noopener">github.com/livid/exe</a></div>
-        <div id="about-host" class="mono" style="margin-top:14px; line-height:1.9"></div>
+        <div class="abt-sep"></div>
+        <div class="abt-list vflush" id="about-rows"></div>
       </div>
     </div>
   </div>
@@ -2038,6 +2076,8 @@ function agentOfWin(id) {
 // closed and the next open puts it back where it was left
 const agentGeom = {}; // app → { l, t, w, h, … }
 
+// a window the user can resize: a grow corner, edge grips, or both
+const winResizable = w => w.classList.contains("grow") || w.classList.contains("edge-grow") || !!w._edge;
 function winSnapshot() {
   const st = {};
   document.querySelectorAll("#desktop .window").forEach(w => {
@@ -2122,8 +2162,11 @@ function applyWinState(st) {
       const width = v.w || w.offsetWidth || 220;
       // floor at the window's wired minimum: a snapshot saved by a narrow
       // viewport (the innerWidth clamp below persists via winSave) must not
-      // pin a resizable window below the width its own drags enforce
-      if (v.w) w.style.width = Math.max(w._edge ? w._edge.minW : 0, Math.min(window.innerWidth - 24, v.w)) + "px";
+      // pin a resizable window below the width its own drags enforce. A
+      // fixed-size window (About, Get Info, the dialogs) always takes the
+      // width its markup declares: a saved width would pin it to whatever
+      // an older build's markup said, and nothing could ever resize it back
+      if (v.w && winResizable(w)) w.style.width = Math.max(w._edge ? w._edge.minW : 0, Math.min(window.innerWidth - 24, v.w)) + "px";
       if (v.l !== undefined) w.style.left = Math.min(window.innerWidth - 60, Math.max(60 - width, v.l)) + "px";
       if (v.t !== undefined) w.style.top = Math.min(window.innerHeight - 46, Math.max(0, v.t)) + "px";
       if (v.z) { w.style.zIndex = v.z; maxZ = Math.max(maxZ, v.z); }
@@ -2277,32 +2320,74 @@ document.querySelectorAll(".dd-item").forEach(it => {
   it.addEventListener("click", () => { menuClose(); const a = ACTIONS[it.dataset.act]; if (a) a(); });
 });
 
-// ---- Apple → About: show this host's name and IPs, click an IP to copy ----
+// ---- Apple → About This Computer ----
+// OS 9's box: the logo panel, the memory lines, and below the rule one
+// memory bar per running VM. A bar shows the VM's allotment, not what the
+// guest touched — allotment is what decides whether the next VM boots —
+// scaled so the largest row fills the column, the way the original scaled
+// application partitions; exe's own footprint is the first row, as "Mac
+// OS" was. Largest Unused Block is what the host could hand a new VM now.
 // hostinfo is fetched BEFORE the window shows so it opens at its final
-// size — filling it in afterwards grew the window and made it jump
-// (worst on mobile, where the dialog is centered on its own height)
-async function openAboutWin() {
-  const box = $("#about-host");
-  try {
-    const h = await j("/v1/hostinfo");
-    $("#about-tagline").textContent = "your personal cloud, right on this " + (h.machine || "machine");
-    box.replaceChildren();
-    if (h.hostname)
-      box.append(el("div", {}, el("span", { class: "muted" }, "Host "), document.createTextNode(h.hostname)));
-    // LAN and Tailscale IPs share one row, middot-separated; each is click-to-copy
-    const ips = el("div", {});
-    const addIP = (label, ip) => {
-      if (ips.childNodes.length) ips.append(document.createTextNode(" · "));
-      ips.append(el("span", { class: "muted" }, label + " "),
-        el("span", { class: "ip-copy", title: "Click to copy", onclick: () => copyIP(ip) }, ip));
-    };
-    if (h.lan_ip) addIP("LAN", h.lan_ip);
-    if (h.tailscale_ip) addIP("Tailscale", h.tailscale_ip);
-    if (ips.childNodes.length) box.append(ips);
-  } catch (e) {
-    box.replaceChildren(el("span", { class: "muted" }, "host info unavailable"));
+// size (the list has a fixed height, so rows never resize it), and the
+// desktop's 5-second tick re-fetches it while the window is open.
+let aboutInfo = null;
+// "48 MB", "49.7 MB", "128 GB", "1.8 TB": one decimal, dropped when zero
+const fmtMem = n => {
+  if (!n) return "—";
+  for (const [d, u] of [[2 ** 40, "TB"], [2 ** 30, "GB"], [2 ** 20, "MB"]])
+    if (n >= d) return (Math.round(n / d * 10) / 10) + " " + u;
+  return Math.max(1, Math.round(n / 1024)) + " K";
+};
+function renderAbout() {
+  const h = aboutInfo || {};
+  const lines = $("#about-lines");
+  lines.replaceChildren();
+  const add = (label, ...kids) => lines.append(el("div", {}, el("b", {}, label + ":"), ...kids));
+  if (h.error) add("Host", el("span", { class: "muted" }, "host info unavailable"));
+  const b = h.build || {};
+  add("Version", b.date ? `exe ${b.date} (${b.commit}${b.modified ? "+" : ""})` : "exe (development build)");
+  add("System", [h.os, h.arch, h.cpus ? h.cpus + " CPUs" : ""].filter(Boolean).join(" · ") || "—");
+  add("Machine", [h.machine, h.hostname].filter(Boolean).join(" · ") || "—");
+  // the LAN and Tailscale IPs, middot-separated; each is click-to-copy
+  const addrs = el("span", {});
+  const addIP = (label, ip) => {
+    if (addrs.childNodes.length) addrs.append(" · ");
+    addrs.append(el("span", { class: "muted" }, label + " "),
+      el("span", { class: "ip-copy", title: "Click to copy", onclick: () => copyIP(ip) }, ip));
+  };
+  if (h.lan_ip) addIP("LAN", h.lan_ip);
+  if (h.tailscale_ip) addIP("Tailscale", h.tailscale_ip);
+  if (addrs.childNodes.length) add("Addresses", addrs);
+  const running = lastVMs.filter(v => v.state === "running");
+  const allotted = running.reduce((s, v) => s + (v.memory_mb || 0), 0) * 2 ** 20;
+  add("Built-in Memory", fmtMem(h.memory_total));
+  add("VM Memory", running.length
+    ? `${fmtMem(allotted)} allotted to ${running.length} running VM${running.length === 1 ? "" : "s"}`
+    : "no VM running");
+  add("Disk Space", h.disk_total ? `${fmtMem(h.disk_free)} free of ${fmtMem(h.disk_total)}` : "—");
+  add("Largest Unused Block", fmtMem(h.memory_available));
+  const apple = $("#menubar .menu.appl svg");
+  const rows = [{ icon: apple ? sizeSvg(apple.outerHTML, 16) : miniMacIcon("running"), name: "exe", bytes: h.exe_memory || 0 }];
+  for (const v of running) rows.push({ icon: miniMacIcon(v.state), name: v.name, bytes: (v.memory_mb || 0) * 2 ** 20 });
+  const max = Math.max(...rows.map(r => r.bytes), 1);
+  const list = $("#about-rows");
+  list.replaceChildren();
+  for (const r of rows) {
+    const ico = el("span", { class: "abt-ico" });
+    ico.innerHTML = r.icon;
+    list.append(el("div", { class: "abt-row" }, ico, el("span", { class: "abt-name" }, r.name),
+      el("span", { class: "abt-size" }, fmtMem(r.bytes)),
+      el("div", { class: "mbar", style: `width:${Math.max(2, r.bytes / max * 100)}%` }, el("div", { class: "mbar-in" }))));
   }
+}
+async function openAboutWin() {
+  try { aboutInfo = await j("/v1/hostinfo"); } catch (e) { aboutInfo = { error: true }; }
+  renderAbout();
   openWin("#win-about");
+}
+async function aboutTick() {
+  if ($("#win-about").hidden) return;
+  try { aboutInfo = await j("/v1/hostinfo"); renderAbout(); } catch (e) {}
 }
 async function copyText(text, label) {
   let ok = false;
@@ -2570,7 +2655,7 @@ function macIcon(state, size) {
     <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
   </svg>`;
 }
-$("#about-icon").innerHTML = macIcon("running", 44);
+$("#about-icon").innerHTML = macIcon("running", 48);
 let selectedIcon = null;
 // set by the boot hostinfo fetch: an agent's icon (Claude Code, Codex) shows
 // only on hosts with its CLI installed, and its tooltip names the project
@@ -3063,7 +3148,7 @@ function applyIconOverrides(ovs, custom) {
     if (d.dom) { const n = $(d.dom); if (n) n.outerHTML = d.disp ? sizeSvg(svg, d.disp) : svg; }
   }
   renderIcons(lastVMs);
-  $("#about-icon").innerHTML = macIcon("running", 44);
+  $("#about-icon").innerHTML = macIcon("running", 48);
   document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
   if (!$("#win-myapps").hidden) loadMyApps().catch(() => {});
   if (!$("#win-search").hidden) renderSearch();
@@ -6774,7 +6859,7 @@ j("/v1/hostinfo").then(h => {
 loadConfig().catch(() => {});
 cfHeartbeat(false);
 chatDetect(false);
-setInterval(() => { if (!document.hidden) loadVMs().catch(() => {}); }, 5000);
+setInterval(() => { if (!document.hidden) { loadVMs().catch(() => {}); aboutTick(); } }, 5000);
 </script>
 </body>
 </html>

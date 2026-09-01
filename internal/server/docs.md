@@ -11,6 +11,7 @@ over HTTP and SSH.
 
 The menu bar works like the classic Mac it resembles:
 
+- **Apple menu** — About This Computer (see below).
 - **File** — New VM…, Upload to Workspace…, Close Window, Refresh.
 - **Windows** — reopen the core windows: Virtual Machines, Chat, Newsfeed,
   Icon Editor, Configuration, Daemon Log.
@@ -18,6 +19,14 @@ The menu bar works like the classic Mac it resembles:
   Setup Wizard, Set API Token….
 - **Help** — this page, and the Agent Skill Guide for handing exe to a
   coding agent.
+
+**About This Computer**, under the Apple menu, is the OS 9 box: the build,
+the machine, its addresses (click one to copy), Built-in Memory, how much of
+it is allotted to running VMs, Disk Space where VM disks live, and Largest
+Unused Block — what the host could still hand a new VM. Below the rule, one
+memory bar per running VM shows its allotment, scaled so the largest fills
+the column, with exe's own footprint as the first row. It refreshes every
+few seconds while open.
 
 Right-click the desktop (long-press on a phone) for the **desktop menu**: a
 NeXT-style menu that pops up at the pointer and reaches everything — New
