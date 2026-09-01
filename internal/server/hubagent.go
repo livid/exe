@@ -367,9 +367,7 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 	}
 	a.dayN++
 	a.lastAt = time.Now()
-	who := hubAgentName(*pending)
-	log.Printf("hub agent: answered %s in thread %s (%d bytes)", who, hubShort(root), len(text))
-	s.PostNews("hub", "Replied on the Hub", "To "+who+": "+hubAgentClip(text, 140))
+	log.Printf("hub agent: answered %s in thread %s (%d bytes)", hubAgentName(*pending), hubShort(root), len(text))
 }
 
 // hubAgentPending finds the reply to answer: the latest one from an
