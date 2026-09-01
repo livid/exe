@@ -193,6 +193,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/ui/state", s.handleUIStateGet)
 	mux.HandleFunc("PUT /v1/ui/state", s.handleUIStatePut)
 	mux.HandleFunc("GET /v1/ui/events", s.handleUIStateEvents)
+	mux.HandleFunc("GET /v1/ui/menu", s.handleDeskMenuGet)
+	mux.HandleFunc("PUT /v1/ui/menu", s.handleDeskMenuPut)
 	mux.HandleFunc("GET /v1/peers", s.handlePeersGet)
 	mux.HandleFunc("POST /v1/peers/code", s.handlePeersCode)
 	mux.HandleFunc("POST /v1/peers/join", s.handlePeersJoin)

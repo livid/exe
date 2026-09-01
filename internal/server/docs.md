@@ -19,6 +19,19 @@ The menu bar works like the classic Mac it resembles:
 - **Help** — this page, and the Agent Skill Guide for handing exe to a
   coding agent.
 
+Right-click the desktop (long-press on a phone) for the **desktop menu**: a
+NeXT-style menu that pops up at the pointer and reaches everything — New
+VM, a terminal, the Workspace, every VM (each with its own submenu: Open,
+Terminal, Start/Stop, Restart, Expose…), every app and open window, the
+tools, Cloudflare and Help. **Customize…** at its bottom opens the menu's
+text file in an editor: one item per line — a label, a tab or two spaces,
+then an action — a label on its own starts a submenu (indent the lines
+under it), `-` is a separator, and `@vms`, `@apps` and `@windows` are lists
+that fill themselves in. The file's own header lists every action. Save
+hands it to the daemon, which checks it — a bad line is named and nothing
+changes — and then puts the new menu on every desk sharing this one; an
+empty file restores the factory menu.
+
 Desktop icons: **Workspace** (shared files), **Terminal** (a shell on this
 host machine), one icon per VM, one per installed app, plus **Newsfeed**,
 **Chat** (appears when Ollama is reachable) and the **Trash**. Double-click

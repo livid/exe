@@ -171,6 +171,11 @@ create a repository on their account.
 default `"note"`) posts a note to the desktop Newsfeed of this node **and
 every joined node** — good for announcing finished work or problems the user
 should see.
+`GET /v1/ui/menu` and `PUT /v1/ui/menu` (body: plain text) read and replace
+the desktop's right-click menu, a short text file whose header documents its
+own format and lists every action; the daemon validates a PUT and answers
+`400 {"error":"line N: …"}` for a bad one. **Only when the user asks** to
+change their desktop menu.
 Endpoints not listed in this file
 (config PUT, daemon restart, chat, workspace, apps, ui state) back exe's own
 web UI — leave them alone unless the user explicitly asks.

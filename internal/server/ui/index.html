@@ -72,9 +72,20 @@ a { color: #202a87; text-decoration: underline; }
 .dd-item.dis:hover { background: none; color: #888; }
 .dd-sep { height: 1px; background: var(--g600); margin: 3px 2px; box-shadow: 0 1px 0 #fff; }
 /* Finder contextual menu, sampled from a real OS 9 capture: #ddd face
-   (menubar menus are lighter), same groove separators and hard shadow */
-#ctx-menu { top: auto; background: var(--g300); min-width: 170px; z-index: 5000;
+   (menubar menus are lighter), same groove separators and hard shadow.
+   .ctx-panel is a hierarchical submenu: same face, opened beside its parent */
+#ctx-menu, .ctx-panel { top: auto; background: var(--g300); min-width: 170px; z-index: 5000;
   border-top: 1px solid var(--black); /* floats at the cursor, away from the menubar line */ }
+/* hierarchical items carry OS 9's solid right-pointing triangle at the
+   right edge; the parent stays highlighted while its submenu is up */
+.dd-item.sub { position: relative; }
+.dd-item.sub::after { content: ""; position: absolute; right: 8px; top: 50%; margin-top: -4px;
+  border: 4px solid transparent; border-right: 0; border-left: 5px solid #000; }
+.dd-item.open { background: var(--hl); color: #fff; }
+.dd-item.sub:hover::after, .dd-item.open::after { border-left-color: #fff; }
+.dd-item.dis.sub::after, .dd-item.dis.sub:hover::after { border-left-color: #888; }
+/* the Desktop Menu editor's status line goes red when the daemon refuses a save */
+.ed-info .ed-saved.err { color: #7a1010; }
 
 /* ---------- global search (the menubar magnifier) ---------- */
 /* platinum query bar over a fixed-height white result list — fixed so the
@@ -1354,6 +1365,27 @@ body.mobile th.sorted {
     </div>
   </div>
 
+  <!-- Desktop Menu editor: the right-click menu is a text file (System
+       :menu.txt) shown in the BBEdit-style editor chrome. Save hands the
+       text to the daemon, which validates it — a bad line is named in the
+       info bar and nothing changes — and lands the new menu on every desk.
+       Edges resize it (no grow corner: the statusbar is full of buttons) -->
+  <div class="window edge-grow" id="win-menu" style="left:170px; top:70px; width:560px;" hidden>
+    <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title">Desktop Menu</div>
+      <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
+    <div class="win-frame">
+      <div class="ed-info" id="menu-info"></div>
+      <textarea class="ed-text doc-scroll" id="menu-text" wrap="off" spellcheck="false" autocomplete="off"></textarea>
+      <div class="statusbar">
+        <span class="muted" id="menu-hint">Save checks the file and applies the menu everywhere</span>
+        <span style="flex:1"></span>
+        <button class="ghost sm" id="menu-defaults">Restore Defaults</button>
+        <button class="ghost sm" id="menu-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Icon Editor: a Finder-style gallery of the system's pixel icons;
        double-click one to repaint it in a fat-bits editor window -->
   <div class="window grow" id="win-icons" style="left:210px; top:96px; width:560px;" hidden>
@@ -1709,7 +1741,7 @@ function mobileSwapIn(w) {
 // local only, never mixed into the shared desktop layout snapshot. Live
 // terminals and transient dialogs don't restore; win-detail needs the VM
 // name, carried alongside.
-const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps", "win-icons"]);
+const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps", "win-icons", "win-menu"]);
 const mobRestorable = id => MOB_RESTORE.has(id)
   || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-ic-");
 function mobSave() {
@@ -1961,8 +1993,8 @@ autoVBar($("#sess-list"));
 const WIN_CLIENT = Math.random().toString(36).slice(2) + Date.now().toString(36);
 // windows whose open/closed state is restored and synced; win-detail needs a
 // current VM and the dialogs are transient, so those only keep geometry
-const WIN_SYNC_OPEN = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-docs", "win-myapps", "win-icons"]);
-const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin(), "win-myapps": () => openMyAppsWin(), "win-icons": () => openIconsWin() };
+const WIN_SYNC_OPEN = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-docs", "win-myapps", "win-icons", "win-menu"]);
+const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin(), "win-myapps": () => openMyAppsWin(), "win-icons": () => openIconsWin(), "win-menu": () => openMenuEditor() };
 let winApplying = false; // applying a stored/remote snapshot — don't echo it back
 let winDragging = null;  // window under the local pointer — remote moves lose
 let winRev = 0;
@@ -3402,29 +3434,75 @@ $("#ma-icons").addEventListener("click", e => {
 
 // ---- Finder contextual menu, styled from a real OS 9 capture ----
 const ctxMenu = $("#ctx-menu");
+// open hierarchical submenu panels, outermost first (depth 1, 2, …); the
+// root #ctx-menu is depth 0. ctxGuardUntil: see the mousedown closer below.
+let ctxPanels = [], ctxHoverT = null, ctxGuardUntil = 0;
+function ctxCloseSubs(depth) {
+  while (ctxPanels.length > depth) {
+    const p = ctxPanels.pop();
+    p._owner.classList.remove("open");
+    p.remove();
+  }
+}
 function hideCtxMenu() {
+  clearTimeout(ctxHoverT);
   if (ctxMenu.hidden) return;
+  ctxCloseSubs(0);
   ctxMenu.hidden = true;
   const f = ctxMenu._onclose;
   ctxMenu._onclose = null;
   if (f) f();
 }
+// Items: { label, act, dis } is a command, { label, items } a submenu, "-"
+// (or { sep: true }) a separator. Submenus open on hover after an OS 9-style
+// pause — a click opens them too, for touch — to the right of the parent,
+// overlapping it by 3px with the first item level with the parent item, or
+// to the left when there's no room. Hovering a plain item closes deeper
+// panels, so the pointer can wander without the menu flickering.
+function ctxFill(panel, items, depth) {
+  panel.replaceChildren();
+  for (const it of items) {
+    if (it === "-" || it.sep) { panel.append(el("div", { class: "dd-sep" })); continue; }
+    const sub = !it.dis && Array.isArray(it.items);
+    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") }, it.label);
+    const open = sub ? () => ctxOpenSub(d, panel, it.items, depth + 1) : () => ctxCloseSubs(depth + 1);
+    d.addEventListener("mouseenter", () => { clearTimeout(ctxHoverT); ctxHoverT = setTimeout(open, 120); });
+    if (sub) d.addEventListener("click", e => { e.stopPropagation(); clearTimeout(ctxHoverT); open(); });
+    else if (!it.dis) d.addEventListener("click", () => { hideCtxMenu(); it.act(); });
+    panel.append(d);
+  }
+}
+function ctxOpenSub(item, parent, items, depth) {
+  if (ctxPanels[depth - 1] && ctxPanels[depth - 1]._owner === item) return; // already up
+  ctxCloseSubs(depth - 1);
+  const p = el("div", { class: "dropdown ctx-panel" });
+  p._owner = item;
+  p.style.zIndex = 5000 + depth;
+  ctxFill(p, items, depth);
+  document.body.append(p);
+  ctxPanels.push(p);
+  item.classList.add("open");
+  const pr = parent.getBoundingClientRect(), ir = item.getBoundingClientRect(), r = p.getBoundingClientRect();
+  let left = pr.right - 3;
+  if (left + r.width > window.innerWidth - 4) left = Math.max(0, pr.left - r.width + 3);
+  p.style.left = left + "px";
+  p.style.top = Math.max(0, Math.min(ir.top - 3, window.innerHeight - r.height - 4)) + "px";
+}
 function showCtxMenu(x, y, items, onclose) {
   hideCtxMenu();
   ctxMenu._onclose = onclose || null;
-  ctxMenu.replaceChildren();
-  for (const it of items) {
-    if (it === "-") { ctxMenu.append(el("div", { class: "dd-sep" })); continue; }
-    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") }, it.label);
-    if (!it.dis) d.addEventListener("click", () => { hideCtxMenu(); it.act(); });
-    ctxMenu.append(d);
-  }
+  ctxFill(ctxMenu, items, 0);
   ctxMenu.hidden = false;
   const r = ctxMenu.getBoundingClientRect();
   ctxMenu.style.left = Math.min(x, window.innerWidth - r.width - 4) + "px";
   ctxMenu.style.top = Math.min(y, window.innerHeight - r.height - 4) + "px";
 }
-document.addEventListener("mousedown", e => { if (!e.target.closest("#ctx-menu")) hideCtxMenu(); });
+document.addEventListener("mousedown", e => {
+  // the emulated mousedown trailing a long-press must not close the menu
+  // the long-press just opened
+  if (Date.now() < ctxGuardUntil) return;
+  if (!e.target.closest("#ctx-menu, .ctx-panel")) hideCtxMenu();
+});
 document.addEventListener("keydown", e => { if (e.key === "Escape") hideCtxMenu(); });
 
 // Move To Trash parks the item in the dot-hidden .Trash folder (the move
@@ -3626,6 +3704,173 @@ async function loadEditor(w) {
     if (en) w.querySelector(".ed-saved").textContent = "Last Saved: " + edFmtDate(en.modified);
   } catch (e) {}
 }
+// ---- the desktop menu: NeXT-style, at the pointer, reaching everything ----
+// A right-click (long-press on touch) on bare desktop pops it up. Its shape
+// is a text file the daemon validates (GET/PUT /v1/ui/menu, stored as
+// System :menu.txt so it syncs to joined desks) and Customize… edits it
+// below. The daemon hands back a parsed tree; this side maps action names
+// onto the same functions the menu bar and icons run, and fills in the
+// self-filling lists (@vms, @apps, @windows) at the moment the menu opens.
+let deskMenu = [], deskMenuErr = "";
+const DESK_ACTS = {
+  terminal: { run: () => openHostTermWin() },
+  claude: { run: () => openHostTermWin("claude"), dis: () => !hostClaude },
+  search: { run: () => openSearchWin() },
+  trash: { run: () => openWin("#win-trash") },
+  customize: { run: () => openMenuEditor() },
+  workspace: { run: p => openFinderWin(p || "") },
+  edit: { run: p => openEditorWin(p) },
+  vm: { run: (name, tab) => openVM(name, tab), dis: name => !lastVMs.some(v => v.name === name) },
+  app: { run: name => openAppWin(name), dis: name => !appsList.some(a => a.name === name) },
+  chat: { run: vm => openChatWin(vm), dis: () => !chatDetected },
+  winchat: { run: () => openChatWin(), dis: () => !chatDetected },
+};
+for (const k of Object.keys(ACTIONS)) if (!DESK_ACTS[k]) DESK_ACTS[k] = { run: ACTIONS[k] };
+DESK_ACTS.url = { run: href => window.open(href, "_blank", "noopener") };
+const DESK_EMPTY = { vms: "No VMs", apps: "No Apps", windows: "No Windows" };
+function deskGen(kind) {
+  if (kind === "vms") return sortedVMs(lastVMs).map(vm => ({ label: vm.name, items: vmCtxItems(vm) }));
+  if (kind === "apps") return appsList.map(a => ({ label: a.title || a.name, act: () => openAppWin(a.name) }));
+  return [...document.querySelectorAll("#desktop .window")].filter(w => !w.hidden)
+    .map(w => ({ label: (w.querySelector(".title") || {}).textContent || w.id, act: () => openWin(w) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+function deskMenuItems(nodes) {
+  const out = [];
+  for (const n of nodes) {
+    const g = n.gen ? deskGen(n.gen) : null;
+    if (g && !g.length) g.push({ label: DESK_EMPTY[n.gen], dis: true });
+    if (n.sep) out.push("-");
+    else if (g && !n.label) out.push(...g); // a bare @list splices in place
+    else if (g) out.push({ label: n.label, items: g });
+    else if (n.items) out.push({ label: n.label, items: deskMenuItems(n.items) });
+    else {
+      const a = DESK_ACTS[n.action], args = n.args || [];
+      out.push({ label: n.label, act: () => a.run(...args), dis: !a || !!(a.dis && a.dis(...args)) });
+    }
+  }
+  return out;
+}
+const deskMenuHas = (nodes, action) => nodes.some(n => n.action === action || (n.items && deskMenuHas(n.items, action)));
+function showDeskMenu(x, y) {
+  menuClose();
+  const items = deskMenuItems(deskMenu);
+  // the way back to the editor is never lost: a menu that dropped its
+  // Customize… item gets one appended, and a file that won't parse says so
+  if (!deskMenuHas(deskMenu, "customize")) items.push("-", { label: "Customize…", act: () => openMenuEditor() });
+  if (deskMenuErr) items.unshift({ label: "The menu file has an error…", act: () => openMenuEditor() }, "-");
+  showCtxMenu(x, y, items);
+}
+// bare desktop: not a window, an icon, a menu or a dialog overlay
+const onDesk = t => !!t.closest("#desktop") && !t.closest(".window, .dicon, .dropdown, .overlay");
+let deskPressT = null;
+$("#desktop").addEventListener("contextmenu", e => {
+  if (!onDesk(e.target)) return;
+  e.preventDefault();
+  clearTimeout(deskPressT);
+  showDeskMenu(e.clientX, e.clientY);
+});
+// touch: a long-press (550ms without moving) on bare desktop; iOS never
+// fires contextmenu, Android does — showing twice is harmless
+$("#desktop").addEventListener("touchstart", e => {
+  if (e.touches.length !== 1 || !onDesk(e.target)) return;
+  const { clientX: x, clientY: y } = e.touches[0];
+  clearTimeout(deskPressT);
+  deskPressT = setTimeout(() => { ctxGuardUntil = Date.now() + 700; showDeskMenu(x, y); }, 550);
+}, { passive: true });
+for (const ev of ["touchmove", "touchend", "touchcancel"])
+  $("#desktop").addEventListener(ev, () => clearTimeout(deskPressT), { passive: true });
+function applyDeskMenu(r) { deskMenu = r.menu || []; deskMenuErr = r.error || ""; }
+const loadDeskMenu = () => j("/v1/ui/menu").then(applyDeskMenu);
+// another desk (or a peer) changed menu.txt: refetch, and refresh an open
+// editor unless it holds unsaved typing
+async function menuChanged(client) {
+  if (client && client === WIN_CLIENT) return;
+  let r;
+  try { r = await j("/v1/ui/menu"); } catch (e) { return; }
+  applyDeskMenu(r);
+  if (!$("#win-menu").hidden && !$("#win-menu").dataset.dirty) menuEditorShow(r);
+}
+
+// ---- Customize…: the menu file in the BBEdit-style editor chrome ----
+$("#menu-info").innerHTML = `${ED_PENCIL}<div class="ed-main">${ED_DOC}<span class="ed-path">System :menu.txt</span></div>
+  ${ED_MARK}<span class="ed-saved" id="menu-saved">…</span>`;
+const menuText = $("#menu-text");
+function menuEditorShow(r) {
+  menuText.value = r.text || "";
+  const st = $("#menu-saved");
+  st.classList.toggle("err", !!r.error);
+  st.textContent = r.error ? r.error
+    : r.default ? "Factory menu — edit and Save to make it yours" : "Last Saved: " + edFmtDate(r.modified);
+  if (r.error) menuSelectLine(r.error);
+}
+async function openMenuEditor() {
+  const w = openWin("#win-menu");
+  if (w.dataset.dirty) return; // unsaved typing wins over a reload
+  try { const r = await j("/v1/ui/menu"); applyDeskMenu(r); menuEditorShow(r); }
+  catch (e) { $("#menu-saved").textContent = e.message; }
+  if (!IS_MOBILE) menuText.focus();
+}
+// put the caret on the line an error names, so the fix is a keystroke away
+function menuSelectLine(msg) {
+  const m = /^line (\d+)/.exec(msg || "");
+  if (!m) return;
+  const lines = menuText.value.split("\n"), n = Math.max(1, Math.min(+m[1], lines.length));
+  let start = 0;
+  for (let i = 0; i < n - 1; i++) start += lines[i].length + 1;
+  menuText.focus();
+  menuText.setSelectionRange(start, start + lines[n - 1].length);
+  const lh = parseFloat(getComputedStyle(menuText).lineHeight) || 17;
+  menuText.scrollTop = Math.max(0, (n - 1) * lh - menuText.clientHeight / 2);
+}
+menuText.addEventListener("input", () => {
+  $("#win-menu").dataset.dirty = "1";
+  const st = $("#menu-saved");
+  st.classList.remove("err");
+  st.textContent = "Edited — Save to apply";
+});
+// Tab types a tab — it's the label/action separator here, not a focus key
+menuText.addEventListener("keydown", e => {
+  if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault();
+  menuText.setRangeText("\t", menuText.selectionStart, menuText.selectionEnd, "end");
+  menuText.dispatchEvent(new Event("input"));
+});
+// the daemon either takes the whole file or names the bad line; blank text
+// asks for the factory menu back
+async function menuSave(text) {
+  const st = $("#menu-saved"), btn = $("#menu-save");
+  btn.disabled = true;
+  try {
+    const r = await j("/v1/ui/menu", { method: "PUT", body: text, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    applyDeskMenu(r);
+    delete $("#win-menu").dataset.dirty;
+    menuEditorShow(r);
+    toast(r.default ? "Factory desktop menu restored" : "Desktop menu saved");
+  } catch (e) {
+    st.classList.add("err");
+    st.textContent = e.message;
+    menuSelectLine(e.message);
+  }
+  btn.disabled = false;
+}
+$("#menu-save").onclick = () => menuSave(menuText.value);
+$("#menu-defaults").onclick = async () => {
+  const ok = await confirmDialog({
+    message: "Restore the factory desktop menu?",
+    detail: "Your menu.txt is removed from every desktop sharing this desk.",
+    action: "Restore", danger: true,
+  });
+  if (ok) menuSave("");
+};
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
+    const w = $("#win-menu");
+    if (!w.hidden && w.classList.contains("front")) { e.preventDefault(); menuSave(menuText.value); }
+  }
+});
+wireEdges($("#win-menu"), menuText, 420, { minH: 160 });
+
 // ---- image viewer windows, modeled on PictureViewer ----
 // Pictures double-clicked in a Finder window open here instead of a browser
 // tab, one spatial window per file (id win-iv-<encoded path>, geometry in
@@ -3835,25 +4080,29 @@ function renderVMList(rawVMs) {
     if (!IS_MOBILE) row.addEventListener("contextmenu", e => {
       e.preventDefault();
       row.classList.add("ctx");
-      const running = vm.state === "running";
-      showCtxMenu(e.clientX, e.clientY, [
-        { label: "Open", act: () => openVM(vm.name) },
-        { label: "Open Terminal", act: () => openVM(vm.name, "term") },
-        { label: "Chat with this VM", act: () => openChatWin(vm.name), dis: !chatDetected },
-        "-",
-        running ? { label: "Stop", act: () => vmAction(vm.name, "stop") }
-                : { label: "Start", act: () => vmAction(vm.name, "start") },
-        { label: "Restart", act: () => vmRestart(vm.name), dis: !running },
-        "-",
-        { label: "Copy IP", act: () => copyIP(vm.ip), dis: !vm.ip },
-        { label: "Expose Port…", act: () => openVM(vm.name, "expose") },
-        { label: "Publish to GitHub…", act: () => openPublishWin(vm.name), dis: !running },
-        "-",
-        { label: "Delete", act: () => del.click() },
-      ], () => row.classList.remove("ctx"));
+      showCtxMenu(e.clientX, e.clientY, [...vmCtxItems(vm), "-", { label: "Delete", act: () => del.click() }],
+        () => row.classList.remove("ctx"));
     });
     tb.append(row);
   }
+}
+// a VM's operations, shared by the list row's contextual menu and the desktop
+// menu's @vms submenus (those leave out Delete: there is no button to arm)
+function vmCtxItems(vm) {
+  const running = vm.state === "running";
+  return [
+    { label: "Open", act: () => openVM(vm.name) },
+    { label: "Open Terminal", act: () => openVM(vm.name, "term") },
+    { label: "Chat with this VM", act: () => openChatWin(vm.name), dis: !chatDetected },
+    "-",
+    running ? { label: "Stop", act: () => vmAction(vm.name, "stop") }
+            : { label: "Start", act: () => vmAction(vm.name, "start") },
+    { label: "Restart", act: () => vmRestart(vm.name), dis: !running },
+    "-",
+    { label: "Copy IP", act: () => copyIP(vm.ip), dis: !vm.ip },
+    { label: "Expose Port…", act: () => openVM(vm.name, "expose") },
+    { label: "Publish to GitHub…", act: () => openPublishWin(vm.name), dis: !running },
+  ];
 }
 // no restart endpoint: a plain stop → start sequence
 async function vmRestart(name) {
@@ -6255,7 +6504,11 @@ function appDataSubscribe() {
     // a feed item landed (posted here or synced in) — refresh an open window
     if (ev.app === "Newsfeed") { if (!$("#win-news").hidden) loadNews().catch(() => {}); return; }
     // custom system icons changed in another window or synced from a peer
-    if (ev.app === "System") { if (ev.path === "icons.json") iconsChanged(ev.client || ""); return; }
+    if (ev.app === "System") {
+      if (ev.path === "icons.json") iconsChanged(ev.client || "");
+      else if (ev.path === "menu.txt") menuChanged(ev.client || "");
+      return;
+    }
     // Forward even to a closed window: closeWin only hides the iframe, which
     // keeps running, so a hidden app must still hear the change or it would
     // reopen with stale in-memory state and clobber the synced-in doc.
@@ -6290,6 +6543,7 @@ renderVMHead();
 loadVMs().catch(e => toast(e.message));
 loadApps().catch(() => {});
 loadIcons().catch(() => {});
+loadDeskMenu().catch(() => {});
 // hosts with the Claude Code CLI get its desktop icon
 j("/v1/hostinfo").then(h => {
   if (h.claude_code) { hostClaude = { dir: h.claude_dir || "the Workspace folder" }; renderIcons(lastVMs); }
