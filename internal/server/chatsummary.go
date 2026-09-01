@@ -166,8 +166,11 @@ func (s *Server) chatSummaryModel(ctx context.Context, cfg *config.Config, provi
 		}
 		text = msg.Content
 	} else {
+		// The lowest thinking level, not "off": a reasoning model told not
+		// to think (glm-5.3) reasons out loud in the content instead, and
+		// the summary would open with its chain of thought.
 		acfg := agent.Config{BaseURL: cfg.Ollama.BaseURL, APIKey: cfg.Ollama.APIKey,
-			Model: cfg.Ollama.Model, Effort: "off"}
+			Model: cfg.Ollama.Model, Effort: "low"}
 		resp, err := agent.Chat(ctx, acfg, msgs, nil)
 		if err != nil {
 			return "", err

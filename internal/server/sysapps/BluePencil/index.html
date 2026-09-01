@@ -283,6 +283,7 @@ function tidy(orig, fixed) {
   let t = fixed.replace(/\r\n/g, "\n");
   const fence = t.match(/^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/);
   if (fence) t = fence[1];
+  t = t.replace(/^\s*<think>[\s\S]*?<\/think>\s*/i, "");
   t = t.replace(/^\s*Corrected(?: passage)?:\s*/i, "");
   t = t.replace(/^\s+|\s+$/g, "");
   if (/^["“][\s\S]*["”]$/.test(t) && !/^["“]/.test(orig.trim())) t = t.slice(1, -1);
@@ -445,14 +446,19 @@ async function pass() {
 }
 
 // One question to the configured Ollama model, answered as a stream of
-// NDJSON lines; the daemon holds the endpoint and key. Thinking is off and
-// sampling greedy: proofreading wants the likeliest correction, fast, and
-// the same one every time — at the default temperature a model will
-// sometimes wander down the "nothing to fix" path and echo the passage.
+// NDJSON lines; the daemon holds the endpoint and key. Sampling is greedy:
+// proofreading wants the likeliest correction, and the same one every
+// time — at the default temperature a model will sometimes wander down
+// the "nothing to fix" path and echo the passage. Thinking is asked for
+// at its lowest level rather than switched off: a reasoning model told
+// not to think (glm-5.3) reasons out loud instead, and the whole chain
+// arrives as content; at "low" it stays in Ollama's thinking channel,
+// which is never shown, and the answer comes faster than with thinking
+// off. Models without levels get the daemon's fallback (no think field).
 async function complete(text, signal, onDelta) {
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system: SYSTEM, prompt: ask(text), model: cfg.model || "", effort: "off",
+    body: JSON.stringify({ system: SYSTEM, prompt: ask(text), model: cfg.model || "", effort: "low",
       options: { temperature: 0 } }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
