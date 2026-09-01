@@ -236,7 +236,9 @@ wording left alone. Every correction is marked in pencil blue; hover one to
 see what it replaced. **Copy** takes the corrected text, **Accept** puts it
 back into the top field. Click the model name in the status bar for the
 options: a different (smaller, faster) model just for this app, and whether
-changes are marked at all.
+changes are marked at all. The draft is kept: reload the window, or open it
+on another desk sharing this node, and both fields come back as they were,
+checked paragraphs included, without asking the model again.
 
 The check runs on the Ollama endpoint in **Configuration**
 (`ollama.base_url`, `ollama.model`), so with a local model nothing you

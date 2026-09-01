@@ -192,6 +192,8 @@ const $ = s => document.querySelector(s);
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
 const APP = decodeURIComponent(location.pathname.split("/")[2] || "BluePencil");
 const CONFIG_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/config.json";
+const DRAFT_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/draft.json";
+const CLIENT = Math.random().toString(36).slice(2, 10); // tags our writes in change events
 const DEBOUNCE = 700;     // ms of quiet before a changed paragraph goes to the model
 const MAX_CHARS = 20000;  // per document
 const CACHE_MAX = 500;    // checked paragraphs remembered
@@ -438,6 +440,7 @@ async function pass() {
     }
     current = null;
     render();
+    scheduleDraft(); // the checked paragraph rides along with the draft
   }
 }
 
@@ -480,6 +483,7 @@ src.addEventListener("input", () => {
   lastErr = "";
   if (current && !src.value.includes(current.text)) current.ctrl.abort();
   render();
+  scheduleDraft();
   clearTimeout(timer);
   timer = setTimeout(kick, DEBOUNCE);
 });
@@ -504,11 +508,107 @@ $("#accept").addEventListener("click", () => {
   src.focus();
   src.select();
   // execCommand keeps native undo, so Accept can be undone like typing
-  if (!document.execCommand("insertText", false, fixed)) src.value = fixed;
+  if (!document.execCommand("insertText", false, fixed)) { src.value = fixed; scheduleDraft(); }
   src.setSelectionRange(fixed.length, fixed.length);
   lastInput = 0;
   render();
   kick();
+});
+
+// ---- the draft: what you typed and what the pencil made of it ----
+// draft.json is synced app data, so a reload — or another desk sharing
+// this node — gets both fields back without a single model call. Same
+// contract as Notes: debounced whole-doc PUT, serialized so a slow write
+// is never overtaken by the next, keepalive flush when the page hides,
+// and no saving at all until the initial load settled — a failed GET must
+// never be overwritten by an empty draft.
+let draftLoaded = false, draftT = null, draftSaving = false, draftAgain = false;
+function draftDoc() {
+  const checked = {}; // only the paragraphs still in the text: the doc stays small
+  for (const p of splitParas(src.value)) {
+    const c = checkable(p) && cache.get(p.text);
+    if (c) checked[p.text] = c.fixed;
+  }
+  return JSON.stringify({ version: 1, text: src.value, checked, updated: Date.now() });
+}
+function scheduleDraft() {
+  if (!draftLoaded) return;
+  clearTimeout(draftT);
+  draftT = setTimeout(saveDraft, 400);
+}
+async function saveDraft(flush) {
+  clearTimeout(draftT);
+  draftT = null;
+  const body = draftDoc();
+  // X-Exe-Seq is a content timestamp: the daemon drops a PUT older than one
+  // it already stored, so an in-flight save can't land stale over the flush.
+  const headers = { "Content-Type": "application/json",
+    "X-Exe-Seq": String(Date.now()), "X-Exe-Client": CLIENT };
+  if (flush) {
+    // unload: a keepalive PUT of the latest draft, bypassing the in-flight
+    // gate — the desktop may tear the iframe down before a normal one lands
+    try { api(DRAFT_URL, { method: "PUT", keepalive: true, headers, body }); } catch (e) {}
+    return;
+  }
+  if (draftSaving) { draftAgain = true; return; }
+  draftSaving = true;
+  try {
+    const r = await api(DRAFT_URL, { method: "PUT", headers, body });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  } catch (e) { toast("Draft not saved: " + e.message); }
+  draftSaving = false;
+  if (draftAgain) { draftAgain = false; saveDraft(); }
+}
+addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && (draftT || draftSaving)) saveDraft(true);
+});
+addEventListener("pagehide", () => { if (draftT || draftSaving) saveDraft(true); });
+
+// adoptDraft takes a stored draft into the fields and the cache; true when
+// the text changed.
+function adoptDraft(d) {
+  if (!d || typeof d.text !== "string") return false;
+  if (d.checked && typeof d.checked === "object") {
+    for (const [t, f] of Object.entries(d.checked)) {
+      if (typeof f === "string" && f) remember(t, f);
+    }
+  }
+  if (d.text === src.value) return false;
+  src.value = d.text;
+  return true;
+}
+async function loadDraft() {
+  try {
+    const r = await api(DRAFT_URL);
+    if (r.status !== 404) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      adoptDraft(await r.json());
+    }
+    draftLoaded = true;
+  } catch (e) { toast("Draft unavailable: " + e.message + " — reopen this window"); }
+}
+// Another window, or a joined desk, wrote our files (the desktop forwards
+// the daemon's change events): take the draft unless typing here is still
+// unsaved — that save lands newer and wins — and follow settings changes.
+window.addEventListener("message", async e => {
+  if (e.origin !== location.origin || !e.data || e.data.exe !== "data-changed") return;
+  if (e.data.client && e.data.client === CLIENT) return; // our own write
+  if (e.data.path === "config.json") {
+    if (!loaded) return;
+    await loadCfg();
+    modelLabel();
+    render();
+    return;
+  }
+  if (e.data.path !== "draft.json" || !draftLoaded || draftT || draftSaving) return;
+  try {
+    const r = await api(DRAFT_URL);
+    if (!r.ok) return;
+    const changed = adoptDraft(await r.json());
+    lastInput = 0;
+    render();
+    if (changed) kick();
+  } catch (e) {}
 });
 
 // ---- settings ----
@@ -575,7 +675,7 @@ function options() {
     const modelChanged = sel.value !== own;
     cfg.model = sel.value;
     cfg.marks = chk.checked;
-    if (modelChanged) cache.clear(); // another model, another opinion
+    if (modelChanged) { cache.clear(); scheduleDraft(); } // another model, another opinion
     saveCfg();
     modelLabel();
     close();
@@ -595,10 +695,13 @@ stModel.addEventListener("click", options);
 
 (async () => {
   render();
-  await Promise.all([loadCfg(), loadDaemon()]);
+  await Promise.all([loadCfg(), loadDaemon(), loadDraft()]);
   modelLabel();
   render();
   src.focus();
+  src.setSelectionRange(src.value.length, src.value.length);
+  lastInput = 0;
+  kick(); // a draft cut off mid-check picks up where it left off
 })();
 
 // ---- desktop window plumbing (same bridge as Notes and Hub) ----
