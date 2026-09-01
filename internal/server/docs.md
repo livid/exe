@@ -235,7 +235,9 @@ write — spelling, grammar, punctuation and capitalization corrected, the
 wording left alone. Every correction is marked in pencil blue; hover one to
 see what it replaced. **Copy** takes the corrected text, **Accept** puts it
 back into the top field. Click the model name in the status bar for the
-options: a different (smaller, faster) model just for this app, and whether
+options: a different model just for this app, how hard it thinks (Max by
+default — the best reading of the passage is worth the wait; Off is
+fastest, but some models then think out loud in the answer), and whether
 changes are marked at all. The draft is kept: reload the window, or open it
 on another desk sharing this node, and both fields come back as they were,
 checked paragraphs included, without asking the model again.

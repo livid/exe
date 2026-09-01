@@ -249,9 +249,15 @@ async function copyText(text, label) {
 }
 
 const src = $("#src"), out = $("#out"), stState = $("#st-state"), stModel = $("#st-model");
-let cfg = { model: "", marks: true };  // this app's settings (synced app data)
+let cfg = { model: "", effort: "max", marks: true }; // this app's settings (synced app data)
 let loaded = false;      // settings fetched — saving stays off until they are
 let defaultModel = "";   // ollama.model from the daemon's configuration
+let defaultEffort = "";  // ollama.effort likewise ("" = the model's own default)
+// Ollama's thinking levels, hardest first; "default" defers to the daemon's
+// ollama.effort. Off is offered but warned about: a reasoning model told
+// not to think reasons out loud in its answer instead.
+const EFFORTS = [["max", "Max"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["off", "Off"], ["default", ""]];
+const effortOf = c => EFFORTS.some(([v]) => v === c.effort) ? c.effort : "max";
 let blocked = "";        // why no check can run right now (unconfigured), or ""
 const cache = new Map(); // paragraph text → {fixed, ops}
 let current = null;      // the paragraph in flight: {text, ctrl, partial, el}
@@ -449,17 +455,17 @@ async function pass() {
 // NDJSON lines; the daemon holds the endpoint and key. Sampling is greedy:
 // proofreading wants the likeliest correction, and the same one every
 // time — at the default temperature a model will sometimes wander down
-// the "nothing to fix" path and echo the passage. Thinking is asked for
-// at Ollama's highest level, "max": the best reading of the passage is
-// worth the wait, and it must never be switched off — a reasoning model
-// told not to think (glm-5.3) reasons out loud instead, and the whole
-// chain arrives as content; at any level it stays in Ollama's thinking
-// channel, which is never shown. Models without levels get the daemon's
-// fallback: think=true, then no think field at all.
+// the "nothing to fix" path and echo the passage. Thinking defaults to
+// Ollama's highest level, "max" — the best reading of the passage is
+// worth the wait — and Options can lower it. Whatever the level, the
+// reasoning stays in Ollama's thinking channel, which is never shown;
+// only "off" is risky, since a reasoning model told not to think (glm-5.3)
+// reasons out loud instead and the whole chain arrives as content. Models
+// without levels get the daemon's fallback: think=true, then no field.
 async function complete(text, signal, onDelta) {
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system: SYSTEM, prompt: ask(text), model: cfg.model || "", effort: "max",
+    body: JSON.stringify({ system: SYSTEM, prompt: ask(text), model: cfg.model || "", effort: effortOf(cfg) === "default" ? "" : effortOf(cfg),
       options: { temperature: 0 } }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
@@ -602,7 +608,9 @@ window.addEventListener("message", async e => {
   if (e.data.client && e.data.client === CLIENT) return; // our own write
   if (e.data.path === "config.json") {
     if (!loaded) return;
+    const was = (cfg.model || "") + "|" + effortOf(cfg);
     await loadCfg();
+    if ((cfg.model || "") + "|" + effortOf(cfg) !== was) { cache.clear(); lastInput = 0; render(); kick(); }
     modelLabel();
     render();
     return;
@@ -645,10 +653,14 @@ async function loadDaemon() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const c = await r.json();
     defaultModel = (c.ollama && c.ollama.model) || "";
+    defaultEffort = (c.ollama && c.ollama.effort) || "";
     blocked = c.ollama && c.ollama.base_url ? "" : "Ollama is not configured (Windows → Configuration)";
   } catch (e) { blocked = "Daemon unreachable: " + e.message; }
 }
-function modelLabel() { stModel.textContent = cfg.model || defaultModel || "no model"; }
+function modelLabel() {
+  const eff = effortOf(cfg) === "default" ? defaultEffort : effortOf(cfg);
+  stModel.textContent = (cfg.model || defaultModel || "no model") + (eff ? " (" + eff + ")" : "");
+}
 
 function options() {
   const dlg = $("#dlg");
@@ -657,6 +669,11 @@ function options() {
   sel.append(el("option", { value: "" }, "Configured" + (defaultModel ? " — " + defaultModel : "")));
   if (own) sel.append(el("option", { value: own }, own));
   sel.value = own;
+  const eff = el("select", { id: "o-effort" });
+  for (const [v, l] of EFFORTS) {
+    eff.append(el("option", { value: v }, l || "Configured — " + (defaultEffort || "model default")));
+  }
+  eff.value = effortOf(cfg);
   const chk = el("input", { type: "checkbox", id: "o-marks" });
   chk.checked = cfg.marks !== false;
   const cancel = el("button", { class: "ghost" }, "Cancel");
@@ -665,6 +682,8 @@ function options() {
     el("h2", {}, "Blue Pencil Options"),
     el("div", { class: "row" }, el("label", { for: "o-model" }, "Model"), sel,
       el("span", { class: "hint" }, "A small local model is plenty for proofreading and answers faster.")),
+    el("div", { class: "row" }, el("label", { for: "o-effort" }, "Thinking"), eff,
+      el("span", { class: "hint" }, "Max reads the passage hardest and slowest. Off is fastest, but some models then think out loud in the answer.")),
     el("label", { class: "check" }, chk, "Mark changes in the checked text"),
     el("div", { class: "btns" }, cancel, ok));
   $("#veil").classList.add("on");
@@ -679,10 +698,11 @@ function options() {
   }).catch(() => {});
   const close = () => { $("#veil").classList.remove("on"); document.removeEventListener("keydown", keys); src.focus(); };
   const submit = () => {
-    const modelChanged = sel.value !== own;
+    const changed = sel.value !== own || eff.value !== effortOf(cfg);
     cfg.model = sel.value;
+    cfg.effort = eff.value;
     cfg.marks = chk.checked;
-    if (modelChanged) { cache.clear(); scheduleDraft(); } // another model, another opinion
+    if (changed) { cache.clear(); scheduleDraft(); } // another model or budget, another opinion
     saveCfg();
     modelLabel();
     close();
