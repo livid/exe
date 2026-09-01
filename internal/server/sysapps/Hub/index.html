@@ -106,7 +106,8 @@ canvas.ava-big { image-rendering: pixelated; }
 #dlg h2 { font-size: 12px; margin: 0 0 10px; }
 #dlg .row { margin: 0 0 8px; display: flex; flex-direction: column; gap: 3px; }
 #dlg label { font-size: 11px; }
-#dlg .btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+#dlg .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
+#dlg .btns .left { margin-right: auto; } /* secondary action, lower left (HIG) */
 #dlg .err { color: var(--red); font-size: 11px; min-height: 14px; margin-top: 6px; }
 /* hub-info rows: right-aligned labels, selectable values */
 .irow { display: flex; gap: 8px; margin: 0 0 6px; align-items: baseline; }
@@ -203,7 +204,6 @@ canvas.ava-big { image-rendering: pixelated; }
 <div id="status">
   <span id="st-hub" title="Hub Info&#8230;">&#8230;</span>
   <span id="st-gate"></span>
-  <button class="ghost sm" id="switch">Hub&#8230;</button>
 </div>
 
 <div id="toast"></div>
@@ -650,12 +650,16 @@ function toMultiaddr(u) {
 }
 
 // info is fetched BEFORE the dialog shows so it opens at its final size
-// (the desktop About window sets the pattern)
+// (the desktop About window sets the pattern). A hub that is down still
+// gets its dialog — from what we last knew — so Connect… stays reachable.
 async function hubInfoDialog() {
-  if (!hub) return;
-  let info;
-  try { info = await hget("/v1/hub"); } catch (e) { say("Hub unreachable: " + e.message, true); return; }
-  hubInfo = info;
+  if (!hub) { hubDialog(true); return; }
+  try { hubInfo = await hget("/v1/hub"); }
+  catch (e) { say("Hub unreachable: " + e.message, true); }
+  showHubInfo(hubInfo);
+}
+function showHubInfo(info) {
+  info = info || {};
   const row = (label, val, mono, copyAs) => {
     const v = el("span", { class: "ival" + (mono ? " mono" : "") }, val);
     if (copyAs) {
@@ -667,22 +671,27 @@ async function hubInfoDialog() {
     return el("div", { class: "irow" }, el("span", { class: "ilab" }, label), v);
   };
   const st = info.stats;
+  const connect = el("button", { class: "ghost left" }, "Connect…");
   const ok = el("button", { class: "ghost" }, "OK");
   const close = dialog([
     el("h2", {}, "Hub Info"),
     row("Address", hub, false, "address"),
     row("Multiaddr", toMultiaddr(hub), true, "multiaddr"),
-    row("Hub id", info.id, true, "hub id"),
-    row("Public key", info.pubkey, true, "public key"),
-    row("Gate", info.gate && info.gate.mode === "token" ? "token-gated" : "open"),
+    row("Hub id", info.id || "—", true, info.id && "hub id"),
+    row("Public key", info.pubkey || "—", true, info.pubkey && "public key"),
+    row("Gate", info.gate ? (info.gate.mode === "token" ? "token-gated" : "open") : "—"),
     row("Users", st ? st.profiles.toLocaleString() : "—"),
     row("Posts", st ? st.posts.toLocaleString() : "—"),
-    el("div", { class: "btns" }, ok)]);
+    el("div", { class: "btns" }, connect, ok)]);
   ok.onclick = close;
+  // Connect to a Hub replaces this panel; its Cancel brings this one back
+  connect.onclick = () => hubDialog(false, () => showHubInfo(info));
 }
 $("#st-hub").onclick = hubInfoDialog;
 
-function hubDialog(firstRun) {
+// firstRun: the onboarding form, no way out but connecting.
+// onCancel: what Cancel returns to (the Hub Info dialog), else just close.
+function hubDialog(firstRun, onCancel) {
   const input = el("input", { type: "text", placeholder: "http://hub.example:7788",
     value: firstRun ? "" : hub });
   const err = el("div", { class: "err" });
@@ -697,7 +706,7 @@ function hubDialog(firstRun) {
       "A hub is an exe-hub daemon your posts publish to. Ask its operator for the address."),
     err,
     el("div", { class: "btns" }, ...btns)]);
-  cancel.onclick = close;
+  cancel.onclick = () => { close(); if (onCancel) onCancel(); };
   const submit = async () => {
     let v = input.value.trim();
     if (!v) return;
@@ -723,7 +732,6 @@ function hubDialog(firstRun) {
   input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   setTimeout(() => input.focus(), 50);
 }
-$("#switch").onclick = () => hubDialog(false);
 
 function profileDialog(needName) {
   let avatarCid = myProfile ? (myProfile.avatar || "") : "";
