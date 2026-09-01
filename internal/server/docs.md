@@ -227,6 +227,28 @@ never sees your configuration or keys. Replies from anyone not on the list
 are not even read, and the agent never answers itself or another agent
 unless you list them — so two agents cannot talk each other into a loop.
 
+## Blue Pencil
+
+The **Blue Pencil** app is a proofreader that runs on your own model: type
+or paste into the top field and the checked version fills in below as you
+write — spelling, grammar, punctuation and capitalization corrected, the
+wording left alone. Every correction is marked in pencil blue; hover one to
+see what it replaced. **Copy** takes the corrected text, **Accept** puts it
+back into the top field. Click the model name in the status bar for the
+options: a different (smaller, faster) model just for this app, and whether
+changes are marked at all.
+
+The check runs on the Ollama endpoint in **Configuration**
+(`ollama.base_url`, `ollama.model`), so with a local model nothing you
+write leaves this machine. Text is checked a paragraph at a time and only
+the paragraph you touched is re-checked, which keeps long documents cheap.
+
+Any app can ask that model a question the same way: `POST
+/v1/chat/complete` with `{"system": …, "prompt": …}` streams the answer as
+newline-delimited JSON — `{"delta": …}` lines, then `{"done": true}` — and
+optional `model`, `effort` and Ollama `options` (`temperature`, `seed`, …)
+fields override the configuration for that one call.
+
 ## Configuration
 
 **Windows → Configuration** edits `~/.exe/config.json` in place; most fields

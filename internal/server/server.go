@@ -173,6 +173,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/chat/sessions/{id}/queue", s.handleChatQueue)
 	mux.HandleFunc("POST /v1/chat/sessions/{id}/confirm", s.handleChatConfirm)
 	mux.HandleFunc("POST /v1/chat/send", s.handleChatSend)
+	mux.HandleFunc("POST /v1/chat/complete", s.handleChatComplete)
 	mux.HandleFunc("GET /v1/vms/{name}/publish/scan", s.handlePublishScan)
 	mux.HandleFunc("POST /v1/vms/{name}/publish", s.handlePublish)
 	mux.HandleFunc("POST /v1/github/oauth/start", s.handleGitHubStart)
