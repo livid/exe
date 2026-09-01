@@ -84,6 +84,13 @@ a { color: #202a87; text-decoration: underline; }
 .dd-item.open { background: var(--hl); color: #fff; }
 .dd-item.sub:hover::after, .dd-item.open::after { border-left-color: #fff; }
 .dd-item.dis.sub::after, .dd-item.dis.sub:hover::after { border-left-color: #888; }
+/* a panel whose items carry small icons — the desk menu's Windows list, the
+   way OS 9's Application menu shows each running program beside its small
+   icon: every row leaves the 16px column so labels line up whether or not
+   the row has one */
+.dropdown.icons .dd-item { position: relative; padding-left: 40px; }
+.dd-ico { position: absolute; left: 17px; top: 50%; margin-top: -8px; width: 16px; height: 16px; }
+.dd-ico svg, .dd-ico img { display: block; width: 16px; height: 16px; image-rendering: pixelated; }
 /* the Desktop Menu editor's status line goes red when the daemon refuses a save */
 .ed-info .ed-saved.err { color: #7a1010; }
 
@@ -2420,6 +2427,15 @@ let MINI_TODO_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rend
   <rect x="4.5" y="9.5" width="4" height="4" fill="#fff" stroke="#000"/>
   <rect x="10" y="11" width="2" height="1" fill="#55524B"/>
 </svg>`;
+// a Platinum window at 16px — title bar stripes over a white pane — for
+// windows with no desktop art of their own in the Windows list
+let MINI_WINDOW_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect x="1.5" y="2.5" width="13" height="11" fill="#fff" stroke="#000"/>
+  <rect x="2" y="3" width="12" height="3" fill="#DAD5CA"/>
+  <path fill="#8B867B" d="M6 3h7v1H6zM6 5h7v1H6z"/>
+  <rect x="3" y="3" width="2" height="3" fill="#DAD5CA"/>
+  <rect x="2" y="6" width="12" height="1" fill="#000"/>
+</svg>`;
 // the desktop's compact Mac at 16px, screen tinted by VM state; a custom
 // icon keeps the tint — any pixel painted the factory running-green is the
 // screen, and follows the state
@@ -3005,6 +3021,8 @@ const ICON_DEFS = [
   { key: "chat-mini", label: "Chat (mini)", size: 16, get: () => MINI_CHAT_ICON, set: s => MINI_CHAT_ICON = s },
   { key: "note-mini", label: "Note (mini)", size: 16, get: () => MINI_NOTE_ICON, set: s => MINI_NOTE_ICON = s },
   { key: "todo-mini", label: "Todo (mini)", size: 16, get: () => MINI_TODO_ICON, set: s => MINI_TODO_ICON = s },
+  { key: "window-mini", label: "Window (mini)", size: 16, get: () => MINI_WINDOW_ICON, set: s => MINI_WINDOW_ICON = s,
+    note: "the Windows list's icon for windows with no art of their own" },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -3543,15 +3561,20 @@ document.addEventListener("mousemove", e => {
   ctxLast = pt;
 });
 // Items: { label, act, dis } is a command, { label, items } a submenu, "-"
-// (or { sep: true }) a separator. Submenus open on hover (a click opens them
-// too, for touch) to the right of the parent, overlapping it by 3px with the
+// (or { sep: true }) a separator; an item's `icon` (16px SVG or <img>
+// markup) draws at its left, and a panel with any icon lays every row out
+// with the icon column. Submenus open on hover (a click opens them too,
+// for touch) to the right of the parent, overlapping it by 3px with the
 // first item level with the parent item, or to the left when there's no room.
 function ctxFill(panel, items, depth) {
   panel.replaceChildren();
+  panel.classList.toggle("icons", items.some(it => it && it.icon));
   for (const it of items) {
     if (it === "-" || it.sep) { panel.append(el("div", { class: "dd-sep" })); continue; }
     const sub = !it.dis && Array.isArray(it.items);
-    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") }, it.label);
+    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") });
+    if (it.icon) { const i = el("span", { class: "dd-ico" }); i.innerHTML = it.icon; d.append(i); }
+    d.append(it.label);
     const act = sub ? () => ctxOpenSub(d, panel, it.items, depth + 1) : () => ctxCloseSubs(depth);
     d.addEventListener("mouseenter", e => ctxHover(e, depth, act));
     if (sub) d.addEventListener("click", e => { e.stopPropagation(); ctxHoldClear(); act(); });
@@ -3822,8 +3845,35 @@ function deskGen(kind) {
   if (kind === "vms") return sortedVMs(lastVMs).map(vm => ({ label: vm.name, items: vmCtxItems(vm) }));
   if (kind === "apps") return appsList.map(a => ({ label: a.title || a.name, act: () => openAppWin(a.name) }));
   return [...document.querySelectorAll("#desktop .window")].filter(w => !w.hidden)
-    .map(w => ({ label: (w.querySelector(".title") || {}).textContent || w.id, act: () => openWin(w) }))
+    .map(w => ({ label: (w.querySelector(".title") || {}).textContent || w.id, icon: winIcon(w), act: () => openWin(w) }))
     .sort((a, b) => a.label.localeCompare(b.label));
+}
+// the small icon for an open window in the Windows list: the desktop art
+// of whatever the window shows, at 16px — a VM (screen tinted by its
+// state), an app's own icon, a folder, document or image, a Terminal or
+// agent session, Chat, Newsfeed, the Trash; text-bearing windows (Daemon
+// Log, the documentation, the menu editor) get the document, and windows
+// with no art of their own the mini Platinum window
+function winIcon(w) {
+  const id = w.id, at16 = svg => sizeSvg(svg, 16);
+  if (id === "win-vms") return miniMacIcon("running");
+  if (id === "win-detail") { const vm = lastVMs.find(v => v.name === currentVM); return miniMacIcon(vm ? vm.state : "stopped"); }
+  if (id.startsWith("win-app-")) {
+    const app = appsList.find(a => a.name === id.slice(8));
+    return app && app.icon
+      ? `<img src="/apps/${encodeURIComponent(app.name)}/${app.icon.split("/").map(encodeURIComponent).join("/")}" alt="">`
+      : at16(APP_FALLBACK_ICON);
+  }
+  if (id.startsWith("win-ws-")) return at16(FOLDER_ICON);
+  if (id.startsWith("win-ed-")) return at16(DOC_ICON);
+  if (id.startsWith("win-iv-")) return at16(IMAGE_ICON);
+  if (id.startsWith("win-term-")) return at16(TERMINAL_ICON);
+  if (agentOfWin(id)) return at16(AGENT_APPS[agentOfWin(id)].icon());
+  if (id === "win-chat") return MINI_CHAT_ICON;
+  if (id === "win-news") return at16($("#news-icon svg").outerHTML);
+  if (id === "win-trash") return at16($("#trash-icon svg").outerHTML);
+  if (["win-log", "win-docs", "win-skill", "win-menu"].includes(id)) return at16(DOC_ICON);
+  return MINI_WINDOW_ICON;
 }
 function deskMenuItems(nodes) {
   const out = [];
