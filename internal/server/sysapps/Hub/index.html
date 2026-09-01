@@ -13,6 +13,10 @@
   --mono: "Berkeley Mono", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 * { box-sizing: border-box; }
+/* iOS Safari inflates text after a rotate to landscape (its text-size
+   "auto" heuristic) and keeps the inflated size on the way back; 100% pins
+   the type to its authored size */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; }
 body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
   user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column; }

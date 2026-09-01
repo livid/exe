@@ -25,6 +25,10 @@
   --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
 }
 * { box-sizing: border-box; }
+/* iOS Safari inflates text after a rotate to landscape (its text-size
+   "auto" heuristic) and keeps the inflated size on the way back; 100% pins
+   the type to its authored size */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; }
 body {
   margin: 0; overflow: hidden; font: 12px/1.45 var(--font); color: var(--black);
