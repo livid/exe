@@ -77,9 +77,12 @@ textarea:focus { outline: none; }
 /* the button row, laid out per the HIG (Dialog Box Guidelines, push
    button layout): in the lower right, a set of one width (58px, the
    OK/Cancel standard), 12px between buttons, 12px below the field and
-   above the status line. Never on the status line itself. */
+   above the status line. Never on the status line itself. Clear, which
+   throws the text away, sits alone in the lower left — away from the
+   pair you reach for by reflex. */
 #actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 4px; }
 #actions button.ghost { width: 58px; padding-left: 0; padding-right: 0; }
+#clear { margin-right: auto; }
 #src { flex: 1; min-height: 0; width: 100%; font: 12px/1.5 var(--font);
   overflow-y: scroll; overflow-x: hidden; }
 #out { flex: 1; min-height: 0; background: #fff; border: 1px solid var(--black); padding: 5px 7px;
@@ -193,6 +196,7 @@ textarea:focus { outline: none; }
   <textarea id="src" placeholder="Type or paste your text here." spellcheck="false"></textarea>
   <div id="out"></div>
   <div id="actions">
+    <button class="ghost" id="clear" disabled>Clear</button>
     <button class="ghost" id="copy" disabled>Copy</button>
     <button class="ghost" id="accept" disabled>Accept</button>
   </div>
@@ -419,6 +423,7 @@ function render() {
     }
   }
   $("#copy").disabled = $("#accept").disabled = done === 0;
+  $("#clear").disabled = text === "";
 
   let state = "Ready", err = false;
   if (lastErr) { state = lastErr; err = true; }
@@ -542,6 +547,21 @@ src.addEventListener("keydown", e => {
 });
 
 $("#copy").addEventListener("click", () => copyText(correctedText(), "the checked text"));
+$("#clear").addEventListener("click", () => {
+  src.focus();
+  src.select();
+  // execCommand keeps native undo, so a Clear can be undone like typing;
+  // its input event does the rest (abort the check in flight, save the
+  // empty draft). The fallback has to do that by hand.
+  if (!document.execCommand("delete")) {
+    src.value = "";
+    if (current) current.ctrl.abort();
+    scheduleDraft();
+  }
+  lastErr = "";
+  clearTimeout(timer);
+  render();
+});
 $("#accept").addEventListener("click", () => {
   // corrected paragraphs are already checked: remember them as clean so
   // nothing goes back to the model

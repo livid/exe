@@ -251,7 +251,8 @@ or paste into the top field and the checked version fills in below as you
 write — spelling, grammar, punctuation and capitalization corrected, the
 wording left alone. Every correction is marked in pencil blue; hover one to
 see what it replaced. **Copy** takes the corrected text, **Accept** puts it
-back into the top field. Click the model name in the status bar for the
+back into the top field, **Clear** empties it to start over (undo brings
+the text back). Click the model name in the status bar for the
 options: a different model just for this app, how hard it thinks (Max by
 default — the best reading of the passage is worth the wait; Off is
 fastest, but some models then think out loud in the answer), and whether
