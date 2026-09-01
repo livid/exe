@@ -3498,21 +3498,27 @@ function hideCtxMenu() {
 }
 // Hovering an item acts at once — a submenu opens, a plain item closes any
 // deeper panels — as on NeXTSTEP, with one exception: when a submenu is
-// already open and the pointer is heading for it (toward its side, or inside
-// the wedge from where it left the parent item to the panel's near edge),
-// the switch is held so the diagonal trip across the siblings doesn't swap
-// the panel away. The hold runs the moment the pointer turns off course or
-// after 300ms if it stops, and is dropped once the pointer reaches the panel.
-let ctxHold = null, ctxHoldT = null, ctxLast = null;
-function ctxHoldClear() { clearTimeout(ctxHoldT); ctxHold = null; }
+// already open and the pointer is heading for it (inside the wedge from
+// where it left the parent item to the panel's near edge), the switch is
+// held so the diagonal trip across the siblings doesn't swap the panel
+// away. The hold ends the moment the pointer turns off course or comes to
+// rest — 50ms without a move: a pointer parked on a sibling wants that
+// sibling, and a mouse in motion reports every few ms — and is dropped
+// once the pointer reaches the panel; 300ms of wandering inside the wedge
+// is the ceiling. (An earlier version also held for any move angled toward
+// the panel's side and waited the whole 300ms for a resting pointer, which
+// made the sibling below a tall panel — Windows under Apps — feel slow.)
+let ctxHold = null, ctxHoldT = null, ctxRestT = null, ctxLast = null;
+function ctxHoldClear() { clearTimeout(ctxHoldT); clearTimeout(ctxRestT); ctxHold = null; }
 function ctxHoldRun() { const h = ctxHold; ctxHoldClear(); if (h) h.fn(); }
+function ctxHoldRest() { clearTimeout(ctxRestT); ctxRestT = setTimeout(ctxHoldRun, 50); }
 function ctxHover(e, depth, fn) {
   ctxHoldClear();
   const open = ctxPanels[depth]; // the panel this move would replace or close
   const pt = { x: e.clientX, y: e.clientY };
   if (open && open._owner !== e.currentTarget) {
     ctxHold = { fn, panel: open, anchor: ctxLast || pt };
-    if (ctxOnCourse(pt)) { ctxHoldT = setTimeout(ctxHoldRun, 300); return; }
+    if (ctxOnCourse(pt)) { ctxHoldT = setTimeout(ctxHoldRun, 300); ctxHoldRest(); return; }
     ctxHold = null;
   }
   fn();
@@ -3521,8 +3527,6 @@ const inRect = (pt, r) => pt.x >= r.left && pt.x <= r.right && pt.y >= r.top && 
 function ctxOnCourse(pt) {
   const { panel, anchor } = ctxHold, r = panel.getBoundingClientRect();
   if (inRect(pt, r)) return true;
-  const toward = panel._side === "right" ? pt.x - anchor.x : anchor.x - pt.x;
-  if (toward > 0 && toward >= Math.abs(pt.y - anchor.y)) return true;
   const x = panel._side === "right" ? r.left : r.right, b = { x, y: r.top - 8 }, c = { x, y: r.bottom + 8 };
   const side = (p, q, o) => (p.x - o.x) * (q.y - o.y) - (q.x - o.x) * (p.y - o.y);
   const d1 = side(pt, anchor, b), d2 = side(pt, b, c), d3 = side(pt, c, anchor);
@@ -3534,6 +3538,7 @@ document.addEventListener("mousemove", e => {
   if (ctxHold) {
     if (inRect(pt, ctxHold.panel.getBoundingClientRect())) ctxHoldClear(); // made it
     else if (!ctxOnCourse(pt)) ctxHoldRun();
+    else ctxHoldRest(); // still heading there — the rest clock restarts
   }
   ctxLast = pt;
 });
