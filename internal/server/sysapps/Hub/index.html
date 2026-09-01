@@ -576,13 +576,221 @@ function updatePostBtn() {
   $("#post").disabled = !$("#text").value.trim() && !attachments.length;
 }
 
+// ---- pictures are scrubbed before they leave the browser ----
+// A photo straight off a phone carries EXIF: where it was taken (GPS) and,
+// for an iPhone original, 12–48 megapixels nobody needs in a feed. So before
+// upload: GPS is zeroed in place (the bytes are otherwise untouched, keeping
+// orientation, colour profile and quality), and an iPhone original is halved
+// in width and height via a canvas re-encode, which drops every tag. A file
+// the browser cannot decode but would have to change is refused, not posted.
+const IPHONE_ORIGINAL_EDGE = 2500; // px; an iOS "Large" export stops at 2048
+const CANVAS_MAX_PX = 16 << 20;    // iOS Safari's canvas ceiling
+const TIFF_TYPE_SIZE = [0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8, 4];
+
+function asciiAt(b, off, n) {
+  let s = "";
+  for (let i = off; i < off + n && i < b.length; i++) s += String.fromCharCode(b[i]);
+  return s;
+}
+function indexOfAscii(b, str, from = 0, to = b.length) {
+  const first = str.charCodeAt(0);
+  outer: for (let i = from; i <= to - str.length; i++) {
+    if (b[i] !== first) continue;
+    for (let j = 1; j < str.length; j++) if (b[i + j] !== str.charCodeAt(j)) continue outer;
+    return i;
+  }
+  return -1;
+}
+function isTiffHeader(b, o) {
+  return o + 8 <= b.length && ((b[o] === 0x49 && b[o + 1] === 0x49 && b[o + 2] === 0x2A && b[o + 3] === 0) ||
+    (b[o] === 0x4D && b[o + 1] === 0x4D && b[o + 2] === 0 && b[o + 3] === 0x2A));
+}
+function isHeic(f) { return /^image\/hei[cf]/.test(f.type) || /\.(heic|heif|hif)$/i.test(f.name); }
+
+// a JPEG's marker segments up to the scan, [{marker, start, len}] with len
+// covering the marker too; null when the bytes are not a JPEG
+function jpegSegments(b) {
+  if (b[0] !== 0xFF || b[1] !== 0xD8) return null;
+  const segs = [];
+  let p = 2;
+  while (p + 4 <= b.length && b[p] === 0xFF) {
+    const m = b[p + 1];
+    if (m === 0xFF) { p++; continue; }              // fill byte
+    if (m === 0xDA || m === 0xD9) break;            // SOS/EOI: entropy data follows
+    if (m === 0x01 || (m >= 0xD0 && m <= 0xD7)) { p += 2; continue; }
+    const len = 2 + ((b[p + 2] << 8) | b[p + 3]);
+    segs.push({ marker: m, start: p, len });
+    p += len;
+  }
+  return segs;
+}
+
+// where the EXIF TIFF block sits in the container: {tiff, end} or null
+function findTiff(b) {
+  const segs = jpegSegments(b);
+  if (segs) {
+    for (const s of segs)
+      if (s.marker === 0xE1 && asciiAt(b, s.start + 4, 6) === "Exif\0\0" && isTiffHeader(b, s.start + 10))
+        return { tiff: s.start + 10, end: Math.min(b.length, s.start + s.len) };
+    return null;
+  }
+  if (isTiffHeader(b, 0)) return { tiff: 0, end: b.length }; // TIFF / DNG
+  if (asciiAt(b, 1, 3) === "PNG") {
+    for (let p = 8; p + 8 <= b.length;) {
+      const len = b[p] * 2 ** 24 + ((b[p + 1] << 16) | (b[p + 2] << 8) | b[p + 3]);
+      const type = asciiAt(b, p + 4, 4);
+      if (type === "eXIf" && isTiffHeader(b, p + 8)) return { tiff: p + 8, end: Math.min(b.length, p + 8 + len) };
+      if (type === "IDAT" || type === "IEND") break;
+      p += 12 + len;
+    }
+    return null;
+  }
+  if (asciiAt(b, 0, 4) === "RIFF" && asciiAt(b, 8, 4) === "WEBP") {
+    for (let p = 12; p + 8 <= b.length;) {
+      const len = (b[p + 4] | (b[p + 5] << 8) | (b[p + 6] << 16)) + b[p + 7] * 2 ** 24;
+      if (asciiAt(b, p, 4) === "EXIF") {
+        const o = asciiAt(b, p + 8, 6) === "Exif\0\0" ? p + 14 : p + 8;
+        if (isTiffHeader(b, o)) return { tiff: o, end: Math.min(b.length, p + 8 + len) };
+      }
+      p += 8 + len + (len & 1);
+    }
+    return null;
+  }
+  // HEIC/HEIF: the Exif item is "Exif\0\0" followed by the TIFF block
+  for (let i = indexOfAscii(b, "Exif\0\0"); i >= 0; i = indexOfAscii(b, "Exif\0\0", i + 1))
+    if (isTiffHeader(b, i + 6)) return { tiff: i + 6, end: b.length };
+  return null;
+}
+
+// IFD0 of the TIFF block: make, orientation and the GPS sub-IFD's entries
+// (gps is null when a GPS pointer exists but the IFD could not be read)
+function readExif(b, loc) {
+  const { tiff: t, end } = loc;
+  const le = b[t] === 0x49;
+  const u16 = o => o >= t && o + 2 <= end ? (le ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1]) : 0;
+  const u32 = o => o >= t && o + 4 <= end
+    ? (le ? (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16)) + b[o + 3] * 2 ** 24
+          : b[o] * 2 ** 24 + ((b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3])) : 0;
+  const ifd = off => { // [{tag, type, size, at (entry), data (absolute)}] or null
+    if (off < t || off + 2 > end) return null;
+    const n = u16(off);
+    if (n > 512 || off + 2 + 12 * n > end) return null;
+    const out = [];
+    for (let i = 0, e = off + 2; i < n; i++, e += 12) {
+      const tag = u16(e), type = u16(e + 2), size = (TIFF_TYPE_SIZE[type] || 0) * u32(e + 4);
+      out.push({ tag, type, size, at: e, data: size > 4 ? t + u32(e + 8) : e + 8 });
+    }
+    return out;
+  };
+  const info = { make: "", orientation: 1, gpsIfd: 0, gps: [] };
+  for (const e of ifd(t + u32(t + 4)) || []) {
+    if (e.tag === 0x010F) info.make = asciiAt(b, e.data, Math.min(e.size, 32)).split("\0")[0].trim();
+    else if (e.tag === 0x0112) info.orientation = u16(e.at + 8);
+    else if (e.tag === 0x8825) info.gpsIfd = t + u32(e.at + 8);
+  }
+  if (info.gpsIfd) info.gps = ifd(info.gpsIfd);
+  return info;
+}
+
+// blank the GPS sub-IFD in place: each entry's out-of-line data, the entries
+// themselves, then the count. False if any byte to blank lies outside the
+// EXIF block (then the caller re-encodes instead of trusting the offsets).
+function zeroGps(b, loc, info) {
+  const lim = Math.min(loc.end, loc.tiff + (1 << 16)); // EXIF fits a JPEG segment
+  for (const e of info.gps) {
+    if (e.size > 4) {
+      if (e.data < loc.tiff || e.data + e.size > lim) return false;
+      b.fill(0, e.data, e.data + e.size);
+    }
+    b.fill(0, e.at, e.at + 12);
+  }
+  b[info.gpsIfd] = 0; b[info.gpsIfd + 1] = 0;
+  return true;
+}
+
+function decodeImage(blob) {
+  return new Promise(res => {
+    const url = URL.createObjectURL(blob), img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); res(null); };
+    img.src = url;
+  });
+}
+// draw at scale into a fresh JPEG (or PNG, keeping alpha): every tag goes and
+// the EXIF orientation is baked into the pixels
+function reencode(img, scale, png) {
+  let w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+  const fit = Math.sqrt(CANVAS_MAX_PX / (w * h));
+  if (fit < 1) { w *= fit; h *= fit; }
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return new Promise(res => c.toBlob(res, png ? "image/png" : "image/jpeg", 0.9));
+}
+
+// the file as it may go to the hub; throws with the reason when it may not
+async function prepareImage(f) {
+  if (!f.type.startsWith("image/") && !isHeic(f)) return f;
+  if (f.size > 32 << 20) throw new Error(f.name + " is over 32MB");
+  const b = new Uint8Array(await f.arrayBuffer());
+  const loc = findTiff(b);
+  const info = loc ? readExif(b, loc) : { make: "", gps: [] };
+  const apple = /^apple/i.test(info.make);
+  const exifGps = !info.gps || info.gps.some(e => e.tag !== 0);
+  const xmpGps = indexOfAscii(b, "GPSLatitude") >= 0 || indexOfAscii(b, "GPSLongitude") >= 0;
+  const png = asciiAt(b, 1, 3) === "PNG";
+  const stem = f.name.replace(/\.[^.]+$/, "") || "image";
+  const fresh = out => new File([out], stem + (png ? ".png" : ".jpg"), { type: out.type });
+
+  // an iPhone original goes at half size, which also drops every tag
+  let img = null;
+  if (apple || isHeic(f)) {
+    img = await decodeImage(f);
+    if (!img && isHeic(f)) throw new Error(f.name + ": this browser cannot read HEIC — export it as JPEG first");
+    if (img && apple && Math.max(img.naturalWidth, img.naturalHeight) >= IPHONE_ORIGINAL_EDGE) {
+      const out = await reencode(img, 0.5, png);
+      if (!out) throw new Error("Could not shrink " + f.name);
+      return fresh(out);
+    }
+  }
+  if (!exifGps && !xmpGps) return f;
+
+  // location: blank it in place when the container allows, else rebuild
+  const out = b.slice();
+  const segs = jpegSegments(out);
+  if (!exifGps || (loc && info.gps && zeroGps(out, loc, info))) {
+    if (segs) { // JPEG: also drop XMP packets that mention GPS, keep the rest
+      const parts = [];
+      let p = 0;
+      for (const s of segs) {
+        if (s.marker !== 0xE1 || asciiAt(out, s.start + 4, 21) !== "http://ns.adobe.com/x") continue;
+        if (indexOfAscii(out, "GPS", s.start, s.start + s.len) < 0) continue;
+        parts.push(out.subarray(p, s.start));
+        p = s.start + s.len;
+      }
+      parts.push(out.subarray(p));
+      return new File(parts, f.name, { type: f.type });
+    }
+    if (!xmpGps && !png) return new File([out], f.name, { type: f.type }); // PNG: eXIf has a CRC
+  }
+  img = img || await decodeImage(f);
+  if (!img) throw new Error(f.name + " has location data this browser cannot remove — export it as JPEG first");
+  const re = await reencode(img, 1, png);
+  if (!re) throw new Error("Could not process " + f.name);
+  return fresh(re);
+}
+
 $("#attach").onclick = () => $("#file").click();
 async function addFiles(files) {
-  for (const f of files) {
+  for (let f of files) {
     if (attachments.length >= 4) { say("Up to 4 attachments per post", true); break; }
-    if (f.size > 8 << 20) { say(f.name + " is over 8MB", true); continue; }
-    say("Uploading " + f.name + "…");
     try {
+      say("Preparing " + f.name + "…");
+      f = await prepareImage(f);
+      if (f.size > 8 << 20) throw new Error(f.name + " is over 8MB");
+      say("Uploading " + f.name + "…");
       const r = await api("/v1/hub/upload?hub=" + encodeURIComponent(hub),
         { method: "POST", body: f });
       const out = await r.json().catch(() => ({}));
