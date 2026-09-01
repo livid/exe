@@ -3907,7 +3907,8 @@ async function loadEditor(w) {
   } catch (e) {}
 }
 // ---- the desktop menu: NeXT-style, at the pointer, reaching everything ----
-// A right-click (long-press on touch) on bare desktop pops it up. Its shape
+// A right-click on bare desktop pops it up (on touch: a long-press there,
+// or a two-finger tap — anywhere, on a phone). Its shape
 // is a text file the daemon validates (GET/PUT /v1/ui/menu, stored as
 // System :menu.txt so it syncs to joined desks) and Customize… edits it
 // below. The daemon hands back a parsed tree; this side maps action names
@@ -4000,16 +4001,46 @@ $("#desktop").addEventListener("contextmenu", e => {
   clearTimeout(deskPressT);
   showDeskMenu(e.clientX, e.clientY);
 });
-// touch: a long-press (550ms without moving) on bare desktop; iOS never
-// fires contextmenu, Android does — showing twice is harmless
+// touch: a long-press (550ms without moving) on bare desktop, or a
+// two-finger tap (the trackpad right-click: both fingers down, both up
+// within 300ms, neither moved). On a phone the open window fills the
+// screen and bare desktop is rare, so there the tap counts anywhere that
+// is not a control, an open menu, a dialog or a modal — nothing else
+// claims two fingers, so it cannot collide. iOS never fires contextmenu,
+// Android does — showing twice is harmless
+const onTapSpot = t => IS_MOBILE
+  ? !!t.closest("#desktop") && !t.closest(".dropdown, .overlay, .window.modal, input, textarea, select, button")
+  : onDesk(t);
+let deskTap = null; // while two fingers are down: when, where, each finger's start
+const deskTapDrift = 10;
 $("#desktop").addEventListener("touchstart", e => {
-  if (e.touches.length !== 1 || !onDesk(e.target)) return;
-  const { clientX: x, clientY: y } = e.touches[0];
   clearTimeout(deskPressT);
-  deskPressT = setTimeout(() => { ctxGuardUntil = Date.now() + 700; showDeskMenu(x, y); }, 550);
+  deskTap = null;
+  const ts = [...e.touches];
+  if (ts.length === 1 && onDesk(ts[0].target)) {
+    const { clientX: x, clientY: y } = ts[0];
+    deskPressT = setTimeout(() => { ctxGuardUntil = Date.now() + 700; showDeskMenu(x, y); }, 550);
+  } else if (ts.length === 2 && ts.every(t => onTapSpot(t.target))) {
+    deskTap = { t: Date.now(), x: ts[0].clientX, y: ts[0].clientY,
+      start: new Map(ts.map(t => [t.identifier, [t.clientX, t.clientY]])) };
+  }
 }, { passive: true });
-for (const ev of ["touchmove", "touchend", "touchcancel"])
-  $("#desktop").addEventListener(ev, () => clearTimeout(deskPressT), { passive: true });
+$("#desktop").addEventListener("touchmove", e => {
+  clearTimeout(deskPressT);
+  if (deskTap && [...e.touches].some(t => {
+    const s = deskTap.start.get(t.identifier);
+    return !s || Math.hypot(t.clientX - s[0], t.clientY - s[1]) > deskTapDrift;
+  })) deskTap = null;
+}, { passive: true });
+$("#desktop").addEventListener("touchend", e => {
+  clearTimeout(deskPressT);
+  if (!deskTap || e.touches.length) return;
+  const tap = deskTap; deskTap = null;
+  if (Date.now() - tap.t > 300) return;
+  ctxGuardUntil = Date.now() + 700;
+  showDeskMenu(tap.x, tap.y);
+}, { passive: true });
+$("#desktop").addEventListener("touchcancel", () => { clearTimeout(deskPressT); deskTap = null; }, { passive: true });
 function applyDeskMenu(r) { deskMenu = r.menu || []; deskMenuErr = r.error || ""; }
 const loadDeskMenu = () => j("/v1/ui/menu").then(applyDeskMenu);
 // another desk (or a peer) changed menu.txt: refetch, and refresh an open
