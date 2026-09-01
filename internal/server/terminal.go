@@ -27,6 +27,14 @@ func (w *wsWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// WriteText sends a control message ({"status":…}) as a text frame, in
+// order with the terminal bytes.
+func (w *wsWriter) WriteText(p []byte) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.c.Write(w.ctx, websocket.MessageText, p)
+}
+
 // handleTerminal bridges a browser WebSocket to an interactive SSH shell in
 // the VM. Binary frames carry terminal bytes both ways; text frames carry
 // control messages ({"resize":[cols,rows]}).

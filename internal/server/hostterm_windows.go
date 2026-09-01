@@ -46,7 +46,8 @@ func startHostShell(command string, cols, rows int) (hostShell, error) {
 }
 
 // startAgent runs an agent's CLI (Claude Code, Codex) on a ConPTY in the
-// project dir. No tmux on Windows — each window is a fresh CLI run.
+// project dir. No tmux on Windows — each window is a fresh CLI run — and
+// no status-line hook: its bridge is a sh one-liner (agentStatusArgs).
 func (s *Server) startAgent(a hostAgent, cols, rows int) (hostShell, error) {
 	bin := agentPath(a)
 	if bin == "" {

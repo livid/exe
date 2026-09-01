@@ -372,9 +372,10 @@ td.actions button + button { margin-left: 8px; }
 /* the Chat status line opens the backend switcher */
 #chat-status { cursor: pointer; }
 #chat-status:hover { text-decoration: underline; }
-/* ChatGPT token usage sits at the status line's far right */
-#chat-usage { margin-left: auto; white-space: nowrap; }
-#chat-usage .hot { color: #a33; }
+/* usage figures sit at the status line's far right: ChatGPT's in Chat,
+   the agent session's in a Claude Code window */
+#chat-usage, .term-usage { margin-left: auto; white-space: nowrap; }
+#chat-usage .hot, .term-usage .hot { color: #a33; }
 
 /* modal dialogs */
 .overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.15);
@@ -4651,12 +4652,13 @@ function openHostTermWin(app, cmd) {
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
       <div class="win-body" style="padding:0"><div class="hostterm-box"></div></div>
-      <div class="statusbar"><span class="term-status">…</span></div>
+      <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
       ${GROW_TILE}
     </div>`;
   w.querySelector(".title").textContent = agent ? agent.title
     : tool || (n === 1 ? "Terminal" : "Terminal " + n);
-  const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status");
+  const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status"),
+    usage = w.querySelector(".term-usage");
   // saved height goes on before fit() so the terminal opens at the right rows
   // (desktop only — mobile keeps its fullscreen 100% height)
   if (geom && geom.h && !IS_MOBILE)
@@ -4699,8 +4701,16 @@ function openHostTermWin(app, cmd) {
       if (initial) term.focus(); // never steal focus on a background reconnect
       requestAnimationFrame(() => termSpacerFix(box, term));
     };
-    ws.onmessage = e => term.write(new Uint8Array(e.data));
+    // binary frames are the terminal; a text frame is the daemon's
+    // {"status":…} with the agent session's figures for the status line
+    ws.onmessage = e => {
+      if (typeof e.data !== "string") { term.write(new Uint8Array(e.data)); return; }
+      let msg;
+      try { msg = JSON.parse(e.data); } catch (err) { return; }
+      if (msg.status) showAgentUsage(usage, msg.status);
+    };
     ws.onclose = e => {
+      usage.hidden = true; // the figures come back with the link
       // An agent window is a persistent tmux session, so a dead *link*
       // (daemon restart, network blip — close code isn't 1000) is worth
       // winning back automatically. A clean 1000 means the session side
@@ -4733,6 +4743,58 @@ function openHostTermWin(app, cmd) {
     try { ws.close(); } catch (e) {}
     term.dispose();
   };
+}
+
+// An agent window's status line carries its session's figures at the far
+// right, the way Chat's carries ChatGPT's: the model, context in use,
+// tokens, cost and the plan's 5-hour and 7-day windows, from Claude
+// Code's status-line hook by way of the daemon (agentstatus.go); the
+// tooltip has the long form. Anything at 90% turns red.
+function showAgentUsage(box, st) {
+  const parts = [], tips = [];
+  const add = (text, hot) => {
+    if (parts.length) parts.push(" · ");
+    parts.push(hot ? el("span", { class: "hot" }, text) : text);
+  };
+  if (st.model) {
+    add(st.model);
+    tips.push(st.model + (st.context_size ? " — " + kfmt(st.context_size) + " token context window" : ""));
+  }
+  const ctx = Math.round(st.context_pct || 0); // null until the first reply
+  add("ctx " + ctx + "%", ctx >= 90);
+  tips.push("context in use: " + ctx + "%");
+  if (st.input_tokens || st.output_tokens) {
+    add(kfmt(st.input_tokens) + " in / " + kfmt(st.output_tokens) + " out");
+    tips.push("tokens this session: " + st.input_tokens.toLocaleString() + " in, " + st.output_tokens.toLocaleString() + " out");
+  }
+  if (st.cost_usd) {
+    add("$" + st.cost_usd.toFixed(2));
+    tips.push("this session's API calls at list price: $" + st.cost_usd.toFixed(2));
+  }
+  for (const [name, label, long] of [["five_hour", "5h", "5-hour window"], ["seven_day", "wk", "7-day window"]]) {
+    const l = st.limits && st.limits[name];
+    if (!l) continue;
+    const pct = Math.max(0, Math.min(100, Math.round(l.used_pct)));
+    add(label + " " + pct + "%", pct >= 90);
+    tips.push(long + ": " + pct + "% used — resets " + agentResetAt(l.resets_at));
+  }
+  box.replaceChildren(...parts);
+  box.title = tips.join("\n");
+  box.hidden = false;
+}
+// the hook gives a window's reset as a unix time; a date string if that changes
+function agentResetAt(v) {
+  if (typeof v === "number") return oaiResetAt(v);
+  if (typeof v === "string" && !isNaN(Date.parse(v))) return oaiResetAt(Date.parse(v) / 1000);
+  return "?";
+}
+// a token count in the status line's few characters: 812, 9.8k, 41k, 1M
+function kfmt(n) {
+  n = n || 0;
+  if (n < 1000) return String(n);
+  if (n < 10000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  if (n < 1e6) return Math.round(n / 1000) + "k";
+  return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
 }
 
 // ---- web services ----

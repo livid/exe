@@ -27,14 +27,17 @@ type hostShell interface {
 // name shown to people, and session the tmux session that keeps the
 // conversation alive between windows. homeDirs are extra per-user install
 // locations (relative to $HOME) beyond the usual ones cliPath checks.
+// statusLine marks a CLI with a status-line hook the window's status line
+// can draw the session's figures from (agentstatus.go).
 type hostAgent struct {
 	app, bin, title, session string
 	homeDirs                 []string
+	statusLine               bool
 }
 
 var hostAgents = map[string]hostAgent{
 	"claude": {app: "claude", bin: "claude", title: "Claude Code", session: "exe-claude",
-		homeDirs: []string{filepath.Join(".claude", "local")}},
+		homeDirs: []string{filepath.Join(".claude", "local")}, statusLine: true},
 	"codex": {app: "codex", bin: "codex", title: "Codex", session: "exe-codex"},
 }
 
@@ -126,13 +129,16 @@ func shQuote(s string) string {
 // VM terminal: binary frames carry terminal bytes both ways, text frames
 // carry control messages ({"resize":[cols,rows]}). ?app=claude or
 // ?app=codex runs that agent's CLI instead of a shell — the desktop's
-// Claude Code and Codex icons (hostAgents).
+// Claude Code and Codex icons (hostAgents); an agent with a status-line
+// hook also gets text frames the other way, {"status":…} with the
+// session's figures for the window's status line (agentstatus.go).
 // ?cmd=<command line> runs that one command in a login shell — the desktop
 // menu's "terminal <command>" shortcut to a CLI tool; the session ends
 // with the command.
 func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	var sh hostShell
 	var err error
+	var statusFile string
 	if app := r.URL.Query().Get("app"); app != "" {
 		a, ok := hostAgents[app]
 		if !ok {
@@ -140,6 +146,9 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sh, err = s.startAgent(a, 80, 24)
+		if a.statusLine {
+			statusFile = s.agentStatusFile(a)
+		}
 	} else {
 		sh, err = startHostShell(r.URL.Query().Get("cmd"), 80, 24)
 	}
@@ -166,6 +175,9 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusNormalClosure, "session ended")
 		cancel()
 	}()
+	if statusFile != "" {
+		go pushAgentStatus(ctx, out, statusFile)
+	}
 
 	for {
 		typ, data, err := c.Read(ctx)

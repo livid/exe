@@ -41,6 +41,12 @@ window and reopening it returns to the same conversation), one icon per VM,
 one per installed app, plus **Newsfeed**, **Chat** (appears when Ollama is
 reachable) and the **Trash**. Double-click opens things.
 
+A Claude Code window's status line shows the session's figures at its
+right — the model, context in use, tokens, cost and the plan's 5-hour and
+7-day usage windows — kept current after every reply by Claude Code's own
+status-line hook; hover for the long form. A status line of your own in
+`~/.claude/settings.json` keeps working inside the terminal.
+
 Windows behave like OS 9 windows: drag the title bar to move, drag the
 left/right/bottom edges or the grow corner to resize, click the shade box to
 collapse a window to its title bar, the zoom box to toggle its size. The
