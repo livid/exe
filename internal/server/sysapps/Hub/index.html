@@ -78,6 +78,9 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-text { margin: 3px 0 0 22px; white-space: pre-wrap; overflow-wrap: break-word;
   user-select: text; cursor: text; }
 .p-text a { color: var(--hl); }
+/* `inline code` in a post: Monaco on a slightly darker Platinum field */
+.p-text code { font: 11px/1 var(--mono); background: #e4e4e4; border: 1px solid #ccc;
+  border-radius: 2px; padding: 0 3px; }
 .p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; }
 .p-embeds img { max-width: 180px; max-height: 140px; border: 1px solid var(--black);
   background: var(--g300); cursor: pointer; }
@@ -329,11 +332,28 @@ function viewImage(em) {
   else window.open(url, "_blank");
 }
 
-// URLs in post text become links that open in a new tab. The text is
-// split into text nodes around anchor elements — never markup — so a post
-// cannot smuggle HTML in. Same matcher as the terminal windows: http(s)
-// only, and the punctuation that usually trails a URL in prose stays text.
+// Post text is rendered as DOM nodes — text, anchors and code elements,
+// never markup — so a post cannot smuggle HTML in. `inline code` spans
+// (one or two backticks, matched within a line, with CommonMark's one-space
+// trim) become <code> and their contents stay literal: a URL inside
+// backticks is not a link. URLs elsewhere become links that open in a new
+// tab, with the same matcher as the terminal windows: http(s) only, and
+// the punctuation that usually trails a URL in prose stays text.
 const URL_RE = /https?:\/\/[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~\[\]`()<>]/g;
+const CODE_RE = /(`{1,2})(?!`)(.+?)(?<!`)\1(?!`)/g;
+function formatText(text) {
+  const out = [];
+  let last = 0;
+  for (const m of text.matchAll(CODE_RE)) {
+    if (m.index > last) out.push(...linkify(text.slice(last, m.index)));
+    let code = m[2];
+    if (code.length > 2 && code.startsWith(" ") && code.endsWith(" ") && code.trim()) code = code.slice(1, -1);
+    out.push(el("code", {}, code));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(...linkify(text.slice(last)));
+  return out;
+}
 function linkify(text) {
   const out = [];
   let last = 0;
@@ -354,7 +374,7 @@ function renderPost(p, opts = {}) {
     el("span", { class: "p-time" }, fmtTime(p.received)));
   const node = el("div", { class: "post" + (opts.focus ? " focus" : "") }, head);
   node.dataset.id = p.id;
-  if (p.text) node.append(el("div", { class: "p-text" }, ...linkify(p.text)));
+  if (p.text) node.append(el("div", { class: "p-text" }, ...formatText(p.text)));
   if (p.embeds && p.embeds.length) {
     const box = el("div", { class: "p-embeds" });
     for (const em of p.embeds) {
