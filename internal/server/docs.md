@@ -27,7 +27,9 @@ tools, Cloudflare and Help. **Customize…** at its bottom opens the menu's
 text file in an editor: one item per line — a label, a tab or two spaces,
 then an action — a label on its own starts a submenu (indent the lines
 under it), `-` is a separator, and `@vms`, `@apps` and `@windows` are lists
-that fill themselves in. The file's own header lists every action. Save
+that fill themselves in. `terminal btop` makes an item a shortcut to a CLI
+tool: it opens in a Terminal window of its own, titled after it, that ends
+when it exits. The file's own header lists every action. Save
 hands it to the daemon, which checks it — a bad line is named and nothing
 changes — and then puts the new menu on every desk sharing this one; an
 empty file restores the factory menu.

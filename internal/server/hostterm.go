@@ -77,13 +77,16 @@ func claudeEnv(claude string) []string {
 // VM terminal: binary frames carry terminal bytes both ways, text frames
 // carry control messages ({"resize":[cols,rows]}). ?app=claude runs the
 // Claude Code CLI instead of a shell — the desktop's Claude Code icon.
+// ?cmd=<command line> runs that one command in a login shell — the desktop
+// menu's "terminal <command>" shortcut to a CLI tool; the session ends
+// with the command.
 func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	var sh hostShell
 	var err error
 	if r.URL.Query().Get("app") == "claude" {
 		sh, err = s.startClaudeCode(80, 24)
 	} else {
-		sh, err = startHostShell(80, 24)
+		sh, err = startHostShell(r.URL.Query().Get("cmd"), 80, 24)
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)

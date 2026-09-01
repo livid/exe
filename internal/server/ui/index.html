@@ -3755,7 +3755,7 @@ async function loadEditor(w) {
 // self-filling lists (@vms, @apps, @windows) at the moment the menu opens.
 let deskMenu = [], deskMenuErr = "";
 const DESK_ACTS = {
-  terminal: { run: () => openHostTermWin() },
+  terminal: { run: cmd => openHostTermWin(undefined, cmd) },
   claude: { run: () => openHostTermWin("claude"), dis: () => !hostClaude },
   search: { run: () => openSearchWin() },
   trash: { run: () => openWin("#win-trash") },
@@ -4520,8 +4520,12 @@ async function termPaste(term) {
 // every claude window is the same conversation (opening a second one takes
 // it over from the first). Because the session outlives its window, the
 // Claude window keeps a stable id and reopens at its last geometry.
-function openHostTermWin(app) {
+// app "claude" is the Claude Code window; cmd is a command line to run in
+// place of a shell (the desktop menu's "terminal btop" shortcut) — the
+// window is titled after the tool and ends when it exits
+function openHostTermWin(app, cmd) {
   const isClaude = app === "claude";
+  const tool = cmd ? cmd.trim().split(/\s+/)[0].split("/").pop() : "";
   if (isClaude) {
     // one session, one window: reopening the icon just brings it forward
     // (a disconnected window is closed first, then reopened to reconnect)
@@ -4551,7 +4555,7 @@ function openHostTermWin(app) {
       ${GROW_TILE}
     </div>`;
   w.querySelector(".title").textContent = app === "claude" ? "Claude Code"
-    : n === 1 ? "Terminal" : "Terminal " + n;
+    : tool || (n === 1 ? "Terminal" : "Terminal " + n);
   const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status");
   // saved height goes on before fit() so the terminal opens at the right rows
   // (desktop only — mobile keeps its fullscreen 100% height)
@@ -4573,6 +4577,7 @@ function openHostTermWin(app) {
   const qs = new URLSearchParams();
   if (tokenInput.value) qs.set("token", tokenInput.value);
   if (app) qs.set("app", app);
+  if (cmd) qs.set("cmd", cmd);
   const url = `${proto}://${location.host}/v1/host/terminal${qs.size ? "?" + qs : ""}`;
   const enc = new TextEncoder();
   let ws = null, retry = 0, retryTimer = 0;
@@ -4611,8 +4616,8 @@ function openHostTermWin(app) {
         return;
       }
       term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-      status.textContent = app === "claude"
-        ? "session ended — close and reopen to start again"
+      status.textContent = app === "claude" ? "session ended — close and reopen to start again"
+        : tool ? tool + " exited — close and reopen to run it again"
         : "disconnected — close and reopen for a new shell";
     };
   }

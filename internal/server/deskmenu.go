@@ -61,6 +61,7 @@ type deskMenuItem struct {
 type deskMenuAction struct {
 	minArgs, maxArgs int
 	usage            string // the argument hint in errors, e.g. "<name> [tab]"
+	raw              bool   // the whole remainder is one argument (a command line)
 	check            func(args []string) error
 }
 
@@ -73,7 +74,10 @@ var deskMenuActions = map[string]deskMenuAction{
 	"winconfig": {}, "winlog": {}, "join": {}, "cfstatus": {}, "cfwizard": {},
 	"token": {}, "docs": {}, "skillguide": {},
 	// desktop icons and windows
-	"terminal": {}, "claude": {}, "search": {}, "trash": {}, "customize": {},
+	"claude": {}, "search": {}, "trash": {}, "customize": {},
+	// a bare terminal is a shell; with a command line it's a shortcut to a
+	// CLI tool, run in a login shell and gone when the tool exits
+	"terminal":  {maxArgs: 1, raw: true, usage: "[command]"},
 	"workspace": {maxArgs: 1, usage: "[folder]", check: checkMenuPath},
 	"edit":      {minArgs: 1, maxArgs: 1, usage: "<file>", check: checkMenuPath},
 	"app":       {minArgs: 1, maxArgs: 1, usage: "<name>"},
@@ -116,13 +120,14 @@ const deskMenuDefault = `# Desktop menu — right-click the desktop (long-press 
 #
 # Actions:
 #   newvm  upload  refresh  closewin  search  trash  customize
-#   terminal  claude  workspace [folder]  edit <file>
+#   terminal [command]  claude  workspace [folder]  edit <file>
 #   winvms  winmyapps  winchat  winnews  winicons  winconfig  winlog
 #   vm <name> [svc|term|vibe|expose|sess|notes]  app <name>  chat [vm]
 #   join  cfstatus  cfwizard  token  url <https://…>
 #   about  docs  skillguide
 # Lists that fill themselves in: @vms  @apps  @windows
 #   alone on a line they expand in place; after a label they fill a submenu.
+# A shortcut to a CLI tool: "btop  terminal btop" opens it in a Terminal window.
 
 New VM…              newvm
 New Terminal         terminal
@@ -271,6 +276,12 @@ func parseDeskMenu(text string) ([]deskMenuItem, error) {
 				return fail(ln, "unknown action %q", f[0])
 			}
 			args := f[1:]
+			if spec.raw {
+				args = nil
+				if rest := strings.TrimSpace(action[len(f[0]):]); rest != "" {
+					args = []string{rest}
+				}
+			}
 			switch {
 			case len(args) < spec.minArgs:
 				return fail(ln, "%s needs %s", f[0], spec.usage)

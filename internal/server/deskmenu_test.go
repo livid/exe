@@ -68,6 +68,14 @@ func TestDeskMenuParseShapes(t *testing.T) {
 	if !menu[2].Sep || menu[3].Gen != "apps" || menu[3].Label != "Apps" || menu[4].Gen != "vms" || menu[4].Label != "" {
 		t.Fatalf("separator/generator items wrong: %+v", menu[2:])
 	}
+	// terminal keeps its command line whole, spaces and all
+	menu, err = parseDeskMenu("Top  terminal htop  -d   10\nShell\tterminal\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(menu[0].Args) != 1 || menu[0].Args[0] != "htop  -d   10" || menu[1].Args != nil {
+		t.Fatalf("terminal args wrong: %+v", menu)
+	}
 }
 
 func TestDeskMenuParseErrors(t *testing.T) {

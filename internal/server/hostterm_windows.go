@@ -20,11 +20,16 @@ func (s *windowsShell) Resize(cols, rows int)       { s.pty.Resize(cols, rows) }
 func (s *windowsShell) Close() error                { return s.pty.Close() }
 
 // startHostShell starts an interactive PowerShell on a ConPTY — PowerShell 7
-// when installed, Windows PowerShell otherwise.
-func startHostShell(cols, rows int) (hostShell, error) {
+// when installed, Windows PowerShell otherwise. A non-empty command runs in
+// it instead of a prompt and the session ends when it exits.
+func startHostShell(command string, cols, rows int) (hostShell, error) {
 	shell := "powershell.exe"
 	if p, err := exec.LookPath("pwsh.exe"); err == nil {
 		shell = p
+	}
+	line := fmt.Sprintf(`"%s"`, shell)
+	if command != "" {
+		line = fmt.Sprintf(`"%s" -NoLogo -Command %s`, shell, command)
 	}
 	opts := []conpty.ConPtyOption{
 		conpty.ConPtyDimensions(cols, rows),
@@ -33,7 +38,7 @@ func startHostShell(cols, rows int) (hostShell, error) {
 	if home, err := os.UserHomeDir(); err == nil {
 		opts = append(opts, conpty.ConPtyWorkDir(home))
 	}
-	pty, err := conpty.Start(fmt.Sprintf(`"%s"`, shell), opts...)
+	pty, err := conpty.Start(line, opts...)
 	if err != nil {
 		return nil, err
 	}

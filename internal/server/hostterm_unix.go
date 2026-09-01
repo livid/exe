@@ -76,8 +76,10 @@ func (s *Server) startClaudeCode(cols, rows int) (hostShell, error) {
 	return &unixShell{f: f, cmd: cmd}, nil
 }
 
-// startHostShell starts the user's login shell on a pty.
-func startHostShell(cols, rows int) (hostShell, error) {
+// startHostShell starts the user's login shell on a pty; a non-empty command
+// runs in it instead of a prompt (-l so the profile's PATH applies — the
+// daemon's own is often slim), and the session ends when it exits.
+func startHostShell(command string, cols, rows int) (hostShell, error) {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		if runtime.GOOS == "darwin" {
@@ -87,6 +89,9 @@ func startHostShell(cols, rows int) (hostShell, error) {
 		}
 	}
 	cmd := exec.Command(shell, "-l")
+	if command != "" {
+		cmd = exec.Command(shell, "-l", "-c", command)
+	}
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	if home, err := os.UserHomeDir(); err == nil {
 		cmd.Dir = home
