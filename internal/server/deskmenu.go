@@ -74,7 +74,7 @@ var deskMenuActions = map[string]deskMenuAction{
 	"winconfig": {}, "winlog": {}, "join": {}, "cfstatus": {}, "cfwizard": {},
 	"token": {}, "docs": {}, "skillguide": {},
 	// desktop icons and windows
-	"claude": {}, "search": {}, "trash": {}, "customize": {},
+	"claude": {}, "codex": {}, "search": {}, "trash": {}, "customize": {},
 	// a bare terminal is a shell; with a command line it's a shortcut to a
 	// CLI tool, run in a login shell and gone when the tool exits
 	"terminal":  {maxArgs: 1, raw: true, usage: "[command]"},
@@ -120,7 +120,7 @@ const deskMenuDefault = `# Desktop menu — right-click the desktop (long-press 
 #
 # Actions:
 #   newvm  upload  refresh  closewin  search  trash  customize
-#   terminal [command]  claude  workspace [folder]  edit <file>
+#   terminal [command]  claude  codex  workspace [folder]  edit <file>
 #   winvms  winmyapps  winchat  winnews  winicons  winconfig  winlog
 #   vm <name> [svc|term|vibe|expose|sess|notes]  app <name>  chat [vm]
 #   join  cfstatus  cfwizard  token  url <https://…>
@@ -140,6 +140,7 @@ Windows              @windows
 Tools
   Chat               winchat
   Claude Code        claude
+  Codex              codex
   Newsfeed           winnews
   Search…            search
   Icon Editor        winicons

@@ -45,19 +45,19 @@ func startHostShell(command string, cols, rows int) (hostShell, error) {
 	return &windowsShell{pty: pty}, nil
 }
 
-// startClaudeCode runs the Claude Code CLI on a ConPTY in the project dir.
-// No tmux on Windows — each window is a fresh CLI run.
-func (s *Server) startClaudeCode(cols, rows int) (hostShell, error) {
-	claude := claudePath()
-	if claude == "" {
-		return nil, fmt.Errorf("Claude Code is not installed on this host")
+// startAgent runs an agent's CLI (Claude Code, Codex) on a ConPTY in the
+// project dir. No tmux on Windows — each window is a fresh CLI run.
+func (s *Server) startAgent(a hostAgent, cols, rows int) (hostShell, error) {
+	bin := agentPath(a)
+	if bin == "" {
+		return nil, fmt.Errorf("%s is not installed on this host", a.title)
 	}
 	opts := []conpty.ConPtyOption{
 		conpty.ConPtyDimensions(cols, rows),
-		conpty.ConPtyEnv(claudeEnv(claude)),
-		conpty.ConPtyWorkDir(s.claudeProjectDir()),
+		conpty.ConPtyEnv(cliEnv(bin)),
+		conpty.ConPtyWorkDir(s.agentProjectDir()),
 	}
-	pty, err := conpty.Start(fmt.Sprintf(`"%s"`, claude), opts...)
+	pty, err := conpty.Start(fmt.Sprintf(`"%s"`, bin), opts...)
 	if err != nil {
 		return nil, err
 	}

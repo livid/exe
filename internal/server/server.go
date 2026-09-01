@@ -714,8 +714,9 @@ func (s *Server) handleTailscale(w http.ResponseWriter, r *http.Request) {
 
 // handleHostInfo reports this host's identity for the About window: hostname,
 // machine model, LAN IPv4, and the Tailscale IPv4 when on a tailnet — plus
-// whether the Claude Code CLI is installed (the desktop shows its icon only
-// then) and the project dir its sessions open in.
+// the agent CLIs installed here (agents: {claude: {dir}, codex: {dir}} —
+// the desktop shows an agent's icon only then) and the project dir their
+// sessions open in.
 func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	host, _ := os.Hostname()
 	ts := config.TailscaleIP()
@@ -723,14 +724,16 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	if lan == ts {
 		lan = "" // the default route is the tailnet; don't show the same IP twice
 	}
-	info := map[string]any{
+	agents := map[string]any{}
+	for app, a := range hostAgents {
+		if agentPath(a) != "" {
+			agents[app] = map[string]any{"dir": s.agentProjectDir()}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
 		"hostname": host, "machine": hostinfo.Model(), "lan_ip": lan, "tailscale_ip": ts,
-	}
-	if claudePath() != "" {
-		info["claude_code"] = true
-		info["claude_dir"] = s.claudeProjectDir()
-	}
-	writeJSON(w, http.StatusOK, info)
+		"agents": agents,
+	})
 }
 
 func (s *Server) handleRoutes(w http.ResponseWriter, r *http.Request) {

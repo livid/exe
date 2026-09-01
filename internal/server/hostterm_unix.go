@@ -3,7 +3,7 @@
 package server
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -34,7 +34,7 @@ func (s *unixShell) Resize(cols, rows int) {
 // master closed. The old code closed the master first and SIGKILLed just
 // the shell, which tore down that terminal before the exit and left the
 // window's children orphaned to init. SIGKILL to the process group is now
-// only the fallback for a shell that ignores the hangup. (The Claude Code
+// only the fallback for a shell that ignores the hangup. (An agent
 // window's `cmd` is a tmux client, and hanging it up simply detaches,
 // leaving the persistent session for the icon to return to.)
 func (s *unixShell) Close() error {
@@ -51,24 +51,29 @@ func (s *unixShell) Close() error {
 	return s.f.Close()
 }
 
-// startClaudeCode runs the Claude Code CLI on a pty in the project dir.
-// With tmux on the host the CLI lives inside a persistent "exe-claude"
-// session: closing the window only detaches, and the desktop icon returns
-// to the running conversation. -A attaches when the session already
-// exists, -D kicks any stale client so the pty size follows the newest
-// window. Without tmux each window is a fresh CLI run.
-func (s *Server) startClaudeCode(cols, rows int) (hostShell, error) {
-	claude := claudePath()
-	if claude == "" {
-		return nil, errors.New("Claude Code is not installed on this host")
+// startAgent runs an agent's CLI (Claude Code, Codex) on a pty in the
+// project dir. With tmux on the host the CLI lives inside a persistent
+// session of its own ("exe-claude", "exe-codex"): closing the window only
+// detaches, and the desktop icon returns to the running conversation. -A
+// attaches when the session already exists, -D kicks any stale client so
+// the pty size follows the newest window. The command line goes through
+// env so the CLI's own directory is on PATH inside the session too: a
+// tmux server's environment is fixed when it starts (by the first agent
+// opened), and an npm shim like codex under nvm needs the node beside it.
+// Without tmux each window is a fresh CLI run.
+func (s *Server) startAgent(a hostAgent, cols, rows int) (hostShell, error) {
+	bin := agentPath(a)
+	if bin == "" {
+		return nil, fmt.Errorf("%s is not installed on this host", a.title)
 	}
-	dir := s.claudeProjectDir()
-	cmd := exec.Command(claude)
+	dir := s.agentProjectDir()
+	cmd := exec.Command(bin)
 	if tmux, err := exec.LookPath("tmux"); err == nil {
-		cmd = exec.Command(tmux, "new-session", "-A", "-D", "-s", "exe-claude", "-c", dir, claude)
+		line := "env " + shQuote("PATH="+cliPATH(bin)) + " " + shQuote(bin)
+		cmd = exec.Command(tmux, "new-session", "-A", "-D", "-s", a.session, "-c", dir, line)
 	}
 	cmd.Dir = dir
-	cmd.Env = claudeEnv(claude)
+	cmd.Env = cliEnv(bin)
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
 		return nil, err

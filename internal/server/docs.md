@@ -35,9 +35,11 @@ changes — and then puts the new menu on every desk sharing this one; an
 empty file restores the factory menu.
 
 Desktop icons: **Workspace** (shared files), **Terminal** (a shell on this
-host machine), one icon per VM, one per installed app, plus **Newsfeed**,
-**Chat** (appears when Ollama is reachable) and the **Trash**. Double-click
-opens things.
+host machine), **Claude Code** and **Codex** (each appears when its CLI is
+installed on this host; one persistent session per agent, so closing the
+window and reopening it returns to the same conversation), one icon per VM,
+one per installed app, plus **Newsfeed**, **Chat** (appears when Ollama is
+reachable) and the **Trash**. Double-click opens things.
 
 Windows behave like OS 9 windows: drag the title bar to move, drag the
 left/right/bottom edges or the grow corner to resize, click the shade box to

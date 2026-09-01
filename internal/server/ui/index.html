@@ -1808,8 +1808,8 @@ function closeWin(w) {
   if (w.id === "win-log") stopLogStream();
   // a closed Terminal is gone for good: end the shell and drop the window
   if (w.classList.contains("term-window")) { w._teardown(); w.remove(); }
-  // an explicit close means this tab no longer restores Claude on reload
-  if (w.id === "win-claude") sessionStorage.removeItem("exe_claude_open");
+  // an explicit close means this tab no longer restores the agent on reload
+  if (agentOfWin(w.id)) sessionStorage.removeItem("exe_" + agentOfWin(w.id) + "_open");
   if (IS_MOBILE) {
     if (!MOB_DIALOG.has(w.id)) {
       const prev = document.getElementById(mobileStack.pop() || "");
@@ -2012,16 +2012,29 @@ const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatW
 let winApplying = false; // applying a stored/remote snapshot — don't echo it back
 let winDragging = null;  // window under the local pointer — remote moves lose
 let winRev = 0;
-// last-known Claude Code window geometry: the tmux session behind it is
+// the agent CLIs the desktop opens in windows of their own — the key is
+// the ?app= value the daemon runs and the window id is "win-" + key. Each
+// has one persistent tmux session behind it, so its window keeps a stable
+// id, remembers its geometry and reconnects on its own (openHostTermWin);
+// its icon shows only on hosts with the CLI installed (hostAgents)
+const AGENT_APPS = {
+  claude: { title: "Claude Code", icon: () => CLAUDE_ICON },
+  codex: { title: "Codex", icon: () => CODEX_ICON },
+};
+// the agent behind a window id ("win-claude" → "claude"), "" for any other
+function agentOfWin(id) {
+  return id.startsWith("win-") && AGENT_APPS[id.slice(4)] ? id.slice(4) : "";
+}
+// last-known geometry of each agent window: the tmux session behind it is
 // persistent, so its geometry rides the snapshot even while the window is
 // closed and the next open puts it back where it was left
-let claudeGeom = null;
+const agentGeom = {}; // app → { l, t, w, h, … }
 
 function winSnapshot() {
   const st = {};
   document.querySelectorAll("#desktop .window").forEach(w => {
     // Terminal windows are one-off live sessions under ephemeral ids — only
-    // the Claude Code window (one persistent session, stable id) is saved
+    // the agent windows (one persistent session each, stable ids) are saved
     if (w.id.startsWith("win-term-")) return;
     // style.*, not offset*: hidden windows are display:none, which reads 0
     st[w.id] = {
@@ -2030,14 +2043,16 @@ function winSnapshot() {
       z: +w.style.zIndex || 0,
       open: !w.hidden, shaded: w.classList.contains("shaded"),
     };
-    // app, Finder, editor, image, chat and Claude windows are also resizable
+    // app, Finder, editor, image, chat and agent windows are also resizable
     const g = w.querySelector(".app-frame, .finder-icons, .ed-text, .iv-box, .chat-wrap, .hostterm-box");
     if (g) st[w.id].h = parseInt(g.style.height) || g.offsetHeight || 0;
   });
-  // the Claude window is removed from the DOM on close, so its last
+  // an agent window is removed from the DOM on close, so its last
   // geometry is carried forward instead of dropped from the snapshot
-  if (st["win-claude"]) claudeGeom = st["win-claude"];
-  else if (claudeGeom) st["win-claude"] = { ...claudeGeom, open: false };
+  for (const app of Object.keys(AGENT_APPS)) {
+    if (st["win-" + app]) agentGeom[app] = st["win-" + app];
+    else if (agentGeom[app]) st["win-" + app] = { ...agentGeom[app], open: false };
+  }
   st["win-log"].h = parseInt($("#log-out").style.height) || $("#log-out").offsetHeight || 380;
   st["win-news"].h = parseInt($("#news-list").style.height) || $("#news-list").offsetHeight || 380;
   st["win-docs"].h = parseInt($("#docs-body").style.height) || $("#docs-body").offsetHeight || 420;
@@ -2054,9 +2069,9 @@ function winSnapshot() {
 }
 function applyWinState(st) {
   if (!st || IS_MOBILE) return; // snapshots describe the spatial desktop, not the phone view
-  // remember the Claude window's geometry for its next open — never auto-open
-  // it: connecting takes the tmux session over from whichever browser has it
-  if (st["win-claude"]) claudeGeom = st["win-claude"];
+  // remember each agent window's geometry for its next open — never auto-open
+  // one: connecting takes the tmux session over from whichever browser has it
+  for (const app of Object.keys(AGENT_APPS)) if (st["win-" + app]) agentGeom[app] = st["win-" + app];
   winApplying = true;
   try {
     // pass 1: open/close (openers bump z and .front; geometry fixes that after)
@@ -2124,7 +2139,7 @@ function applyWinState(st) {
         const fr = w.querySelector(".app-frame");
         if (fr) fr.style.height = Math.max(120, Math.min(window.innerHeight - 120, v.h)) + "px";
       }
-      if (id === "win-claude") {
+      if (agentOfWin(id)) {
         if (v.h) {
           const g = w.querySelector(".hostterm-box");
           if (g) g.style.height = Math.max(160, Math.min(window.innerHeight - 170, v.h)) + "px";
@@ -2187,10 +2202,10 @@ function winRestore() {
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem("exe_winstate") || "null"); } catch (e) {}
   if (cached) applyWinState(cached); else openWin("#win-vms");
-  // the tab that had the Claude window open gets it back after a reload —
+  // the tab that had an agent window open gets it back after a reload —
   // per-tab (sessionStorage), so other tabs and browsers never auto-open
   // and steal the tmux session from whoever holds it
-  if (sessionStorage.getItem("exe_claude_open")) openHostTermWin("claude");
+  for (const app of Object.keys(AGENT_APPS)) if (sessionStorage.getItem("exe_" + app + "_open")) openHostTermWin(app);
   j("/v1/ui/state").then(r => {
     winRev = r.rev || 0;
     if (r.state) {
@@ -2540,9 +2555,10 @@ function macIcon(state, size) {
 }
 $("#about-icon").innerHTML = macIcon("running", 44);
 let selectedIcon = null;
-// set by the boot hostinfo fetch: the Claude Code icon shows only on hosts
-// with the CLI installed, and its tooltip names the project dir it opens in
-let hostClaude = null; // { dir }
+// set by the boot hostinfo fetch: an agent's icon (Claude Code, Codex) shows
+// only on hosts with its CLI installed, and its tooltip names the project
+// dir it opens in
+const hostAgents = {}; // app → { dir }
 function renderIcons(vms) {
   const box = $("#icons");
   box.replaceChildren();
@@ -2572,17 +2588,18 @@ function renderIcons(vms) {
     tapOpen(ic, () => openHostTermWin());
     box.append(ic);
   }
-  if (hostClaude) {
-    const ic = el("div", { class: "dicon" + (selectedIcon === "claude" ? " sel" : ""), title: "Claude Code — an agent session in " + hostClaude.dir + "; reopen to pick up where you left off" });
-    ic.innerHTML = CLAUDE_ICON;
-    ic.append(el("span", { class: "lbl" }, "Claude Code"));
+  for (const [app, a] of Object.entries(AGENT_APPS)) {
+    if (!hostAgents[app]) continue;
+    const ic = el("div", { class: "dicon" + (selectedIcon === app ? " sel" : ""), title: a.title + " — an agent session in " + hostAgents[app].dir + "; reopen to pick up where you left off" });
+    ic.innerHTML = a.icon();
+    ic.append(el("span", { class: "lbl" }, a.title));
     ic.addEventListener("click", e => {
       e.stopPropagation();
-      selectedIcon = "claude";
+      selectedIcon = app;
       box.querySelectorAll(".dicon").forEach(d => d.classList.remove("sel"));
       ic.classList.add("sel");
     });
-    tapOpen(ic, () => openHostTermWin("claude"));
+    tapOpen(ic, () => openHostTermWin(app));
     box.append(ic);
   }
   for (const vm of vms) {
@@ -2667,6 +2684,16 @@ let CLAUDE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-renderi
   <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
   <rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
   <path fill="#D97757" d="M13 6h1v1h-1zM16 6h1v1h-1zM19 6h1v1h-1zM14 7h1v1h-1zM16 7h1v1h-1zM18 7h1v1h-1zM15 8h3v1h-3zM13 9h7v1h-7zM15 10h3v1h-3zM14 11h1v1h-1zM16 11h1v1h-1zM18 11h1v1h-1zM13 12h1v1h-1zM16 12h1v1h-1zM19 12h1v1h-1z"/>
+  <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+  <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
+  <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
+</svg>`;
+// Codex: the same compact Mac, its screen showing a white hexagonal ring
+let CODEX_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+  <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
+  <rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
+  <path fill="#FFFFFF" d="M15 6h3v1h-3zM14 7h1v1h-1zM18 7h1v1h-1zM13 8h1v3h-1zM19 8h1v3h-1zM14 11h1v1h-1zM18 11h1v1h-1zM15 12h3v1h-3z"/>
   <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
   <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
   <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
@@ -2964,6 +2991,7 @@ const ICON_DEFS = [
     note: "the green screen follows each VM's state" },
   { key: "terminal", label: "Terminal", size: 32, get: () => TERMINAL_ICON, set: s => TERMINAL_ICON = s },
   { key: "claude", label: "Claude Code", size: 32, get: () => CLAUDE_ICON, set: s => CLAUDE_ICON = s },
+  { key: "codex", label: "Codex", size: 32, get: () => CODEX_ICON, set: s => CODEX_ICON = s },
   { key: "folder", label: "Folder", size: 32, get: () => FOLDER_ICON, set: s => FOLDER_ICON = s },
   { key: "doc", label: "Document", size: 32, get: () => DOC_ICON, set: s => DOC_ICON = s },
   { key: "image", label: "Image File", size: 32, get: () => IMAGE_ICON, set: s => IMAGE_ICON = s },
@@ -3770,7 +3798,8 @@ async function loadEditor(w) {
 let deskMenu = [], deskMenuErr = "";
 const DESK_ACTS = {
   terminal: { run: cmd => openHostTermWin(undefined, cmd) },
-  claude: { run: () => openHostTermWin("claude"), dis: () => !hostClaude },
+  claude: { run: () => openHostTermWin("claude"), dis: () => !hostAgents.claude },
+  codex: { run: () => openHostTermWin("codex"), dis: () => !hostAgents.codex },
   search: { run: () => openSearchWin() },
   trash: { run: () => openWin("#win-trash") },
   customize: { run: () => openMenuEditor() },
@@ -4411,7 +4440,7 @@ function termSpacerFix(box, t) {
   const h = Math.floor(vp.getBoundingClientRect().height) + "px";
   if (sa.style.height !== h) sa.style.height = h;
 }
-// ---- every terminal (VM console, Terminal and Claude Code windows) comes
+// ---- every terminal (VM console, Terminal and agent windows) comes
 // from here so they look and behave alike. Links: an http(s) URL in the
 // text — across wrapped lines too — underlines under the pointer and a
 // click opens it in a new tab (a plain click, so touch can follow it;
@@ -4529,33 +4558,35 @@ async function termPaste(term) {
   term.focus();
 }
 
-// app === "claude" opens the Claude Code CLI instead of a shell; on hosts
-// with tmux the daemon keeps one persistent session behind the icon, so
-// every claude window is the same conversation (opening a second one takes
-// it over from the first). Because the session outlives its window, the
-// Claude window keeps a stable id and reopens at its last geometry.
-// app "claude" is the Claude Code window; cmd is a command line to run in
-// place of a shell (the desktop menu's "terminal btop" shortcut) — the
-// window is titled after the tool and ends when it exits
+// app names an agent CLI (AGENT_APPS: "claude" for Claude Code, "codex"
+// for Codex) to open instead of a shell; on hosts with tmux the daemon
+// keeps one persistent session behind each icon, so every window of that
+// agent is the same conversation (opening a second one takes it over from
+// the first). Because the session outlives its window, an agent window
+// keeps a stable id ("win-" + app) and reopens at its last geometry.
+// cmd is a command line to run in place of a shell (the desktop menu's
+// "terminal btop" shortcut) — the window is titled after the tool and
+// ends when it exits
 function openHostTermWin(app, cmd) {
-  const isClaude = app === "claude";
+  const agent = app ? AGENT_APPS[app] : null;
   const tool = cmd ? cmd.trim().split(/\s+/)[0].split("/").pop() : "";
-  if (isClaude) {
+  if (agent) {
     // one session, one window: reopening the icon just brings it forward
     // (a disconnected window is closed first, then reopened to reconnect)
-    const old = document.getElementById("win-claude");
+    const old = document.getElementById("win-" + app);
     if (old) { openWin(old); return; }
-    sessionStorage.setItem("exe_claude_open", "1"); // this tab restores it on reload
+    sessionStorage.setItem("exe_" + app + "_open", "1"); // this tab restores it on reload
   }
-  const n = isClaude ? 0 : ++termSeq;
-  const w = el("div", { class: "window grow term-window", id: isClaude ? "win-claude" : "win-term-" + n });
+  const n = agent ? 0 : ++termSeq;
+  const w = el("div", { class: "window grow term-window", id: agent ? "win-" + app : "win-term-" + n });
   const open = document.querySelectorAll("#desktop .term-window").length;
   w.style.left = (150 + open * 26) + "px";
   w.style.top = (100 + open * 22) + "px";
   w.style.width = "640px";
-  if (isClaude && claudeGeom) {
+  const geom = agent ? agentGeom[app] : null;
+  if (geom) {
     // last saved geometry, same clamps as applyWinState pass 2
-    const v = claudeGeom;
+    const v = geom;
     if (v.w) w.style.width = Math.max(400, Math.min(window.innerWidth - 24, v.w)) + "px";
     if (v.l !== undefined) w.style.left = Math.min(window.innerWidth - 60, Math.max(60 - (v.w || 640), v.l)) + "px";
     if (v.t !== undefined) w.style.top = Math.min(window.innerHeight - 46, Math.max(0, v.t)) + "px";
@@ -4568,13 +4599,13 @@ function openHostTermWin(app, cmd) {
       <div class="statusbar"><span class="term-status">…</span></div>
       ${GROW_TILE}
     </div>`;
-  w.querySelector(".title").textContent = app === "claude" ? "Claude Code"
+  w.querySelector(".title").textContent = agent ? agent.title
     : tool || (n === 1 ? "Terminal" : "Terminal " + n);
   const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status");
   // saved height goes on before fit() so the terminal opens at the right rows
   // (desktop only — mobile keeps its fullscreen 100% height)
-  if (isClaude && claudeGeom && claudeGeom.h && !IS_MOBILE)
-    box.style.height = Math.max(160, Math.min(window.innerHeight - 170, claudeGeom.h)) + "px";
+  if (geom && geom.h && !IS_MOBILE)
+    box.style.height = Math.max(160, Math.min(window.innerHeight - 170, geom.h)) + "px";
   box.addEventListener("wheel", e => e.preventDefault(), { passive: false });
   $("#desktop").append(w);
   initWindow(w);
@@ -4615,14 +4646,14 @@ function openHostTermWin(app, cmd) {
     };
     ws.onmessage = e => term.write(new Uint8Array(e.data));
     ws.onclose = e => {
-      // The Claude window is a persistent tmux session, so a dead *link*
+      // An agent window is a persistent tmux session, so a dead *link*
       // (daemon restart, network blip — close code isn't 1000) is worth
       // winning back automatically. A clean 1000 means the session side
-      // ended on purpose: claude exited, or another Claude window took
+      // ended on purpose: the agent exited, or another window of it took
       // the session over with -D — reconnecting would fight that window
       // for it, kick for kick, forever. Terminal windows lose their
       // shell with the link, so a reconnect could only offer a stranger.
-      if (isClaude && e.code !== 1000) {
+      if (agent && e.code !== 1000) {
         if (!retry) term.write("\r\n\x1b[90m[connection lost — reconnecting]\x1b[0m\r\n");
         retryTimer = setTimeout(() => connect(false), Math.min(1000 << retry, 5000));
         retry++;
@@ -4630,7 +4661,7 @@ function openHostTermWin(app, cmd) {
         return;
       }
       term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-      status.textContent = app === "claude" ? "session ended — close and reopen to start again"
+      status.textContent = agent ? "session ended — close and reopen to start again"
         : tool ? tool + " exited — close and reopen to run it again"
         : "disconnected — close and reopen for a new shell";
     };
@@ -6614,9 +6645,14 @@ loadVMs().catch(e => toast(e.message));
 loadApps().catch(() => {});
 loadIcons().catch(() => {});
 loadDeskMenu().catch(() => {});
-// hosts with the Claude Code CLI get its desktop icon
+// hosts with an agent CLI (Claude Code, Codex) get its desktop icon
 j("/v1/hostinfo").then(h => {
-  if (h.claude_code) { hostClaude = { dir: h.claude_dir || "the Workspace folder" }; renderIcons(lastVMs); }
+  let any = false;
+  for (const app of Object.keys(AGENT_APPS)) {
+    const a = h.agents && h.agents[app];
+    if (a) { hostAgents[app] = { dir: a.dir || "the Workspace folder" }; any = true; }
+  }
+  if (any) renderIcons(lastVMs);
 }).catch(() => {});
 loadConfig().catch(() => {});
 cfHeartbeat(false);
