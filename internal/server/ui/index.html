@@ -4264,36 +4264,57 @@ function openHostTermWin(app) {
   const qs = new URLSearchParams();
   if (tokenInput.value) qs.set("token", tokenInput.value);
   if (app) qs.set("app", app);
-  status.textContent = "connecting…";
-  const ws = new WebSocket(`${proto}://${location.host}/v1/host/terminal${qs.size ? "?" + qs : ""}`);
-  ws.binaryType = "arraybuffer";
+  const url = `${proto}://${location.host}/v1/host/terminal${qs.size ? "?" + qs : ""}`;
   const enc = new TextEncoder();
+  let ws = null, retry = 0, retryTimer = 0;
   const resize = () => {
-    if (ws.readyState === 1) {
+    if (ws && ws.readyState === 1) {
       fit.fit();
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
       requestAnimationFrame(() => termSpacerFix(box, term));
     }
   };
-  ws.onopen = () => {
-    status.textContent = "connected";
-    ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
-    term.focus();
-    requestAnimationFrame(() => termSpacerFix(box, term));
-  };
-  ws.onmessage = e => term.write(new Uint8Array(e.data));
-  ws.onclose = () => {
-    term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-    status.textContent = app === "claude"
-      ? "disconnected — close and reopen to return to the session"
-      : "disconnected — close and reopen for a new shell";
-  };
-  term.onData(d => { if (ws.readyState === 1) ws.send(enc.encode(d)); });
+  function connect(initial) {
+    status.textContent = initial ? "connecting…" : "reconnecting… (" + retry + ")";
+    ws = new WebSocket(url);
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => {
+      retry = 0;
+      status.textContent = "connected";
+      ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
+      if (initial) term.focus(); // never steal focus on a background reconnect
+      requestAnimationFrame(() => termSpacerFix(box, term));
+    };
+    ws.onmessage = e => term.write(new Uint8Array(e.data));
+    ws.onclose = e => {
+      // The Claude window is a persistent tmux session, so a dead *link*
+      // (daemon restart, network blip — close code isn't 1000) is worth
+      // winning back automatically. A clean 1000 means the session side
+      // ended on purpose: claude exited, or another Claude window took
+      // the session over with -D — reconnecting would fight that window
+      // for it, kick for kick, forever. Terminal windows lose their
+      // shell with the link, so a reconnect could only offer a stranger.
+      if (isClaude && e.code !== 1000) {
+        if (!retry) term.write("\r\n\x1b[90m[connection lost — reconnecting]\x1b[0m\r\n");
+        retryTimer = setTimeout(() => connect(false), Math.min(1000 << retry, 5000));
+        retry++;
+        status.textContent = "reconnecting… (" + retry + ")";
+        return;
+      }
+      term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
+      status.textContent = app === "claude"
+        ? "session ended — close and reopen to start again"
+        : "disconnected — close and reopen for a new shell";
+    };
+  }
+  connect(true);
+  term.onData(d => { if (ws && ws.readyState === 1) ws.send(enc.encode(d)); });
   window.addEventListener("resize", resize);
   wireGrow(w.querySelector(".grow-box"), w, box, 400, { minH: 160, onMove: resize });
   w._fit = resize; // applyWinState: refit after a remote geometry change
   w._teardown = () => {
     window.removeEventListener("resize", resize);
+    clearTimeout(retryTimer);
     ws.onclose = null;
     try { ws.close(); } catch (e) {}
     term.dispose();
