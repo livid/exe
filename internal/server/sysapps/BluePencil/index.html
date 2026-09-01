@@ -34,10 +34,20 @@ textarea { background: #fff; border: 1px solid var(--black); padding: 5px 7px; b
     1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff;
   user-select: text; cursor: text; resize: none; }
 textarea:focus { outline: none; }
-/* popup menu: a raised Platinum button that holds the choice */
-select { background: var(--g300); border: 1px solid var(--black); border-radius: 3px;
-  padding: 1px 4px; height: 20px; max-width: 100%;
-  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #888; }
+/* pop-up menu button, pixel for pixel from the HIG's Figure 2-7 (Mac OS 8
+   HIG, "Pop-Up Menu Buttons"): a rounded black outline; on the body a
+   white top and left highlight and a #aaa bottom shadow; on the right the
+   raised arrow well — #aaa separator, a 1px gap, its own white bevel,
+   #aaa then #777 shadows, two 7px triangles — cut from the figure itself
+   as the sprite below. The list that opens is the browser's own. */
+select { appearance: none; height: 19px; color: #000; min-width: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="21" height="17" shape-rendering="crispEdges"><path fill="%23bbbbbb" d="M19 0h1v1h-1z M1 16h1v1h-1z"/><path fill="%23000000" d="M20 0h1v1h-1z M10 3h1v1h-1z M9 4h3v1h-3z M8 5h5v1h-5z M7 6h7v1h-7z M7 9h7v1h-7z M8 10h5v1h-5z M9 11h3v1h-3z M10 12h1v1h-1z M20 16h1v1h-1z"/><path fill="%23aaaaaa" d="M0 1h1v1h-1z M20 1h1v1h-1z M0 2h1v1h-1z M19 2h1v1h-1z M0 3h1v1h-1z M19 3h1v1h-1z M0 4h1v1h-1z M19 4h1v1h-1z M0 5h1v1h-1z M19 5h1v1h-1z M0 6h1v1h-1z M19 6h1v1h-1z M0 7h1v1h-1z M19 7h1v1h-1z M0 8h1v1h-1z M19 8h1v1h-1z M0 9h1v1h-1z M19 9h1v1h-1z M0 10h1v1h-1z M19 10h1v1h-1z M0 11h1v1h-1z M19 11h1v1h-1z M0 12h1v1h-1z M19 12h1v1h-1z M0 13h1v1h-1z M19 13h1v1h-1z M0 14h1v1h-1z M19 14h1v1h-1z M0 15h1v1h-1z M3 15h16v1h-16z M0 16h1v1h-1z"/><path fill="%23ffffff" d="M2 1h17v1h-17z M2 2h1v1h-1z M2 3h1v1h-1z M2 4h1v1h-1z M2 5h1v1h-1z M2 6h1v1h-1z M2 7h1v1h-1z M2 8h1v1h-1z M2 9h1v1h-1z M2 10h1v1h-1z M2 11h1v1h-1z M2 12h1v1h-1z M2 13h1v1h-1z M2 14h1v1h-1z"/><path fill="%23777777" d="M20 2h1v1h-1z M20 3h1v1h-1z M20 4h1v1h-1z M20 5h1v1h-1z M20 6h1v1h-1z M20 7h1v1h-1z M20 8h1v1h-1z M20 9h1v1h-1z M20 10h1v1h-1z M20 11h1v1h-1z M20 12h1v1h-1z M20 13h1v1h-1z M20 14h1v1h-1z M19 15h2v1h-2z M2 16h18v1h-18z"/></svg>') right 0 top 0 / 21px 17px no-repeat,
+    linear-gradient(#fff, #fff) 0 0 / calc(100% - 21px) 1px no-repeat,
+    linear-gradient(#fff, #fff) 0 0 / 1px calc(100% - 1px) no-repeat,
+    linear-gradient(#aaa, #aaa) 0 100% / calc(100% - 21px) 1px no-repeat,
+    var(--g300);
+  border: 1px solid #000; border-radius: 3px; padding: 0 27px 0 6px;
+  font: 12px/17px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 select:focus { outline: none; }
 
 /* two document fields of equal height: what you wrote, and what the
@@ -77,8 +87,11 @@ select:focus { outline: none; }
 #dlg { width: 330px; background: var(--g300); border: 1px solid var(--black); padding: 14px;
   box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #999, 2px 2px 0 rgba(0,0,0,.25); }
 #dlg h2 { font-size: 12px; margin: 0 0 10px; }
-#dlg .row { margin: 0 0 8px; display: flex; flex-direction: column; gap: 3px; }
-#dlg label { font-size: 11px; }
+#dlg .row { margin: 0 0 8px; display: grid; grid-template-columns: 58px 1fr; column-gap: 5px;
+  align-items: center; }
+#dlg .row label { text-align: right; }
+#dlg .row .hint { grid-column: 2; margin-top: 3px; }
+#dlg label { font-size: 12px; }
 #dlg label.check { display: flex; align-items: center; gap: 5px; font-size: 12px; margin-top: 4px; }
 /* a Platinum check box: sunken white square, a black check when on */
 #dlg input[type=checkbox] { appearance: none; margin: 0; width: 12px; height: 12px; flex: none;
@@ -680,10 +693,10 @@ function options() {
   const ok = el("button", { class: "ghost" }, "OK");
   dlg.replaceChildren(
     el("h2", {}, "Blue Pencil Options"),
-    el("div", { class: "row" }, el("label", { for: "o-model" }, "Model"), sel,
+    el("div", { class: "row" }, el("label", { for: "o-model" }, "Model:"), sel,
       el("span", { class: "hint" }, "A small local model is plenty for proofreading and answers faster.")),
-    el("div", { class: "row" }, el("label", { for: "o-effort" }, "Thinking"), eff,
-      el("span", { class: "hint" }, "Max reads the passage hardest and slowest. Off is fastest, but some models then think out loud in the answer.")),
+    el("div", { class: "row" }, el("label", { for: "o-effort" }, "Thinking:"), eff,
+      el("span", { class: "hint" }, "Max reads hardest and slowest. Off is fastest, but some models then think out loud.")),
     el("label", { class: "check" }, chk, "Mark changes in the checked text"),
     el("div", { class: "btns" }, cancel, ok));
   $("#veil").classList.add("on");
