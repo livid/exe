@@ -1836,10 +1836,19 @@ function mobRestore() {
     else (WIN_OPENERS[id] || (() => openWin("#" + id)))();
   }
 }
+// an app's iframe lives on behind its closed window (windows are hidden, not
+// destroyed, so they reopen where they were); the bridge tells the app so it
+// can pause its loops and pick them up again
+function tellApp(w, exe) {
+  const fr = w.querySelector && w.querySelector(".app-frame");
+  if (fr && fr.contentWindow) { try { fr.contentWindow.postMessage({ exe }, location.origin); } catch (e) {} }
+}
 function openWin(sel) {
   const w = typeof sel === "string" ? $(sel) : sel;
   if (IS_MOBILE && !MOB_DIALOG.has(w.id)) mobileSwapIn(w);
+  const wasHidden = w.hidden;
   w.hidden = false;
+  if (wasHidden) tellApp(w, "show");
   w.classList.remove("shaded");
   focusWin(w);
   if (IS_MOBILE) mobSave();
@@ -1848,6 +1857,7 @@ function openWin(sel) {
 function closeWin(w) {
   const wasFront = w.classList.contains("front");
   w.hidden = true;
+  tellApp(w, "hide");
   if (w.id === "win-detail") { closeTerm(); flushNotes(); currentVM = null; }
   if (w.id === "win-newvm") $("#c-status").textContent = "";
   if (w.id === "win-upload") {
