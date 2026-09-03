@@ -341,9 +341,14 @@ function viewImage(em) {
 // (one or two backticks, matched within a line, with CommonMark's one-space
 // trim) become <code> and their contents stay literal: a URL inside
 // backticks is not a link. URLs elsewhere become links that open in a new
-// tab, with the same matcher as the terminal windows: http(s) only, and
-// the punctuation that usually trails a URL in prose stays text.
-const URL_RE = /https?:\/\/[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~\[\]`()<>]/g;
+// tab: http(s) only; the punctuation that usually trails a URL in prose
+// stays text; and a URL is ASCII plus accented Latin letters, so CJK prose
+// and its fullwidth punctuation end it — Chinese sits flush against a link
+// with no space ("来自小虾平台（https://xiaoxia.app）的助手"). A raw CJK
+// path loses its tail; browsers paste those percent-encoded. The hub's
+// public pages (exe-hub web.go) carry the same matcher.
+const URL_LATIN = "\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F";
+const URL_RE = new RegExp("https?:\\/\\/[\\w#$%&+,\\-./:;=?@\\[\\]~" + URL_LATIN + "]*[\\w#$%&+\\-/;=@" + URL_LATIN + "]", "g");
 const CODE_RE = /(`{1,2})(?!`)(.+?)(?<!`)\1(?!`)/g;
 function formatText(text) {
   const out = [];
