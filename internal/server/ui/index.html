@@ -2843,7 +2843,7 @@ function openAppWin(name) {
     w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
       <div class="title"></div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
-      <div class="win-frame"><iframe class="app-frame"></iframe></div>`;
+      <div class="win-frame"><iframe class="app-frame" allow="fullscreen" allowfullscreen></iframe></div>`;
     w.querySelector(".title").textContent = app.title || name;
     if (app.window && app.window.grow) w.classList.add("grow");
     const fr = w.querySelector(".app-frame");
