@@ -65,6 +65,11 @@ service. Reapply `setcap` whenever the helper binary is replaced. The
 checked-in Supervisor config is specific to `/www/exe` and
 `/home/livid/.exe`.
 
+At boot the daemon may come up before Tailscale has its address. It waits
+up to five minutes for `listen` (likewise `proxy_listen` and `ssh_listen`)
+to become bindable, and exits non-zero after that so Supervisor starts it
+again.
+
 ### Windows requirements
 
 - An x86-64 host. Enable **Windows Hypervisor Platform** and **Virtual

@@ -244,13 +244,16 @@ func cmdServe() error {
 		}
 		return lns, nil
 	}
-	// Retry binds briefly: after POST /v1/daemon/restart the parent process
-	// is still releasing these ports while we come up.
-	apiLns, err := bindAPI(cfg.Listen, 15*time.Second)
+	// Retry the startup binds: after POST /v1/daemon/restart the parent is
+	// still releasing these ports, and at boot the Tailscale IP in `listen`
+	// shows up only once tailscaled has logged in. Should the wait run out
+	// we exit non-zero and the service manager starts us again.
+	const startBindWait = 5 * time.Minute
+	apiLns, err := bindAPI(cfg.Listen, startBindWait)
 	if err != nil {
 		return err
 	}
-	proxyLn, err := listenRetry(cfg.ProxyListen, 15*time.Second)
+	proxyLn, err := listenRetry(cfg.ProxyListen, startBindWait)
 	if err != nil {
 		return err
 	}
@@ -271,7 +274,7 @@ func cmdServe() error {
 	var sshLn net.Listener
 	curSSH := cfg.SSHListen
 	if config.SSHEnabled(curSSH) {
-		if sshLn, err = listenRetry(curSSH, 15*time.Second); err != nil {
+		if sshLn, err = listenRetry(curSSH, startBindWait); err != nil {
 			return err
 		}
 		serveSSH(sshLn)
@@ -438,18 +441,46 @@ func loopbackAddr(addr string) string {
 	return net.JoinHostPort("127.0.0.1", port)
 }
 
+// listenRetry binds addr, retrying for up to wait while the port is still
+// held by the daemon we are replacing (right after POST /v1/daemon/restart)
+// or the address is on no interface yet. The latter is the boot race: a
+// Tailscale IP in `listen` appears only once tailscaled has logged in,
+// seconds to minutes after Supervisor or systemd started us, and a daemon
+// that gave up on it stayed down until someone noticed.
 func listenRetry(addr string, wait time.Duration) (net.Listener, error) {
-	deadline := time.Now().Add(wait)
+	start := time.Now()
+	deadline := start.Add(wait)
+	logged := false
 	for {
 		ln, err := net.Listen("tcp", addr)
 		if err == nil {
+			if logged {
+				log.Printf("bind %s: ok after %s", addr, time.Since(start).Round(time.Second))
+			}
 			return ln, nil
 		}
-		if !strings.Contains(err.Error(), "address already in use") || time.Now().After(deadline) {
+		if !bindRetryable(err) || time.Now().After(deadline) {
 			return nil, err
+		}
+		if !logged && time.Since(start) > time.Second {
+			logged = true
+			log.Printf("bind %s: %v — retrying for up to %s", addr, err, wait)
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
+}
+
+// bindRetryable reports whether a failed bind may succeed shortly: the port
+// is still in use, or the address is not assigned yet. Windows reports both
+// with its own error codes, which do not unwrap to the portable errnos.
+func bindRetryable(err error) bool {
+	if errors.Is(err, syscall.EADDRINUSE) || errors.Is(err, syscall.EADDRNOTAVAIL) {
+		return true
+	}
+	s := err.Error()
+	return strings.Contains(s, "address already in use") ||
+		strings.Contains(s, "Only one usage of each socket address") || // WSAEADDRINUSE
+		strings.Contains(s, "not valid in its context") // WSAEADDRNOTAVAIL
 }
 
 func cmdInit() error {
