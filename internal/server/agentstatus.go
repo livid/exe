@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"exe/internal/codex"
 )
 
 // An agent window's status line carries the session's figures — context
@@ -18,7 +20,11 @@ import (
 // (agentStatusFile), follows the file for as long as a window is open
 // (pushAgentStatus) and sends each new version down the window's
 // WebSocket as a text frame, {"status":…} (agentStatus). Codex has no
-// such hook, so its status line shows the link state alone.
+// such hook; its window runs on the ChatGPT sign-in, so the daemon reads
+// the subscription's usage windows itself, once a minute while a window
+// is open, and sends them as {"usage":…} (pushOpenAIUsage) — the same
+// figures the Chat window's status line and the Configuration window's
+// OpenAI tab show.
 
 // agentStatusFile is where an agent's hook leaves its latest figures.
 func (s *Server) agentStatusFile(a hostAgent) string {
@@ -163,6 +169,44 @@ func pushAgentStatus(ctx context.Context, out *wsWriter, file string) {
 					return
 				}
 			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// openaiUsageEvery is how often a Codex window's usage is re-read: the
+// Chat window's own cadence, and a minute's lag is nothing next to the
+// windows' five-hour and weekly scale.
+const openaiUsageEvery = time.Minute
+
+// pushOpenAIUsage keeps a Codex window's status line current for the life
+// of the window: the subscription's usage as fetch reads it on connect and
+// every interval after, sent as {"usage":…}. A read that fails once
+// figures are up — the sign-in gone, the backend not answering — sends
+// {"usage":null}, which clears them until a read succeeds again; failing
+// from the start (no sign-in) sends nothing, and the status line shows
+// the link state alone.
+func pushOpenAIUsage(ctx context.Context, out *wsWriter, fetch func(context.Context) (*codex.Usage, error), every time.Duration) {
+	shown := false
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		u, err := fetch(ctx)
+		if err == nil {
+			msg, _ := json.Marshal(map[string]*codex.Usage{"usage": u})
+			if out.WriteText(msg) != nil {
+				return
+			}
+			shown = true
+		} else if shown {
+			if out.WriteText([]byte(`{"usage":null}`)) != nil {
+				return
+			}
+			shown = false
 		}
 		select {
 		case <-ctx.Done():

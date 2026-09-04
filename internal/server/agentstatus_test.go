@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,9 +11,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"exe/internal/codex"
 	"github.com/coder/websocket"
 )
 
@@ -66,6 +69,71 @@ func TestPushAgentStatus(t *testing.T) {
 	time.Sleep(1100 * time.Millisecond)
 	os.WriteFile(file, []byte(hook("Third")), 0o644)
 	frame("Third")
+}
+
+// the usage feed over a real WebSocket: the figures arrive on connect and
+// each tick after; a failed read clears them once, then stays quiet until
+// a read succeeds again; failing from the start sends nothing
+func TestPushOpenAIUsage(t *testing.T) {
+	var mu sync.Mutex
+	var answers []*codex.Usage // nil = the read fails
+	fetch := func(context.Context) (*codex.Usage, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(answers) == 0 {
+			return nil, errors.New("not signed in")
+		}
+		u := answers[0]
+		answers = answers[1:]
+		if u == nil {
+			return nil, errors.New("HTTP 502")
+		}
+		return u, nil
+	}
+	usage := func(pct float64) *codex.Usage {
+		return &codex.Usage{PlanType: "plus", RateLimit: &codex.UsageRateLimit{
+			PrimaryWindow: &codex.UsageWindow{UsedPercent: pct, LimitWindowSeconds: 18000},
+		}}
+	}
+	mu.Lock()
+	answers = []*codex.Usage{nil, usage(12), usage(13), nil, nil, usage(14)}
+	mu.Unlock()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		pushOpenAIUsage(ctx, &wsWriter{ctx: ctx, c: c}, fetch, 100*time.Millisecond)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	frame := func(want string) {
+		t.Helper()
+		typ, data, err := c.Read(ctx)
+		if err != nil {
+			t.Fatalf("waiting for %s: %v", want, err)
+		}
+		if typ != websocket.MessageText || !strings.Contains(string(data), want) {
+			t.Fatalf("got %v %s, want a text frame with %s", typ, data, want)
+		}
+	}
+	// the first read fails with nothing shown: no frame; then two reads
+	frame(`"used_percent":12`)
+	frame(`"used_percent":13`)
+	// two failures clear the figures once
+	frame(`{"usage":null}`)
+	frame(`"used_percent":14`)
 }
 
 // the hook settings an agent is launched with: the bridge alone, the

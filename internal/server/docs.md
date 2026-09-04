@@ -54,7 +54,10 @@ A Claude Code window's status line shows the session's figures at its
 right — the model, context in use, tokens, cost and the plan's 5-hour and
 7-day usage windows — kept current after every reply by Claude Code's own
 status-line hook; hover for the long form. A status line of your own in
-`~/.claude/settings.json` keeps working inside the terminal.
+`~/.claude/settings.json` keeps working inside the terminal. A Codex
+window's shows the ChatGPT subscription's 5-hour and weekly usage windows
+(the sign-in under **Configuration → OpenAI**), re-read once a minute
+while the window is open; hover for the reset times.
 
 Windows behave like OS 9 windows: drag the title bar to move, drag the
 left/right/bottom edges or the grow corner to resize, click the shade box to

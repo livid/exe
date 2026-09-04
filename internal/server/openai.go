@@ -227,21 +227,33 @@ func (s *Server) handleOpenAIStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// handleOpenAIUsage reports the subscription's rate-limit usage (the 5-hour
-// and weekly windows, plus any credit balance) for the Configuration
-// window's OpenAI tab.
-func (s *Server) handleOpenAIUsage(w http.ResponseWriter, r *http.Request) {
-	c, err := s.codexToken(r.Context(), false)
+// codexUsage reads the subscription's rate-limit usage (the 5-hour and
+// weekly windows, plus any credit balance) on a live token, trying once
+// more on a freshly refreshed one when the backend rejects the token on
+// file. Behind the Configuration window's OpenAI tab, the Chat window's
+// status line and the Codex window's (agentstatus.go).
+func (s *Server) codexUsage(ctx context.Context) (*codex.Usage, error) {
+	c, err := s.codexToken(ctx, false)
 	if err != nil {
-		writeErr(w, http.StatusConflict, err)
-		return
+		return nil, err
 	}
-	u, err := codex.FetchUsage(r.Context(), c.AccessToken, c.AccountID)
+	u, err := codex.FetchUsage(ctx, c.AccessToken, c.AccountID)
 	if errors.Is(err, codex.ErrUnauthorized) {
-		if c, err = s.codexToken(r.Context(), true); err == nil {
-			u, err = codex.FetchUsage(r.Context(), c.AccessToken, c.AccountID)
+		if c, err = s.codexToken(ctx, true); err == nil {
+			u, err = codex.FetchUsage(ctx, c.AccessToken, c.AccountID)
 		}
 	}
+	return u, err
+}
+
+// handleOpenAIUsage serves codexUsage: 409 without a sign-in to read on,
+// 502 when the backend would not answer.
+func (s *Server) handleOpenAIUsage(w http.ResponseWriter, r *http.Request) {
+	if s.codexCreds() == nil {
+		writeErr(w, http.StatusConflict, errors.New("not signed in to ChatGPT (Configuration → OpenAI)"))
+		return
+	}
+	u, err := s.codexUsage(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err)
 		return

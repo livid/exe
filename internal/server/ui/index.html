@@ -4831,13 +4831,15 @@ function openHostTermWin(app, cmd) {
       if (initial) term.focus(); // never steal focus on a background reconnect
       requestAnimationFrame(() => termSpacerFix(box, term));
     };
-    // binary frames are the terminal; a text frame is the daemon's
-    // {"status":…} with the agent session's figures for the status line
+    // binary frames are the terminal; a text frame is the daemon's figures
+    // for the status line — {"status":…} with the Claude Code session's,
+    // {"usage":…} with the ChatGPT subscription's for Codex
     ws.onmessage = e => {
       if (typeof e.data !== "string") { term.write(new Uint8Array(e.data)); return; }
       let msg;
       try { msg = JSON.parse(e.data); } catch (err) { return; }
       if (msg.status) showAgentUsage(usage, msg.status);
+      if ("usage" in msg) showOpenAIUsage(usage, msg.usage);
     };
     ws.onclose = e => {
       usage.hidden = true; // the figures come back with the link
@@ -4875,11 +4877,12 @@ function openHostTermWin(app, cmd) {
   };
 }
 
-// An agent window's status line carries its session's figures at the far
-// right, the way Chat's carries ChatGPT's: the model, context in use,
-// tokens, cost and the plan's 5-hour and 7-day windows, from Claude
+// A Claude Code window's status line carries its session's figures at
+// the far right, the way Chat's carries ChatGPT's: the model, context in
+// use, tokens, cost and the plan's 5-hour and 7-day windows, from Claude
 // Code's status-line hook by way of the daemon (agentstatus.go); the
-// tooltip has the long form. Anything at 90% turns red.
+// tooltip has the long form. Anything at 90% turns red. A Codex window's
+// carries the ChatGPT subscription's windows instead (showOpenAIUsage).
 function showAgentUsage(box, st) {
   const parts = [], tips = [];
   const add = (text, hot) => {
@@ -5346,7 +5349,15 @@ async function chatUsage(force) {
   let u;
   try { u = await j("/v1/openai/usage"); }
   catch (e) { box.hidden = true; chatUsageAt = 0; return; }
-  const rl = u.rate_limit || {};
+  showOpenAIUsage(box, u);
+}
+// The subscription's windows on a status line — "5h 12% · wk 40%", red at
+// 90%, the long form with reset times in the tooltip — for Chat while
+// ChatGPT is its backend and for the Codex window, whose figures the
+// daemon sends down the terminal's WebSocket as {"usage":…}
+// (agentstatus.go). null, or a usage without windows, hides them.
+function showOpenAIUsage(box, u) {
+  const rl = (u && u.rate_limit) || {};
   const spans = [], tips = [];
   for (const w of [rl.primary_window, rl.secondary_window]) {
     if (!w) continue;
