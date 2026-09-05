@@ -35,6 +35,9 @@ button.ghost.danger { color: #7a1010; }
 button.ghost.armed { background: var(--red); color: #fff;
   box-shadow: inset 1px 1px 0 #e88, inset -1px -1px 0 #911; }
 button.ghost.sm { padding: 1px 8px; font-size: 10px; border-radius: 3px; height: auto; }
+/* a dialog's default button — Return presses it — wears the ring: outset
+   3px from the button (HIG Fig. 2-3), drawn as the desktop draws it */
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
 
 input[type=text], textarea { font: inherit; color: var(--black); background: #fff;
   border: 1px solid var(--black); padding: 3px 5px; border-radius: 0;
@@ -197,6 +200,7 @@ canvas.ava-big { image-rendering: pixelated; }
       <button class="ghost" id="attach">Attach&#8230;</button>
       <input type="file" id="file" hidden multiple>
       <span id="c-status"></span>
+      <button class="ghost" id="find">Find&#8230;</button>
       <button class="ghost" id="refresh">Refresh</button>
       <button class="ghost" id="me">Profile&#8230;</button>
       <button class="ghost" id="post" disabled>Post</button>
@@ -256,7 +260,7 @@ let hub = "";        // hub base URL
 let hubInfo = null;  // GET /v1/hub
 let who = null;      // {id, name, pubkey} from the daemon
 let myProfile = null;
-let view = { kind: "feed" }; // or {kind:"thread", id}
+let view = { kind: "feed" }; // or {kind:"thread", id} or {kind:"search", q, oldest}
 let attachments = [];        // [{cid, mime, filename}]
 let oldestId = "";           // feed keyset cursor
 const feedEl = $("#feed"), cStatus = $("#c-status");
@@ -449,7 +453,7 @@ function placeholders(n) {
 const moreEl = el("div", { class: "ph", id: "more" },
   el("div", { class: "bar w40" }), el("div", { class: "bar w80" }));
 const moreIO = new IntersectionObserver(entries => {
-  if (entries.some(e => e.isIntersecting)) loadFeed(true);
+  if (entries.some(e => e.isIntersecting)) view.kind === "search" ? openSearch(view.q, true) : loadFeed(true);
 }, { root: feedEl, rootMargin: "0px 0px 80px 0px" });
 let loadingMore = false;
 function watchMore() {
@@ -508,8 +512,88 @@ function showFeed() {
   loadFeed();
 }
 $("#back").onclick = showFeed;
-const refreshView = () => view.kind === "thread" ? openThread(view.id) : loadFeed();
+const refreshView = () => view.kind === "thread" ? openThread(view.id)
+  : view.kind === "search" ? openSearch(view.q) : loadFeed();
 $("#refresh").onclick = refreshView;
+
+// ---- find ----
+// Find… (Cmd-F) asks for words in a dialog, Find being its default
+// button; the hits are a view like a thread — the feed list under the
+// back bar, titled with the query and the hub's match count, older
+// pages loading themselves the same way. Every word must appear
+// (GET /v1/search: literal substrings, ASCII case folded, replies too).
+// A search is a snapshot: the live stream leaves it alone, Refresh
+// re-runs it.
+let lastQuery = "";
+async function openSearch(q, more) {
+  if (more) {
+    if (loadingMore || view.kind !== "search" || !moreEl.isConnected) return;
+    loadingMore = true;
+  } else {
+    view = { kind: "search", q, oldest: "" };
+    lastQuery = q;
+    $("#thread-head").classList.add("on");
+    $("#thread-title").textContent = "Find \u201c" + q + "\u201d";
+    $("#text").placeholder = "What's happening?";
+    feedEl.replaceChildren(placeholders(4));
+  }
+  try {
+    const cur = view.oldest ? "&before=" + view.oldest : "";
+    const out = await hget("/v1/search?q=" + encodeURIComponent(q) + "&limit=" + PAGE + cur);
+    if (view.kind !== "search" || view.q !== q || (more && !moreEl.isConnected)) return; // view moved on
+    moreEl.remove();
+    if (!more) {
+      feedEl.replaceChildren();
+      $("#thread-title").textContent = "Find \u201c" + q + "\u201d \u2014 " +
+        out.total + (out.total === 1 ? " post matches" : " posts match");
+      if (!out.posts.length) feedEl.append(el("div", { class: "muted" }, "No post matches."));
+    }
+    for (const p of out.posts) feedEl.append(renderPost(p));
+    if (out.posts.length) view.oldest = out.posts[out.posts.length - 1].id;
+    if (out.posts.length === PAGE) watchMore();
+  } catch (e) {
+    if (!more) feedEl.replaceChildren(el("div", { class: "muted" }, "Find failed: " + e.message));
+    else setTimeout(() => { if (view.kind === "search" && moreEl.isConnected) watchMore(); }, 3000);
+  } finally {
+    if (more) loadingMore = false;
+  }
+}
+function findDialog() {
+  if (!hub || $("#veil").classList.contains("on")) return;
+  const input = el("input", { type: "text", maxlength: 200, value: lastQuery });
+  const go = el("button", { class: "ghost default" }, "Find");
+  const cancel = el("button", { class: "ghost" }, "Cancel");
+  const close = dialog([
+    el("h2", {}, "Find"),
+    el("div", { class: "row" }, el("label", {}, "Find posts containing"), input),
+    el("div", { style: "font-size:11px;color:#555" },
+      "Every word must appear somewhere in the post. Replies count too."),
+    el("div", { class: "btns" }, cancel, go)]);
+  // Return presses Find and Escape presses Cancel wherever the focus is
+  // (HIG), so the keys are taken at the document while the dialog is up
+  const done = () => { document.removeEventListener("keydown", onKey, true); close(); };
+  const submit = () => {
+    const q = input.value.trim().split(/\s+/).filter(Boolean).join(" ");
+    if (!q) return;
+    done();
+    openSearch(q);
+  };
+  const onKey = e => {
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+    else if (e.key === "Escape") { e.preventDefault(); done(); }
+  };
+  document.addEventListener("keydown", onKey, true);
+  cancel.onclick = done;
+  go.onclick = submit;
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+}
+$("#find").onclick = findDialog;
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    findDialog();
+  }
+});
 
 // ---- live updates ----
 // The hub streams post activity over SSE; events carry ids only, the
@@ -546,6 +630,7 @@ function connectEvents() {
       if (!seen(m.id)) feedEl.append(renderPost(out.post, { inThread: true }));
       return;
     }
+    if (view.kind === "search") return; // a snapshot; Refresh re-runs it
     if (m.reply_to) { // not shown in the feed, but its parent's count is
       const c = seen(m.reply_to)?.querySelector("[data-count]");
       if (c) {
@@ -848,7 +933,7 @@ async function doPost() {
     attachments = [];
     renderChips();
     say("");
-    view.kind === "thread" ? openThread(view.id) : loadFeed();
+    refreshView();
   } catch (e) { say(e.message, true); }
   updatePostBtn();
 }
@@ -914,7 +999,7 @@ function showHubInfo(info) {
   };
   const st = info.stats;
   const connect = el("button", { class: "ghost left" }, "Connect…");
-  const ok = el("button", { class: "ghost" }, "OK");
+  const ok = el("button", { class: "ghost default" }, "OK");
   const close = dialog([
     el("h2", {}, "Hub Info"),
     row("Address", hub, false, "address"),
@@ -937,7 +1022,7 @@ function hubDialog(firstRun, onCancel) {
   const input = el("input", { type: "text", placeholder: "http://hub.example:7788",
     value: firstRun ? "" : hub });
   const err = el("div", { class: "err" });
-  const go = el("button", { class: "ghost" }, "Connect");
+  const go = el("button", { class: "ghost default" }, "Connect");
   const cancel = el("button", { class: "ghost" }, "Cancel");
   const btns = firstRun ? [go] : [cancel, go];
   const close = dialog([
@@ -1012,7 +1097,7 @@ function profileDialog(needName) {
     } catch (e2) { err.textContent = e2.message; }
     pick.disabled = false;
   };
-  const save = el("button", { class: "ghost" }, "Save");
+  const save = el("button", { class: "ghost default" }, "Save");
   const cancel = el("button", { class: "ghost" }, "Cancel");
   const close = dialog([
     el("h2", {}, "Your Profile"),
