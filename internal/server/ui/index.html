@@ -95,6 +95,18 @@ a { color: #202a87; text-decoration: underline; }
 .dropdown.icons .dd-item { position: relative; padding-left: 40px; }
 .dd-ico { position: absolute; left: 17px; top: 50%; margin-top: -8px; width: 16px; height: 16px; }
 .dd-ico svg, .dd-ico img { display: block; width: 16px; height: 16px; image-rendering: pixelated; }
+/* the check mark OS 9's Application menu set beside the active program,
+   in the left column every menu row leaves for it; it takes the text
+   color, so a highlighted (inverted) row shows it white */
+.dd-item.chk { position: relative; }
+.dd-chk { position: absolute; left: 5px; top: 50%; margin-top: -4px; width: 10px; height: 8px; }
+.dd-chk svg { display: block; width: 10px; height: 8px; fill: currentColor; }
+/* the Apple menu lists the open windows: a phone can pile up many, and
+   an editor window's title can be a long file name, so the list scrolls
+   instead of running off the screen and a row clips instead of pushing
+   the menu past the right edge */
+#dd-apple { max-height: calc(100dvh - 24px); overflow-y: auto; }
+#dd-apple .dd-win { max-width: calc(100vw - 48px); overflow: hidden; text-overflow: ellipsis; }
 /* the Desktop Menu editor's status line goes red when the daemon refuses a save */
 .ed-info .ed-saved.err { color: #7a1010; }
 
@@ -939,7 +951,7 @@ body.mobile th.sorted {
 <body>
 
 <div id="menubar">
-  <div class="menu appl" data-m="apple" title="About"><svg width="15" height="15" viewBox="0 0 32 32" shape-rendering="crispEdges"><rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/><rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/><rect x="10.5" y="5.5" width="11" height="8" fill="#7FD67F" stroke="#000"/><rect x="12" y="18" width="8" height="2" fill="#55524B"/><rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/></svg></div>
+  <div class="menu appl" data-m="apple" title="About This Computer, and the open windows"><svg width="15" height="15" viewBox="0 0 32 32" shape-rendering="crispEdges"><rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/><rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/><rect x="10.5" y="5.5" width="11" height="8" fill="#7FD67F" stroke="#000"/><rect x="12" y="18" width="8" height="2" fill="#55524B"/><rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/></svg></div>
   <div class="menu" data-m="file">File</div>
   <div class="menu" data-m="windows">Windows</div>
   <div class="menu" data-m="special">Special</div>
@@ -956,6 +968,7 @@ body.mobile th.sorted {
   </div>
 </div>
 
+<!-- the open windows follow About under a rule (appleMenuFill) -->
 <div class="dropdown" id="dd-apple" hidden>
   <div class="dd-item" data-act="about">About This Computer</div>
 </div>
@@ -1890,6 +1903,14 @@ function closeFrontWindow() {
   wins.sort((a, b) => (+b.style.zIndex || 0) - (+a.style.zIndex || 0));
   if (wins[0]) closeWin(wins[0]);
 }
+// the windows a user could switch to: the visible ones — and on a phone,
+// where opening a window hides the one it replaces, the ones waiting in
+// the back-stack too, open in every sense but the visual
+function openWindows() {
+  return [...document.querySelectorAll("#desktop .window")]
+    .filter(w => !w.hidden || (IS_MOBILE && mobileStack.includes(w.id)));
+}
+const winLabel = w => (w.querySelector(".title") || {}).textContent || w.id;
 function initWindow(w) {
   w.addEventListener("mousedown", () => { if (!w.closest(".overlay")) focusWin(w); });
   const tb = w.querySelector(".titlebar");
@@ -2293,6 +2314,7 @@ function menuShow(m) {
   openMenuEl = m;
   m.classList.add("open");
   const dd = $("#dd-" + m.dataset.m);
+  if (m.dataset.m === "apple") appleMenuFill();
   dd.hidden = false;
   dd.style.left = Math.min(m.getBoundingClientRect().left, window.innerWidth - dd.offsetWidth - 4) + "px";
 }
@@ -2333,6 +2355,31 @@ const ACTIONS = {
 document.querySelectorAll(".dd-item").forEach(it => {
   it.addEventListener("click", () => { menuClose(); const a = ACTIONS[it.dataset.act]; if (a) a(); });
 });
+// Apple menu: About This Computer, and under a rule every open window,
+// the way OS 9's Application menu listed the running programs beside
+// their small icons with a check mark on the active one. Picking a row
+// brings that window forward — on a phone, where one window fills the
+// screen and the rest wait hidden in the back-stack, it's the way to
+// switch between them. Rebuilt each time the menu drops, so it always
+// shows the windows open at that moment.
+const CHECK_MARK = `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path d="M9 0h1v2H9zM8 1h1v2H8zM7 2h1v2H7zM6 3h1v2H6zM5 4h1v2H5zM4 5h1v2H4zM3 6h1v2H3zM0 3h1v2H0zM1 4h1v2H1zM2 5h1v2H2z"/></svg>`;
+function appleMenuFill() {
+  const dd = $("#dd-apple");
+  dd.querySelectorAll(".dd-win").forEach(n => n.remove());
+  const wins = openWindows().filter(w => w.id !== "win-about")
+    .sort((a, b) => winLabel(a).localeCompare(winLabel(b)));
+  dd.classList.toggle("icons", wins.length > 0);
+  if (!wins.length) return;
+  dd.append(el("div", { class: "dd-sep dd-win" }));
+  for (const w of wins) {
+    const front = w.classList.contains("front");
+    const d = el("div", { class: "dd-item dd-win" + (front ? " chk" : ""), onclick: () => { menuClose(); openWin(w); } });
+    if (front) { const c = el("span", { class: "dd-chk" }); c.innerHTML = CHECK_MARK; d.append(c); }
+    const i = el("span", { class: "dd-ico" }); i.innerHTML = winIcon(w); d.append(i);
+    d.append(winLabel(w));
+    dd.append(d);
+  }
+}
 
 // ---- Apple → About This Computer ----
 // OS 9's box: the logo panel, the memory lines, and below the rule one
@@ -3945,8 +3992,8 @@ const DESK_EMPTY = { vms: "No VMs", apps: "No Apps", windows: "No Windows" };
 function deskGen(kind) {
   if (kind === "vms") return sortedVMs(lastVMs).map(vm => ({ label: vm.name, items: vmCtxItems(vm) }));
   if (kind === "apps") return appsList.map(a => ({ label: a.title || a.name, act: () => openAppWin(a.name) }));
-  return [...document.querySelectorAll("#desktop .window")].filter(w => !w.hidden)
-    .map(w => ({ label: (w.querySelector(".title") || {}).textContent || w.id, icon: winIcon(w), act: () => openWin(w) }))
+  return openWindows()
+    .map(w => ({ label: winLabel(w), icon: winIcon(w), act: () => openWin(w) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 // the small icon for an open window in the Windows list: the desktop art
