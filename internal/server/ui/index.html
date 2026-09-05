@@ -2811,6 +2811,16 @@ let DOC_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering=
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
   <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
 </svg>`;
+// Daemon Log: a tractor-feed printout — the wide sheet with its perforated
+// sprocket strips torn along dotted lines, and the log's lines inside,
+// each a dark timestamp then a grayer message of its own length
+let LOG_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="4.5" y="1.5" width="23" height="29" fill="#fff" stroke="#000"/>
+  <path fill="#ccc" d="M8 2h1v2H8zM8 5h1v2H8zM8 8h1v2H8zM8 11h1v2H8zM8 14h1v2H8zM8 17h1v2H8zM8 20h1v2H8zM8 23h1v2H8zM8 26h1v2H8zM8 29h1v2H8zM23 2h1v2h-1zM23 5h1v2h-1zM23 8h1v2h-1zM23 11h1v2h-1zM23 14h1v2h-1zM23 17h1v2h-1zM23 20h1v2h-1zM23 23h1v2h-1zM23 26h1v2h-1zM23 29h1v2h-1z"/>
+  <path fill="#aaa" d="M5 4h2v2H5zM5 9h2v2H5zM5 14h2v2H5zM5 19h2v2H5zM5 24h2v2H5zM25 4h2v2h-2zM25 9h2v2h-2zM25 14h2v2h-2zM25 19h2v2h-2zM25 24h2v2h-2z"/>
+  <path fill="#55524B" d="M10 4h3v1h-3zM10 7h3v1h-3zM10 10h3v1h-3zM10 13h3v1h-3zM10 16h3v1h-3zM10 19h3v1h-3zM10 22h3v1h-3zM10 25h3v1h-3z"/>
+  <path fill="#8B867B" d="M14 4h7v1h-7zM14 7h5v1h-5zM14 10h8v1h-8zM14 13h4v1h-4zM14 16h7v1h-7zM14 19h6v1h-6zM14 22h3v1h-3zM14 25h8v1h-8z"/>
+</svg>`;
 // image document: the page with a framed landscape — sun over two hills
 let IMAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
@@ -3159,6 +3169,7 @@ const ICON_DEFS = [
   { key: "doc", label: "Document", size: 32, get: () => DOC_ICON, set: s => DOC_ICON = s },
   { key: "image", label: "Image File", size: 32, get: () => IMAGE_ICON, set: s => IMAGE_ICON = s },
   { key: "archive", label: "Archive", size: 32, get: () => ARCHIVE_ICON, set: s => ARCHIVE_ICON = s },
+  { key: "log", label: "Daemon Log", size: 32, get: () => LOG_ICON, set: s => LOG_ICON = s },
   { key: "app", label: "App", size: 32, get: () => APP_FALLBACK_ICON, set: s => APP_FALLBACK_ICON = s },
   { key: "news", label: "Newsfeed", size: 32, dom: "#news-icon svg" },
   { key: "chat", label: "Chat", size: 32, dom: "#chat-icon svg" },
@@ -3999,8 +4010,9 @@ function deskGen(kind) {
 // the small icon for an open window in the Windows lists: the desktop
 // art of whatever the window shows, at 16px — a VM (screen tinted by its
 // state), an app's own icon, a folder, document or image, a Terminal or
-// agent session, Chat, Newsfeed, the Trash; text-bearing windows (Daemon
-// Log, the documentation, the menu editor) get the document, and windows
+// agent session, Chat, Newsfeed, the Trash, the Daemon Log's printout;
+// text-bearing windows (the documentation, the menu editor) get the
+// document, and windows
 // with no art of their own the Platinum window. One set of icons, all
 // the 32px art halved: on a retina screen its half-pixel outline reads
 // finer than a hand-drawn 16px mini would (tried and reverted 2026-09-05)
@@ -4022,7 +4034,8 @@ function winIcon(w) {
   if (id === "win-chat") return at16($("#chat-icon svg").outerHTML);
   if (id === "win-news") return at16($("#news-icon svg").outerHTML);
   if (id === "win-trash") return at16($("#trash-icon svg").outerHTML);
-  if (["win-log", "win-docs", "win-skill", "win-menu"].includes(id)) return at16(DOC_ICON);
+  if (id === "win-log") return at16(LOG_ICON);
+  if (["win-docs", "win-skill", "win-menu"].includes(id)) return at16(DOC_ICON);
   return at16(WINDOW_ICON);
 }
 function deskMenuItems(nodes) {
