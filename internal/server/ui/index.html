@@ -2099,8 +2099,8 @@ let winRev = 0;
 // id, remembers its geometry and reconnects on its own (openHostTermWin);
 // its icon shows only on hosts with the CLI installed (hostAgents)
 const AGENT_APPS = {
-  claude: { title: "Claude Code", icon: () => CLAUDE_ICON, mini: () => MINI_CLAUDE_ICON },
-  codex: { title: "Codex", icon: () => CODEX_ICON, mini: () => MINI_CODEX_ICON },
+  claude: { title: "Claude Code", icon: () => CLAUDE_ICON },
+  codex: { title: "Codex", icon: () => CODEX_ICON },
 };
 // the agent behind a window id ("win-claude" → "claude"), "" for any other
 function agentOfWin(id) {
@@ -2574,89 +2574,6 @@ let MINI_TODO_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rend
   <rect x="4.5" y="9.5" width="4" height="4" fill="#fff" stroke="#000"/>
   <rect x="10" y="11" width="2" height="1" fill="#55524B"/>
 </svg>`;
-// a Platinum window at 16px — title bar stripes over a white pane — for
-// windows with no desktop art of their own in the Windows list
-let MINI_WINDOW_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect x="1.5" y="2.5" width="13" height="11" fill="#fff" stroke="#000"/>
-  <rect x="2" y="3" width="12" height="3" fill="#DAD5CA"/>
-  <path fill="#8B867B" d="M6 3h7v1H6zM6 5h7v1H6z"/>
-  <rect x="3" y="3" width="2" height="3" fill="#DAD5CA"/>
-  <rect x="2" y="6" width="12" height="1" fill="#000"/>
-</svg>`;
-// Small icons proper: OS 9 drew every icon again at 16px with a full one-
-// pixel outline rather than shrinking the 32px art (which halves every
-// line to a hairline). These are the Windows lists' rows for the things
-// that have desktop art but no small version of their own.
-// the compact Mac of the VM mini with a dark screen: Terminal's green
-// prompt, Claude Code's coral spark, Codex's white ring
-let MINI_TERMINAL_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect x="3.5" y="0.5" width="9" height="12" fill="#DAD5CA" stroke="#000"/>
-  <rect x="5.5" y="2.5" width="5" height="5" fill="#000" stroke="#000"/>
-  <path fill="#33ff33" d="M6 3h1v1H6zM7 4h1v1H7zM6 5h1v1H6zM8 5h2v1H8z"/>
-  <rect x="6" y="9" width="4" height="1" fill="#55524B"/>
-  <rect x="5.5" y="12.5" width="5" height="2" fill="#C8C3B8" stroke="#000"/>
-</svg>`;
-let MINI_CLAUDE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect x="3.5" y="0.5" width="9" height="12" fill="#DAD5CA" stroke="#000"/>
-  <rect x="5.5" y="2.5" width="5" height="5" fill="#000" stroke="#000"/>
-  <path fill="#D97757" d="M6 3h1v1H6zM9 3h1v1H9zM7 4h2v2H7zM6 6h1v1H6zM9 6h1v1H9z"/>
-  <rect x="6" y="9" width="4" height="1" fill="#55524B"/>
-  <rect x="5.5" y="12.5" width="5" height="2" fill="#C8C3B8" stroke="#000"/>
-</svg>`;
-let MINI_CODEX_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect x="3.5" y="0.5" width="9" height="12" fill="#DAD5CA" stroke="#000"/>
-  <rect x="5.5" y="2.5" width="5" height="5" fill="#000" stroke="#000"/>
-  <path fill="#FFFFFF" d="M7 3h2v1H7zM6 4h1v2H6zM9 4h1v2H9zM7 6h2v1H7z"/>
-  <rect x="6" y="9" width="4" height="1" fill="#55524B"/>
-  <rect x="5.5" y="12.5" width="5" height="2" fill="#C8C3B8" stroke="#000"/>
-</svg>`;
-// the lavender folder face-on with its tab, navy outline, lit top rows and
-// a shaded bottom row, from the same blue-violet ramp as the 32px folder
-let MINI_FOLDER_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <path fill="#30305e" d="M1 3h6v1H1zM1 4h1v9H1zM6 4h9v1H6zM14 5h1v8h-1zM1 12h14v1H1z"/>
-  <path fill="#d2d2fa" d="M2 4h4v1H2zM2 5h12v1H2z"/>
-  <path fill="#b6b6f4" d="M2 6h12v5H2z"/>
-  <path fill="#8080dc" d="M2 11h12v1H2z"/>
-  <path fill="#000" fill-opacity="0.25" d="M15 5h1v9h-1zM2 13h14v1H2z"/>
-</svg>`;
-// the page with the folded corner, and the same page framing a landscape;
-// pixel-plotted so the fold's diagonal steps one pixel at a time
-let MINI_DOC_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <path fill="#fff" d="M4 2h4v4H4zM4 6h8v8H4z"/>
-  <path fill="#ccc" d="M9 3h1v1H9zM9 4h2v1H9z"/>
-  <path fill="#000" d="M3 1h6v1H3zM3 2h1v12H3zM9 2h1v1H9zM10 3h1v1H10zM11 4h1v1H11zM12 5h1v10H12zM3 14h9v1H3zM8 2h1v3H8zM8 5h4v1H8z"/>
-</svg>`;
-let MINI_IMAGE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <path fill="#fff" d="M4 2h4v4H4zM4 6h8v8H4z"/>
-  <path fill="#ccc" d="M9 3h1v1H9zM9 4h2v1H9z"/>
-  <path fill="#000" d="M3 1h6v1H3zM3 2h1v12H3zM9 2h1v1H9zM10 3h1v1H10zM11 4h1v1H11zM12 5h1v10H12zM3 14h9v1H3zM8 2h1v3H8zM8 5h4v1H8z"/>
-  <rect x="4.5" y="7.5" width="7" height="5" fill="#99ccff" stroke="#000"/>
-  <path fill="#ffff33" d="M6 8h1v1H6z"/>
-  <path fill="#77bb77" d="M7 10h1v1H7zM5 11h3v1H5z"/>
-  <path fill="#336633" d="M9 10h1v1H9zM8 11h3v1H8z"/>
-</svg>`;
-// the diamond app badge, pixel-plotted so its edges step evenly
-let MINI_APP_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <path fill="#DAD5CA" d="M7 2h2v1H7zM6 3h4v1H6zM5 4h6v1H5zM4 5h3v1H4zM9 5h3v1H9zM3 6h3v1H3zM10 6h3v1H10zM2 7h3v1H2zM11 7h3v1H11zM2 8h3v1H2zM11 8h3v1H11zM3 9h3v1H3zM10 9h3v1H10zM4 10h3v1H4zM9 10h3v1H9zM5 11h6v1H5zM6 12h4v1H6zM7 13h2v1H7z"/>
-  <path fill="#9C9AF2" d="M7 6h2v1H7zM6 7h4v1H6zM6 8h4v1H6zM7 9h2v1H7z"/>
-  <path fill="#000" d="M7 1h2v1H7zM6 2h1v1H6zM9 2h1v1H9zM5 3h1v1H5zM10 3h1v1H10zM4 4h1v1H4zM11 4h1v1H11zM3 5h1v1H3zM7 5h2v1H7zM12 5h1v1H12zM2 6h1v1H2zM6 6h1v1H6zM9 6h1v1H9zM13 6h1v1H13zM1 7h1v1H1zM5 7h1v1H5zM10 7h1v1H10zM14 7h1v1H14zM1 8h1v1H1zM5 8h1v1H5zM10 8h1v1H10zM14 8h1v1H14zM2 9h1v1H2zM6 9h1v1H6zM9 9h1v1H9zM13 9h1v1H13zM3 10h1v1H3zM7 10h2v1H7zM12 10h1v1H12zM4 11h1v1H4zM11 11h1v1H11zM5 12h1v1H5zM10 12h1v1H10zM6 13h1v1H6zM9 13h1v1H9zM7 14h2v1H7z"/>
-</svg>`;
-// the newspaper: masthead strip, headline bar, photo block beside its
-// columns, then the lines below
-let MINI_NEWS_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect x="1.5" y="2.5" width="13" height="11" fill="#DAD5CA" stroke="#000"/>
-  <rect x="2" y="3" width="12" height="1" fill="#EDEAE2"/>
-  <rect x="3" y="5" width="10" height="1" fill="#55524B"/>
-  <rect x="3" y="7" width="4" height="3" fill="#8B867B"/>
-  <path fill="#55524B" d="M8 7h5v1H8zM8 9h5v1H8zM3 11h10v1H3z"/>
-</svg>`;
-// the wastebasket: knob, lid, ribbed can
-let MINI_TRASH_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect x="7.5" y="0.5" width="2" height="2" fill="#C8C3B8" stroke="#000"/>
-  <rect x="3.5" y="2.5" width="10" height="2" fill="#DAD5CA" stroke="#000"/>
-  <rect x="4.5" y="4.5" width="8" height="10" fill="#C8C3B8" stroke="#000"/>
-  <path d="M6.5 6v7M8.5 6v7M10.5 6v7" stroke="#8B867B"/>
-</svg>`;
 // the desktop's compact Mac at 16px, screen tinted by VM state; a custom
 // icon keeps the tint — any pixel painted the factory running-green is the
 // screen, and follows the state
@@ -2875,6 +2792,15 @@ let appsList = [];
 let APP_FALLBACK_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path d="M16 2.5 L29.5 16 L16 29.5 L2.5 16 Z" fill="#DAD5CA" stroke="#000"/>
   <path d="M16 8.5 L23.5 16 L16 23.5 L8.5 16 Z" fill="#9C9AF2" stroke="#000"/>
+</svg>`;
+// a Platinum window — title bar stripes and close box over a white pane —
+// for windows with no desktop art of their own in the Windows lists
+let WINDOW_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="3.5" y="4.5" width="25" height="23" fill="#fff" stroke="#000"/>
+  <rect x="4" y="5" width="24" height="6" fill="#DAD5CA"/>
+  <path fill="#8B867B" d="M11 6h16v1H11zM11 8h16v1H11zM11 10h16v1H11z"/>
+  <rect x="5.5" y="6.5" width="4" height="4" fill="#DAD5CA" stroke="#000"/>
+  <rect x="4" y="11" width="24" height="1" fill="#000"/>
 </svg>`;
 // OS 9 folder, downsampled pixel-for-pixel from a real Mac OS 9 Finder
 // capture (Macintosh HD window): lavender perspective folder, navy outline,
@@ -3237,22 +3163,13 @@ const ICON_DEFS = [
   { key: "news", label: "Newsfeed", size: 32, dom: "#news-icon svg" },
   { key: "chat", label: "Chat", size: 32, dom: "#chat-icon svg" },
   { key: "trash", label: "Trash", size: 32, dom: "#trash-icon svg" },
+  { key: "window", label: "Window", size: 32, get: () => WINDOW_ICON, set: s => WINDOW_ICON = s,
+    note: "the Windows lists' icon for windows with no art of their own" },
   { key: "vm-mini", label: "VM (mini)", size: 16, get: () => miniMacIcon("running"),
     note: "the green screen follows each VM's state" },
   { key: "chat-mini", label: "Chat (mini)", size: 16, get: () => MINI_CHAT_ICON, set: s => MINI_CHAT_ICON = s },
   { key: "note-mini", label: "Note (mini)", size: 16, get: () => MINI_NOTE_ICON, set: s => MINI_NOTE_ICON = s },
   { key: "todo-mini", label: "Todo (mini)", size: 16, get: () => MINI_TODO_ICON, set: s => MINI_TODO_ICON = s },
-  { key: "window-mini", label: "Window (mini)", size: 16, get: () => MINI_WINDOW_ICON, set: s => MINI_WINDOW_ICON = s,
-    note: "the Windows list's icon for windows with no art of their own" },
-  { key: "terminal-mini", label: "Terminal (mini)", size: 16, get: () => MINI_TERMINAL_ICON, set: s => MINI_TERMINAL_ICON = s },
-  { key: "claude-mini", label: "Claude Code (mini)", size: 16, get: () => MINI_CLAUDE_ICON, set: s => MINI_CLAUDE_ICON = s },
-  { key: "codex-mini", label: "Codex (mini)", size: 16, get: () => MINI_CODEX_ICON, set: s => MINI_CODEX_ICON = s },
-  { key: "folder-mini", label: "Folder (mini)", size: 16, get: () => MINI_FOLDER_ICON, set: s => MINI_FOLDER_ICON = s },
-  { key: "doc-mini", label: "Document (mini)", size: 16, get: () => MINI_DOC_ICON, set: s => MINI_DOC_ICON = s },
-  { key: "image-mini", label: "Image File (mini)", size: 16, get: () => MINI_IMAGE_ICON, set: s => MINI_IMAGE_ICON = s },
-  { key: "app-mini", label: "App (mini)", size: 16, get: () => MINI_APP_ICON, set: s => MINI_APP_ICON = s },
-  { key: "news-mini", label: "Newsfeed (mini)", size: 16, get: () => MINI_NEWS_ICON, set: s => MINI_NEWS_ICON = s },
-  { key: "trash-mini", label: "Trash (mini)", size: 16, get: () => MINI_TRASH_ICON, set: s => MINI_TRASH_ICON = s },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -4079,34 +3996,34 @@ function deskGen(kind) {
     .map(w => ({ label: winLabel(w), icon: winIcon(w), act: () => openWin(w) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
-// the small icon for an open window in the Windows lists: the 16px
-// version of whatever the window shows — a VM (screen tinted by its
+// the small icon for an open window in the Windows lists: the desktop
+// art of whatever the window shows, at 16px — a VM (screen tinted by its
 // state), an app's own icon, a folder, document or image, a Terminal or
 // agent session, Chat, Newsfeed, the Trash; text-bearing windows (Daemon
 // Log, the documentation, the menu editor) get the document, and windows
-// with no art of their own the mini Platinum window. Always the small
-// art, never the 32px icon shrunk: that halves its outline to a hairline
-// beside the minis' full pixel
+// with no art of their own the Platinum window. One set of icons, all
+// the 32px art halved: on a retina screen its half-pixel outline reads
+// finer than a hand-drawn 16px mini would (tried and reverted 2026-09-05)
 function winIcon(w) {
-  const id = w.id;
-  if (id === "win-vms") return miniMacIcon("running");
-  if (id === "win-detail") { const vm = lastVMs.find(v => v.name === currentVM); return miniMacIcon(vm ? vm.state : "stopped"); }
+  const id = w.id, at16 = svg => sizeSvg(svg, 16);
+  if (id === "win-vms") return macIcon("running", 16);
+  if (id === "win-detail") { const vm = lastVMs.find(v => v.name === currentVM); return macIcon(vm ? vm.state : "stopped", 16); }
   if (id.startsWith("win-app-")) {
     const app = appsList.find(a => a.name === id.slice(8));
     return app && app.icon
       ? `<img src="/apps/${encodeURIComponent(app.name)}/${app.icon.split("/").map(encodeURIComponent).join("/")}" alt="">`
-      : MINI_APP_ICON;
+      : at16(APP_FALLBACK_ICON);
   }
-  if (id.startsWith("win-ws-")) return MINI_FOLDER_ICON;
-  if (id.startsWith("win-ed-")) return MINI_DOC_ICON;
-  if (id.startsWith("win-iv-")) return MINI_IMAGE_ICON;
-  if (id.startsWith("win-term-")) return MINI_TERMINAL_ICON;
-  if (agentOfWin(id)) return AGENT_APPS[agentOfWin(id)].mini();
-  if (id === "win-chat") return MINI_CHAT_ICON;
-  if (id === "win-news") return MINI_NEWS_ICON;
-  if (id === "win-trash") return MINI_TRASH_ICON;
-  if (["win-log", "win-docs", "win-skill", "win-menu"].includes(id)) return MINI_DOC_ICON;
-  return MINI_WINDOW_ICON;
+  if (id.startsWith("win-ws-")) return at16(FOLDER_ICON);
+  if (id.startsWith("win-ed-")) return at16(DOC_ICON);
+  if (id.startsWith("win-iv-")) return at16(IMAGE_ICON);
+  if (id.startsWith("win-term-")) return at16(TERMINAL_ICON);
+  if (agentOfWin(id)) return at16(AGENT_APPS[agentOfWin(id)].icon());
+  if (id === "win-chat") return at16($("#chat-icon svg").outerHTML);
+  if (id === "win-news") return at16($("#news-icon svg").outerHTML);
+  if (id === "win-trash") return at16($("#trash-icon svg").outerHTML);
+  if (["win-log", "win-docs", "win-skill", "win-menu"].includes(id)) return at16(DOC_ICON);
+  return at16(WINDOW_ICON);
 }
 function deskMenuItems(nodes) {
   const out = [];
