@@ -40,6 +40,11 @@ type agentSession struct {
 	Attached bool   `json:"attached"`
 	Bell     bool   `json:"bell"`
 	Working  bool   `json:"working"`
+	// from the session's hooks (agentStateHooks), Claude Code only: State
+	// is the word they wrote, Wants that the session waits for the person
+	// — its turn finished, or a permission or question is pending
+	State string `json:"state,omitempty"`
+	Wants bool   `json:"wants"`
 }
 
 // agentWorkingSeconds: activity this fresh means the session's CLI is
@@ -126,6 +131,21 @@ func agentSessions(a hostAgent) []agentSession {
 	return parseAgentSessions(a, string(out), host, time.Now().Unix())
 }
 
+// markAgentStates reads each session's state file into the list. A
+// word from the hooks outranks the activity guess: working means
+// working whatever the pane's silence (a long tool run), and a finished
+// or waiting session is not working however much it repaints.
+func (s *Server) markAgentStates(a hostAgent, list []agentSession) {
+	for i := range list {
+		switch st := readAgentState(s.agentStateFile(a, list[i].Name)); st {
+		case agentStateWorking:
+			list[i].State, list[i].Working = st, true
+		case agentStateDone, agentStateWaiting:
+			list[i].State, list[i].Working, list[i].Wants = st, false, true
+		}
+	}
+}
+
 // agentColumn is the daemon's side of one window's column. It keeps the
 // window's list current — {"sessions":[…],"current":"…"} text frames on
 // connect, after a switch, and whenever tmux reports a change, polled
@@ -187,7 +207,9 @@ func (c *agentColumn) follow(ctx context.Context) {
 		if cur := c.sh.Current(); cur != "" {
 			c.setCurrent(cur)
 		}
-		msg, _ := json.Marshal(map[string]any{"sessions": agentSessions(c.a), "current": c.current()})
+		list := agentSessions(c.a)
+		c.s.markAgentStates(c.a, list)
+		msg, _ := json.Marshal(map[string]any{"sessions": list, "current": c.current()})
 		if string(msg) != last {
 			last = string(msg)
 			if c.out.WriteText(msg) != nil {
@@ -251,6 +273,8 @@ func (c *agentColumn) kill(name string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("tmux kill-session: %s", strings.TrimSpace(string(out)))
 	}
+	os.Remove(c.s.agentStatusFile(c.a, name)) // the next session under this number starts clean
+	os.Remove(c.s.agentStateFile(c.a, name))
 	c.refresh()
 	return nil
 }

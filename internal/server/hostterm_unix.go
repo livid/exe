@@ -80,10 +80,12 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 	if has := tmuxCmd("has-session", "-t", "="+a.session); has != nil {
 		if has.Run() != nil {
 			os.Remove(file)
+			os.Remove(stateFileOf(file))
 		}
 		cmd = tmuxCmd("new-session", "-A", "-D", "-s", a.session, "-c", dir, line)
 	} else {
 		os.Remove(file)
+		os.Remove(stateFileOf(file))
 	}
 	cmd.Dir = dir
 	cmd.Env = cliEnv(bin)
@@ -126,6 +128,7 @@ func (s *Server) newAgentSession(a hostAgent, name string) error {
 		os.MkdirAll(filepath.Dir(file), 0o755)
 	}
 	os.Remove(file)
+	os.Remove(stateFileOf(file))
 	cmd := tmuxCmd("new-session", "-d", "-s", name, "-c", dir, line)
 	if cmd == nil {
 		return fmt.Errorf("a second session needs tmux on this host")

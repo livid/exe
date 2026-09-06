@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"exe/internal/codex"
@@ -68,14 +69,27 @@ func claudeStatusLine(settings string) (string, *int) {
 	return st.StatusLine.Command, st.StatusLine.Padding
 }
 
-// agentStatusArgs are the CLI arguments that install the hook, none for
-// an agent without one. Claude Code's --settings takes a JSON object that
-// ranks above every settings file, so a status line of the user's own
-// (settings, normally ~/.claude/settings.json) would be hidden by the
+// agentStateFile is where the hooks of one of an agent's sessions leave
+// its state for the session column (agentStateHooks): a sibling of the
+// status file, ".state" for ".status.json".
+func (s *Server) agentStateFile(a hostAgent, session string) string {
+	return stateFileOf(s.agentStatusFile(a, session))
+}
+
+func stateFileOf(statusFile string) string {
+	return strings.TrimSuffix(statusFile, ".status.json") + ".state"
+}
+
+// agentStatusArgs are the CLI arguments that install the hooks, none for
+// an agent without them. Claude Code's --settings takes a JSON object
+// that ranks above every settings file, so a status line of the user's
+// own (settings, normally ~/.claude/settings.json) would be hidden by the
 // bridge: it is run on the same JSON afterwards and keeps drawing the
 // in-terminal line. The bridge writes beside the file and moves the
 // result into place last, so the daemon never reads half a write; it is
-// a sh one-liner, which is why Windows does without.
+// a sh one-liner, which is why Windows does without. The same JSON
+// carries the state hooks (agentStateHooks); hook lists merge across
+// settings sources, so the user's own hooks keep running.
 func agentStatusArgs(a hostAgent, file, settings string) []string {
 	if !a.statusLine {
 		return nil
@@ -90,8 +104,55 @@ func agentStatusArgs(a hostAgent, file, settings string) []string {
 		}
 	}
 	sl["command"] = line + "; mv -f " + shQuote(tmp) + " " + shQuote(file)
-	b, _ := json.Marshal(map[string]any{"statusLine": sl})
+	b, _ := json.Marshal(map[string]any{"statusLine": sl, "hooks": agentStateHooks(stateFileOf(file))})
 	return []string{"--settings", string(b)}
+}
+
+// The session column's states. A session's hooks write one word to its
+// state file (agentStateHooks) and the column reads it back
+// (markAgentStates): the CLI is mid-turn, has finished a turn and waits
+// at its prompt, or waits on the person right now — a permission, a
+// question. No file, no word: a fresh session, or an agent without hooks.
+const (
+	agentStateWorking = "working"
+	agentStateDone    = "done"
+	agentStateWaiting = "waiting"
+)
+
+// agentStateHooks is the hooks block for a session's --settings: Claude
+// Code runs a command on each event, and these write the state file.
+// UserPromptSubmit opens a turn, Stop (and a turn that dies of an API
+// error) closes it at the prompt, and a Notification that asks for the
+// person — a permission prompt, an idle prompt, a question — marks it
+// waiting. Written beside the file and moved into place, like the
+// status bridge, so a read never sees half a word.
+func agentStateHooks(state string) map[string]any {
+	tmp := state + ".tmp"
+	write := func(word string) []map[string]any {
+		cmd := "printf " + word + " > " + shQuote(tmp) + " && mv -f " + shQuote(tmp) + " " + shQuote(state)
+		return []map[string]any{{"type": "command", "command": cmd}}
+	}
+	return map[string]any{
+		"UserPromptSubmit": []map[string]any{{"hooks": write(agentStateWorking)}},
+		"Stop":             []map[string]any{{"hooks": write(agentStateDone)}},
+		"StopFailure":      []map[string]any{{"hooks": write(agentStateDone)}},
+		"Notification": []map[string]any{{
+			"matcher": "permission_prompt|idle_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog",
+			"hooks":   write(agentStateWaiting)}},
+	}
+}
+
+// readAgentState is the word in a session's state file, "" for none.
+func readAgentState(file string) string {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return ""
+	}
+	switch w := strings.TrimSpace(string(b)); w {
+	case agentStateWorking, agentStateDone, agentStateWaiting:
+		return w
+	}
+	return ""
 }
 
 // agentStatus is what the window's status line shows: the parts of the

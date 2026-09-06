@@ -132,8 +132,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   grip astride it drags the list's width, saved in the layout — and its
   button in a row of its own under the list. On a phone the column turns
   into a strip of tabs above the terminal. A row's mark sits left of its
-  title: the 7px bell, or the Chat list's 6px pulsing green dot while the
-  session works unwatched — green means "live" everywhere.
+  title: the 7px black dot when the session wants someone (a hook's word,
+  or the bell), or the Chat list's 6px pulsing green dot while it works
+  unwatched — green means "live" everywhere.
 
 ## Icons
 

@@ -266,3 +266,77 @@ func TestAgentStatusMessage(t *testing.T) {
 		}
 	}
 }
+
+// The settings JSON carries the session's state hooks beside the status
+// line, each writing its word into the state file and moving it into
+// place; a Notification matcher names the kinds that ask for the person.
+func TestAgentStateHooks(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "claude-2.status.json")
+	args := agentStatusArgs(hostAgents["claude"], file, filepath.Join(dir, "none.json"))
+	var st struct {
+		Hooks map[string][]struct {
+			Matcher string `json:"matcher"`
+			Hooks   []struct {
+				Type, Command string
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(args[1]), &st); err != nil {
+		t.Fatal(err)
+	}
+	state := filepath.Join(dir, "claude-2.state")
+	for event, word := range map[string]string{"UserPromptSubmit": "working", "Stop": "done", "StopFailure": "done", "Notification": "waiting"} {
+		h := st.Hooks[event]
+		if len(h) != 1 || len(h[0].Hooks) != 1 || h[0].Hooks[0].Type != "command" {
+			t.Fatalf("%s hooks = %+v", event, h)
+		}
+		// run the hook the way Claude Code would: the file holds the word after
+		if out, err := exec.Command("sh", "-c", h[0].Hooks[0].Command).CombinedOutput(); err != nil {
+			t.Fatalf("%s hook: %v: %s", event, err, out)
+		}
+		if got := readAgentState(state); got != word {
+			t.Errorf("%s wrote %q, want %q", event, got, word)
+		}
+	}
+	if m := st.Hooks["Notification"][0].Matcher; !strings.Contains(m, "permission_prompt") || !strings.Contains(m, "idle_prompt") {
+		t.Errorf("Notification matcher = %q", m)
+	}
+	if st.Hooks["Stop"][0].Matcher != "" {
+		t.Errorf("Stop should match every stop, got matcher %q", st.Hooks["Stop"][0].Matcher)
+	}
+	os.WriteFile(state, []byte("nonsense"), 0o644)
+	if got := readAgentState(state); got != "" {
+		t.Errorf("a stray word reads as %q, want none", got)
+	}
+}
+
+func TestMarkAgentStates(t *testing.T) {
+	s := &Server{StateDir: t.TempDir()}
+	a := hostAgents["claude"]
+	os.MkdirAll(filepath.Join(s.StateDir, "agents"), 0o755)
+	os.WriteFile(s.agentStateFile(a, "exe-claude"), []byte("done"), 0o644)
+	os.WriteFile(s.agentStateFile(a, "exe-claude-2"), []byte("working\n"), 0o644)
+	os.WriteFile(s.agentStateFile(a, "exe-claude-3"), []byte("waiting"), 0o644)
+	list := []agentSession{
+		{Name: "exe-claude", Working: true},    // repainting, but its turn is over
+		{Name: "exe-claude-2", Working: false}, // silent inside a long tool run
+		{Name: "exe-claude-3", Working: true},
+		{Name: "exe-claude-4", Working: true}, // no file: the activity guess stands
+	}
+	s.markAgentStates(a, list)
+	want := []agentSession{
+		{Name: "exe-claude", State: "done", Working: false, Wants: true},
+		{Name: "exe-claude-2", State: "working", Working: true},
+		{Name: "exe-claude-3", State: "waiting", Working: false, Wants: true},
+		{Name: "exe-claude-4", Working: true},
+	}
+	for i := range want {
+		if list[i] != want[i] {
+			t.Errorf("%s: got %+v, want %+v", want[i].Name, list[i], want[i])
+		}
+	}
+	if got := s.agentStateFile(a, "exe-claude-2"); filepath.Base(got) != "claude-2.state" {
+		t.Errorf("state file = %q", got)
+	}
+}

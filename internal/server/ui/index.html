@@ -5244,12 +5244,19 @@ function openHostTermWin(app, cmd) {
   function renderSessions() {
     if (!list) return;
     list.replaceChildren(...sessions.map(s => {
-      const working = s.working && s.name !== current; // the terminal itself shows the current one's state
+      // the current row carries no mark: the terminal itself shows its
+      // state. Off screen, wanting someone outranks working — the hooks'
+      // word (finished at its prompt, or a permission or question), or
+      // the bell, which is all a CLI without hooks (Codex) can say
+      const off = s.name !== current;
+      const wants = off && (s.wants || s.bell), working = off && s.working && !wants;
+      const why = !wants ? (working ? "\nstill working" : "")
+        : s.state === "waiting" ? "\nwaiting for you: a permission, or a question"
+        : s.state === "done" ? "\nfinished its turn — waiting for you"
+        : "\nrang the bell while no window was showing it";
       const row = el("div", { class: "sess-row" + (s.name === current ? " sel" : "") + (s.title ? "" : " untitled"),
-        title: sessTitle(s) + (s.bell ? "\nrang the bell while no window was showing it"
-          : working ? "\nstill working" : "")
-          + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") });
-      if (s.bell) row.append(sessBell());
+        title: sessTitle(s) + why + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") });
+      if (wants) row.append(sessBell());
       else if (working) row.append(el("span", { class: "sess-live" }));
       row.append(el("span", { class: "t" }, sessTitle(s)));
       row.onclick = () => { if (s.name && s.name !== current) switchSession(s.name); term.focus(); };
