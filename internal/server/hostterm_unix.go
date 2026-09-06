@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -57,36 +59,29 @@ func (s *unixShell) Close() error {
 // session of its own ("exe-claude", "exe-codex"): closing the window only
 // detaches, and the desktop icon returns to the running conversation. -A
 // attaches when the session already exists, -D kicks any stale client so
-// the pty size follows the newest window. The command line goes through
-// env so the CLI's own directory is on PATH inside the session too: a
-// tmux server's environment is fixed when it starts (by the first agent
-// opened), and an npm shim like codex under nvm needs the node beside it.
-// Without tmux each window is a fresh CLI run. An agent with a status-line
-// hook is launched with the arguments that install it (agentStatusArgs)
-// — the session's first launch decides, as -A attaching ignores the
-// command line — and its status file is cleared for a fresh conversation,
-// so the window never opens on the last one's figures.
-func (s *Server) startAgent(a hostAgent, cols, rows int) (hostShell, error) {
+// the pty size follows the newest window. Without tmux each window is a
+// fresh CLI run. An agent with a status-line hook is launched with the
+// arguments that install it (agentCommand) — the session's first launch
+// decides, as -A attaching ignores the command line — and its status
+// file is cleared for a fresh conversation, so the window never opens on
+// the last one's figures.
+func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 	bin := agentPath(a)
 	if bin == "" {
 		return nil, fmt.Errorf("%s is not installed on this host", a.title)
 	}
 	dir := s.agentProjectDir()
-	file := s.agentStatusFile(a)
-	args := agentStatusArgs(a, file, claudeSettingsPath())
+	file := s.agentStatusFile(a, a.session)
+	args, line := agentCommand(a, bin, file)
 	if args != nil {
 		os.MkdirAll(filepath.Dir(file), 0o755)
 	}
 	cmd := exec.Command(bin, args...)
-	if tmux, err := exec.LookPath("tmux"); err == nil {
-		if exec.Command(tmux, "has-session", "-t", "="+a.session).Run() != nil {
+	if has := tmuxCmd("has-session", "-t", "="+a.session); has != nil {
+		if has.Run() != nil {
 			os.Remove(file)
 		}
-		line := "env " + shQuote("PATH="+cliPATH(bin)) + " " + shQuote(bin)
-		for _, arg := range args {
-			line += " " + shQuote(arg)
-		}
-		cmd = exec.Command(tmux, "new-session", "-A", "-D", "-s", a.session, "-c", dir, line)
+		cmd = tmuxCmd("new-session", "-A", "-D", "-s", a.session, "-c", dir, line)
 	} else {
 		os.Remove(file)
 	}
@@ -97,6 +92,91 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (hostShell, error) {
 		return nil, err
 	}
 	return &unixShell{f: f, cmd: cmd}, nil
+}
+
+// agentCommand is the CLI's launch inside a tmux session: the arguments
+// that install its status-line hook on file (agentStatusArgs, none for
+// an agent without one) and the command line the session runs. That
+// goes through env so the CLI's own directory is on PATH inside the
+// session too: a tmux server's environment is fixed when it starts (by
+// the first agent opened), and an npm shim like codex under nvm needs
+// the node beside it.
+func agentCommand(a hostAgent, bin, file string) (args []string, line string) {
+	args = agentStatusArgs(a, file, claudeSettingsPath())
+	line = "env " + shQuote("PATH="+cliPATH(bin)) + " " + shQuote(bin)
+	for _, arg := range args {
+		line += " " + shQuote(arg)
+	}
+	return args, line
+}
+
+// newAgentSession starts a detached tmux session of the agent's under
+// name — the window's session column adding a conversation — with the
+// CLI launched as startAgent launches the icon's own and a status file
+// of the session's own, cleared first. A window moves to it with Switch.
+func (s *Server) newAgentSession(a hostAgent, name string) error {
+	bin := agentPath(a)
+	if bin == "" {
+		return fmt.Errorf("%s is not installed on this host", a.title)
+	}
+	dir := s.agentProjectDir()
+	file := s.agentStatusFile(a, name)
+	args, line := agentCommand(a, bin, file)
+	if args != nil {
+		os.MkdirAll(filepath.Dir(file), 0o755)
+	}
+	os.Remove(file)
+	cmd := tmuxCmd("new-session", "-d", "-s", name, "-c", dir, line)
+	if cmd == nil {
+		return fmt.Errorf("a second session needs tmux on this host")
+	}
+	cmd.Dir = dir
+	cmd.Env = cliEnv(bin)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux new-session: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// tmuxClient finds the pty's tmux client — the one whose pid is the
+// command on the pty — and the session it shows; "" for a pty that is no
+// tmux client (a Terminal window, or an agent run without tmux). Colons
+// separate the fields: neither a tty path nor a session name holds one.
+func (s *unixShell) tmuxClient() (tty, session string) {
+	cmd := tmuxCmd("list-clients", "-F", "#{client_pid}:#{client_tty}:#{client_session}")
+	if cmd == nil {
+		return "", ""
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		return "", ""
+	}
+	pid := strconv.Itoa(s.cmd.Process.Pid)
+	for _, line := range strings.Split(string(out), "\n") {
+		if f := strings.Split(line, ":"); len(f) == 3 && f[0] == pid {
+			return f[1], f[2]
+		}
+	}
+	return "", ""
+}
+
+func (s *unixShell) Current() string {
+	_, session := s.tmuxClient()
+	return session
+}
+
+// Switch moves the pty's tmux client to another session; the pty keeps
+// its size and tmux lays the session out for it.
+func (s *unixShell) Switch(session string) error {
+	tty, _ := s.tmuxClient()
+	if tty == "" {
+		return fmt.Errorf("this window is not a tmux client")
+	}
+	out, err := tmuxCmd("switch-client", "-c", tty, "-t", "="+session).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("switch-client: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // startHostShell starts the user's login shell on a pty; a non-empty command

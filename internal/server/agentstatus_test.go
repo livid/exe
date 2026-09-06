@@ -36,7 +36,7 @@ func TestPushAgentStatus(t *testing.T) {
 		defer c.CloseNow()
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
-		pushAgentStatus(ctx, &wsWriter{ctx: ctx, c: c}, file)
+		pushAgentStatus(ctx, &wsWriter{ctx: ctx, c: c}, func() string { return file })
 	}))
 	defer srv.Close()
 

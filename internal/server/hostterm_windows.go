@@ -18,6 +18,16 @@ func (s *windowsShell) Read(p []byte) (int, error)  { return s.pty.Read(p) }
 func (s *windowsShell) Write(p []byte) (int, error) { return s.pty.Write(p) }
 func (s *windowsShell) Resize(cols, rows int)       { s.pty.Resize(cols, rows) }
 func (s *windowsShell) Close() error                { return s.pty.Close() }
+func (s *windowsShell) Current() string             { return "" }
+func (s *windowsShell) Switch(string) error {
+	return fmt.Errorf("a second session needs tmux, which Windows has not")
+}
+
+// newAgentSession is the session column's new conversation; without
+// tmux there is nothing to start one in.
+func (s *Server) newAgentSession(a hostAgent, name string) error {
+	return fmt.Errorf("a second session needs tmux, which Windows has not")
+}
 
 // startHostShell starts an interactive PowerShell on a ConPTY — PowerShell 7
 // when installed, Windows PowerShell otherwise. A non-empty command runs in
@@ -48,7 +58,7 @@ func startHostShell(command string, cols, rows int) (hostShell, error) {
 // startAgent runs an agent's CLI (Claude Code, Codex) on a ConPTY in the
 // project dir. No tmux on Windows — each window is a fresh CLI run — and
 // no status-line hook: its bridge is a sh one-liner (agentStatusArgs).
-func (s *Server) startAgent(a hostAgent, cols, rows int) (hostShell, error) {
+func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 	bin := agentPath(a)
 	if bin == "" {
 		return nil, fmt.Errorf("%s is not installed on this host", a.title)

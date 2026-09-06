@@ -59,6 +59,15 @@ window's shows the ChatGPT subscription's 5-hour and weekly usage windows
 (the sign-in under **Configuration → OpenAI**), re-read once a minute
 while the window is open; hover for the reset times.
 
+On a host with tmux, a Claude Code or Codex window lists the agent's
+sessions down its left, one row per tmux session, titled the way the CLI
+titles its terminal — Claude Code keeps that on its current task. Click a
+row and the window moves to that session; **New** starts another
+conversation in a session of its own, beside the first. A dot marks a
+session that rang the bell while no window was showing it — a reply
+finished, or a permission waits — and the status line's figures follow
+the session on screen. A window comes back to the session it was on last.
+
 Windows behave like OS 9 windows: drag the title bar to move, drag the
 left/right/bottom edges or the grow corner to resize, click the shade box to
 collapse a window to its title bar, the zoom box to toggle its size. The

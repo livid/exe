@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"exe/internal/codex"
@@ -26,9 +27,15 @@ import (
 // figures the Chat window's status line and the Configuration window's
 // OpenAI tab show.
 
-// agentStatusFile is where an agent's hook leaves its latest figures.
-func (s *Server) agentStatusFile(a hostAgent) string {
-	return filepath.Join(s.StateDir, "agents", a.app+".status.json")
+// agentStatusFile is where the hook of one of an agent's sessions leaves
+// its latest figures: the icon's own session keeps the plain name, the
+// column's numbered ones carry their number (agentsessions.go).
+func (s *Server) agentStatusFile(a hostAgent, session string) string {
+	name := a.app
+	if n := agentSessionNumber(a, session); n > 1 {
+		name += "-" + strconv.Itoa(n)
+	}
+	return filepath.Join(s.StateDir, "agents", name+".status.json")
 }
 
 // claudeSettingsPath is Claude Code's per-user settings file.
@@ -151,20 +158,29 @@ func agentStatusMessage(b []byte) ([]byte, bool) {
 	return msg, true
 }
 
-// pushAgentStatus follows an agent's status file for the life of a
-// window, sending the figures as they stand on connect and each new
+// pushAgentStatus follows an agent window's status file for the life of
+// the window, sending the figures as they stand on connect and each new
 // version after. A poll, not a watch: the file changes a few times a
 // minute at most, and a second's lag is invisible under the reply that
-// caused it.
-func pushAgentStatus(ctx context.Context, out *wsWriter, file string) {
+// caused it. file is asked each time: it is the current session's, and
+// when the session column moves the window the figures follow —
+// {"status":null} first when the new session has none yet.
+func pushAgentStatus(ctx context.Context, out *wsWriter, file func() string) {
+	var cur string
 	var seen time.Time
 	var seenSize int64
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
-		if st, err := os.Stat(file); err == nil && (!st.ModTime().Equal(seen) || st.Size() != seenSize) {
+		if f := file(); f != cur {
+			cur, seen, seenSize = f, time.Time{}, 0
+			if _, err := os.Stat(f); err != nil && out.WriteText([]byte(`{"status":null}`)) != nil {
+				return
+			}
+		}
+		if st, err := os.Stat(cur); err == nil && (!st.ModTime().Equal(seen) || st.Size() != seenSize) {
 			seen, seenSize = st.ModTime(), st.Size()
-			if b, err := os.ReadFile(file); err == nil {
+			if b, err := os.ReadFile(cur); err == nil {
 				if msg, ok := agentStatusMessage(b); ok && out.WriteText(msg) != nil {
 					return
 				}

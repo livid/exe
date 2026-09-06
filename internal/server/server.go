@@ -753,7 +753,7 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	agents := map[string]any{}
 	for app, a := range hostAgents {
 		if agentPath(a) != "" {
-			agents[app] = map[string]any{"dir": s.agentProjectDir()}
+			agents[app] = map[string]any{"dir": s.agentProjectDir(), "sessions": tmuxCmd("-V") != nil}
 		}
 	}
 	mem, disk, build := hostinfo.Mem(), hostinfo.DiskUsage(s.StateDir), hostinfo.BuildInfo()

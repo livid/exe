@@ -22,6 +22,33 @@ type hostShell interface {
 	Resize(cols, rows int)
 }
 
+// agentShell is an agent window's pty: a tmux client the window's
+// session column moves between the agent's sessions (agentsessions.go).
+// Current names the session the client shows, "" when it is no tmux
+// client; Switch moves it to another session of the agent's.
+type agentShell interface {
+	hostShell
+	Current() string
+	Switch(session string) error
+}
+
+// tmuxSocket names the tmux server the agent sessions live on: "" for
+// the user's default server, a -L socket name in tests so they never
+// touch it.
+var tmuxSocket string
+
+// tmuxCmd is a tmux command on that server, nil without tmux on PATH.
+func tmuxCmd(args ...string) *exec.Cmd {
+	tmux, err := exec.LookPath("tmux")
+	if err != nil {
+		return nil
+	}
+	if tmuxSocket != "" {
+		args = append([]string{"-L", tmuxSocket}, args...)
+	}
+	return exec.Command(tmux, args...)
+}
+
 // hostAgent is an agent CLI the desktop opens in a window of its own: app
 // is the ?app= value the browser sends, bin the command name, title the
 // name shown to people, and session the tmux session that keeps the
@@ -135,26 +162,29 @@ func shQuote(s string) string {
 // text frames the other way for its status line (agentstatus.go):
 // {"status":…} with the session's figures from Claude Code's status-line
 // hook, {"usage":…} with the ChatGPT subscription's usage windows for
-// Codex.
+// Codex; and for its session column (agentsessions.go)
+// {"sessions":[…],"current":…}, the agent's tmux sessions and the one the
+// window shows. The window sends {"switch":"exe-claude-2"} to move to
+// another and {"new":true} to start one; what goes wrong comes back as
+// {"error":…}.
 // ?cmd=<command line> runs that one command in a login shell — the desktop
 // menu's "terminal <command>" shortcut to a CLI tool; the session ends
 // with the command.
 func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	var sh hostShell
 	var err error
-	var statusFile string
-	var openaiUsage bool
+	var agent *hostAgent
+	var ash agentShell
 	if app := r.URL.Query().Get("app"); app != "" {
 		a, ok := hostAgents[app]
 		if !ok {
 			writeErr(w, http.StatusBadRequest, fmt.Errorf("unknown app %q", app))
 			return
 		}
-		sh, err = s.startAgent(a, 80, 24)
-		if a.statusLine {
-			statusFile = s.agentStatusFile(a)
+		if ash, err = s.startAgent(a, 80, 24); err == nil {
+			sh = ash
 		}
-		openaiUsage = a.openaiUsage
+		agent = &a
 	} else {
 		sh, err = startHostShell(r.URL.Query().Get("cmd"), 80, 24)
 	}
@@ -181,11 +211,16 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusNormalClosure, "session ended")
 		cancel()
 	}()
-	if statusFile != "" {
-		go pushAgentStatus(ctx, out, statusFile)
-	}
-	if openaiUsage {
-		go pushOpenAIUsage(ctx, out, s.codexUsage, openaiUsageEvery)
+	var col *agentColumn
+	if agent != nil {
+		col = newAgentColumn(s, *agent, ash, out)
+		go col.follow(ctx)
+		if agent.statusLine {
+			go pushAgentStatus(ctx, out, col.statusFile)
+		}
+		if agent.openaiUsage {
+			go pushOpenAIUsage(ctx, out, s.codexUsage, openaiUsageEvery)
+		}
 	}
 
 	for {
@@ -200,10 +235,28 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 		case websocket.MessageText:
 			var msg struct {
-				Resize []int `json:"resize"`
+				Resize []int  `json:"resize"`
+				Switch string `json:"switch"`
+				New    bool   `json:"new"`
 			}
-			if json.Unmarshal(data, &msg) == nil && len(msg.Resize) == 2 {
+			if json.Unmarshal(data, &msg) != nil {
+				continue
+			}
+			if len(msg.Resize) == 2 {
 				sh.Resize(msg.Resize[0], msg.Resize[1])
+			}
+			if col == nil || (msg.Switch == "" && !msg.New) {
+				continue
+			}
+			var err error
+			if msg.Switch != "" {
+				err = col.switchTo(msg.Switch)
+			} else {
+				err = col.open()
+			}
+			if err != nil {
+				b, _ := json.Marshal(map[string]string{"error": err.Error()})
+				out.WriteText(b)
 			}
 		}
 	}

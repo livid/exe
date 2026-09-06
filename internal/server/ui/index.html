@@ -721,6 +721,27 @@ a.svc:hover { text-decoration: underline; }
 /* Terminal windows are edge to edge: the win-frame draws the outline and
    the viewport scrollbar is the .vflush 15px flush variant */
 .hostterm-box { border: 0; box-shadow: none; }
+/* an agent window's session column (agentsessions.go): the agent's tmux
+   sessions down the left, the terminal on the right. A sunken white list
+   like Chat's; its one seam with the terminal is the 1px line on its
+   right, and New gets a row of its own under the list */
+.agent-wrap { display: flex; align-items: stretch; }
+.agent-wrap .hostterm-box { flex: 1; min-width: 0; }
+.sess-col { width: 160px; flex: none; display: flex; flex-direction: column;
+  border-right: 1px solid var(--black); background: var(--g300); }
+.sess-list { flex: 1; min-height: 0; overflow-y: auto; background: #fff; }
+.sess-row { display: flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 8px;
+  white-space: nowrap; border-bottom: 1px solid #efefef; }
+.sess-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sess-row.untitled .t { color: #777; }
+.sess-row.sel { background: var(--hl); color: #fff; }
+.sess-row.sel.untitled .t { color: #ddd; }
+/* the bell: the CLI rang it in a session no window was showing — a reply
+   finished, or a permission waits */
+.sess-bell { flex: none; width: 7px; height: 7px; display: block; }
+.sess-bell svg { display: block; }
+.sess-btns { flex: none; border-top: 1px solid var(--black); padding: 12px; display: flex; justify-content: center; }
+.sess-btns button { min-width: 58px; }
 /* Text inset lives on .xterm, not the box: FitAddon subtracts element padding
    when sizing rows, but the absolutely-positioned viewport anchors to the
    padding box — so the scrollbar runs flush to the frame, OS 9 style. */
@@ -996,6 +1017,13 @@ body.mobile #log-out { height: 100% !important; }
 body.mobile #news-list { height: 100% !important; }
 body.mobile #docs-body { height: 100% !important; }
 body.mobile .term-window .hostterm-box { height: 100%; }
+/* an agent window's session column becomes a strip of tabs above the terminal */
+body.mobile .term-window .agent-wrap { height: 100%; flex-direction: column; }
+body.mobile .term-window .agent-wrap .hostterm-box { flex: 1; min-height: 0; height: auto; }
+body.mobile .sess-col { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--black); }
+body.mobile .sess-list { display: flex; overflow-x: auto; overflow-y: hidden; }
+body.mobile .sess-row { flex: none; max-width: 150px; height: auto; padding: 0 8px; border-bottom: 0; border-right: 1px solid #efefef; }
+body.mobile .sess-btns { border-top: 0; border-left: 1px solid var(--black); padding: 6px 8px; }
 body.mobile #term-box { height: calc(var(--vvh, 100dvh) - 260px); min-height: 180px; }
 /* chat: sessions become a strip on top, messages fill the rest */
 body.mobile .chat-wrap { height: 100% !important; flex-direction: column; }
@@ -2924,7 +2952,7 @@ let selectedIcon = null;
 // set by the boot hostinfo fetch: an agent's icon (Claude Code, Codex) shows
 // only on hosts with its CLI installed, and its tooltip names the project
 // dir it opens in
-const hostAgents = {}; // app → { dir }
+const hostAgents = {}; // app → { dir, sessions } — sessions: tmux there, so the window gets a session column
 function renderIcons(vms) {
   const box = $("#icons");
   box.replaceChildren();
@@ -5118,11 +5146,15 @@ async function termPaste(term) {
 // agent is the same conversation (opening a second one takes it over from
 // the first). Because the session outlives its window, an agent window
 // keeps a stable id ("win-" + app) and reopens at its last geometry.
-// cmd is a command line to run in place of a shell (the desktop menu's
-// "terminal btop" shortcut) — the window is titled after the tool and
-// ends when it exits
+// On a host with tmux the window carries a session column: the agent's
+// sessions down its left, a click moving the window's tmux client
+// between them and New starting another in a session of its own
+// (agentsessions.go). cmd is a command line to run in place of a shell
+// (the desktop menu's "terminal btop" shortcut) — the window is titled
+// after the tool and ends when it exits
 function openHostTermWin(app, cmd) {
   const agent = app ? AGENT_APPS[app] : null;
+  const column = !!(agent && hostAgents[app] && hostAgents[app].sessions);
   const tool = cmd ? cmd.trim().split(/\s+/)[0].split("/").pop() : "";
   if (agent) {
     // one session, one window: reopening the icon just brings it forward
@@ -5136,12 +5168,13 @@ function openHostTermWin(app, cmd) {
   const open = document.querySelectorAll("#desktop .term-window").length;
   w.style.left = (150 + open * 26) + "px";
   w.style.top = (100 + open * 22) + "px";
-  w.style.width = "640px";
+  w.style.width = column ? "800px" : "640px";
   const geom = agent ? agentGeom[app] : null;
   if (geom) {
     // last saved geometry, same clamps as applyWinState pass 2
     const v = geom;
-    if (v.w) w.style.width = Math.max(400, Math.min(window.innerWidth - 24, v.w)) + "px";
+    // a column window keeps at least 80 terminal columns beside the list
+    if (v.w) w.style.width = Math.max(column ? 760 : 400, Math.min(window.innerWidth - 24, v.w)) + "px";
     if (v.l !== undefined) w.style.left = Math.min(window.innerWidth - 60, Math.max(60 - (v.w || 640), v.l)) + "px";
     if (v.t !== undefined) w.style.top = Math.min(window.innerHeight - 46, Math.max(0, v.t)) + "px";
   }
@@ -5149,7 +5182,9 @@ function openHostTermWin(app, cmd) {
     <div class="title"></div>
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
-      <div class="win-body" style="padding:0"><div class="hostterm-box"></div></div>
+      <div class="win-body" style="padding:0">${column
+        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button></div></div><div class="hostterm-box"></div></div>`
+        : `<div class="hostterm-box"></div>`}</div>
       <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
       ${GROW_TILE}
     </div>`;
@@ -5173,6 +5208,35 @@ function openHostTermWin(app, cmd) {
   wireTermMenu(w, box, () => term);
   box.querySelector(".xterm-viewport").classList.add("vflush");
   fit.fit();
+  // the session column: rows follow the daemon's {"sessions":…} frames, a
+  // click moves the window's tmux client, New starts a conversation in a
+  // session of its own. Until the first frame the column holds the one
+  // row the window opens on, so nothing jumps when the list arrives. A
+  // browser goes back to the session it was on last (localStorage): a
+  // reconnect lands the client on the icon's own session
+  const list = w.querySelector(".sess-list"), newBtn = w.querySelector(".sess-new");
+  const sessKey = "exe_" + app + "_session";
+  let sessions = [{ name: "", number: 1, title: "" }], current = "", restored = false;
+  const sessTitle = s => s.title ? s.title.replace(/^✳\s*/, "") : agent.title + " " + s.number;
+  function renderSessions() {
+    if (!list) return;
+    list.replaceChildren(...sessions.map(s => {
+      const row = el("div", { class: "sess-row" + (s.name === current ? " sel" : "") + (s.title ? "" : " untitled"),
+        title: sessTitle(s) + (s.bell ? "\nrang the bell while no window was showing it" : "")
+          + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") });
+      if (s.bell) row.append(sessBell());
+      row.append(el("span", { class: "t" }, sessTitle(s)));
+      row.onclick = () => { if (s.name && s.name !== current) switchSession(s.name); term.focus(); };
+      return row;
+    }));
+  }
+  function switchSession(name) {
+    current = name;
+    renderSessions();
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ switch: name }));
+  }
+  if (newBtn) newBtn.onclick = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
+  renderSessions();
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const qs = new URLSearchParams();
   if (tokenInput.value) qs.set("token", tokenInput.value);
@@ -5194,20 +5258,37 @@ function openHostTermWin(app, cmd) {
     ws.binaryType = "arraybuffer";
     ws.onopen = () => {
       retry = 0;
+      restored = false;
       status.textContent = "connected";
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
       if (initial) term.focus(); // never steal focus on a background reconnect
       requestAnimationFrame(() => termSpacerFix(box, term));
     };
     // binary frames are the terminal; a text frame is the daemon's figures
-    // for the status line — {"status":…} with the Claude Code session's,
-    // {"usage":…} with the ChatGPT subscription's for Codex
+    // for the status line — {"status":…} with the Claude Code session's
+    // (null: the session the column moved to has none yet), {"usage":…}
+    // with the ChatGPT subscription's for Codex — or the session column's
+    // list, {"sessions":[…],"current":…}, or an {"error":…} for a switch
+    // or New that failed
     ws.onmessage = e => {
       if (typeof e.data !== "string") { term.write(new Uint8Array(e.data)); return; }
       let msg;
       try { msg = JSON.parse(e.data); } catch (err) { return; }
-      if (msg.status) showAgentUsage(usage, msg.status);
+      if ("status" in msg) { if (msg.status) showAgentUsage(usage, msg.status); else usage.hidden = true; }
       if ("usage" in msg) showOpenAIUsage(usage, msg.usage);
+      if (Array.isArray(msg.sessions)) {
+        if (msg.sessions.length) sessions = msg.sessions;
+        current = msg.current || current;
+        if (!restored) {
+          restored = true;
+          let want = null;
+          try { want = localStorage.getItem(sessKey); } catch (err) {}
+          if (want && want !== current && sessions.some(s => s.name === want)) switchSession(want);
+        }
+        renderSessions();
+        try { localStorage.setItem(sessKey, current); } catch (err) {}
+      }
+      if (msg.error) toast(msg.error);
     };
     ws.onclose = e => {
       usage.hidden = true; // the figures come back with the link
@@ -5234,7 +5315,7 @@ function openHostTermWin(app, cmd) {
   connect(true);
   term.onData(d => { if (ws && ws.readyState === 1) ws.send(enc.encode(d)); });
   window.addEventListener("resize", resize);
-  wireGrow(w.querySelector(".grow-box"), w, box, 400, { minH: 160, onMove: resize });
+  wireGrow(w.querySelector(".grow-box"), w, box, column ? 760 : 400, { minH: 160, onMove: resize });
   w._fit = resize; // applyWinState: refit after a remote geometry change
   w._teardown = () => {
     window.removeEventListener("resize", resize);
@@ -5243,6 +5324,13 @@ function openHostTermWin(app, cmd) {
     try { ws.close(); } catch (e) {}
     term.dispose();
   };
+}
+
+// the session column's bell: a 7px crispEdges dot in the row's own colour
+function sessBell() {
+  const b = el("span", { class: "sess-bell" });
+  b.innerHTML = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1z" fill="currentColor"/></svg>';
+  return b;
 }
 
 // A Claude Code window's status line carries its session's figures at
@@ -7320,7 +7408,7 @@ j("/v1/hostinfo").then(h => {
   let any = false;
   for (const app of Object.keys(AGENT_APPS)) {
     const a = h.agents && h.agents[app];
-    if (a) { hostAgents[app] = { dir: a.dir || "the Workspace folder" }; any = true; }
+    if (a) { hostAgents[app] = { dir: a.dir || "the Workspace folder", sessions: !!a.sessions }; any = true; }
   }
   if (any) renderIcons(lastVMs);
 }).catch(() => {});
