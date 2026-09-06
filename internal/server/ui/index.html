@@ -69,6 +69,9 @@ a { color: #202a87; text-decoration: underline; }
 #search-btn:active { background: var(--hl); color: #fff; }
 #clock { display: flex; align-items: center; padding: 0 12px; font-weight: bold;
   border-left: 1px solid var(--g600); box-shadow: inset 1px 0 0 #fff; }
+/* a phone shows the clock as a 15px analog face (tickClock) */
+#clock svg { display: block; }
+body.mobile #clock { padding: 0 10px; }
 .dropdown {
   position: fixed; top: calc(20px + var(--sat)); z-index: 3001; min-width: 200px;
   background: var(--g200); border: 1px solid var(--black); padding: 2px 1px;
@@ -2620,12 +2623,53 @@ $("#skill-copy").addEventListener("click", async () => {
   toast(ok ? "Prompt copied" : "Copy failed — copy the selected text manually");
 });
 
+// the phone menubar's clock: a 15px face whose hands tickClock draws live
+// over this art (the rim, four ticks, a white dial)
+let CLOCK_ICON = `<svg width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
+  <path fill="#fff" d="M5 1h5v1H5zM3 2h9v1H3zM2 3h11v1H2zM2 4h11v1H2zM1 5h13v1H1zM1 6h13v1H1zM1 7h13v1H1zM1 8h13v1H1zM1 9h13v1H1zM2 10h11v1H2zM2 11h11v1H2zM3 12h9v1H3zM5 13h5v1H5z"/>
+  <path fill="#000" d="M5 0h5v1H5zM3 1h2v1H3zM10 1h2v1H10zM2 2h1v1H2zM12 2h1v1H12zM1 3h1v1H1zM13 3h1v1H13zM1 4h1v1H1zM13 4h1v1H13zM0 5h1v1H0zM14 5h1v1H14zM0 6h1v1H0zM14 6h1v1H14zM0 7h1v1H0zM14 7h1v1H14zM0 8h1v1H0zM14 8h1v1H14zM0 9h1v1H0zM14 9h1v1H14zM1 10h1v1H1zM13 10h1v1H13zM1 11h1v1H1zM13 11h1v1H13zM2 12h1v1H2zM12 12h1v1H12zM3 13h2v1H3zM10 13h2v1H10zM5 14h5v1H5zM7 1h1v1H7zM13 7h1v1H13zM7 13h1v1H7zM1 7h1v1H1z"/>
+</svg>`;
 // ---- clock ----
+// A desktop reads the time as text. A phone's bar has no room for words,
+// so there the clock is a 15px analog face with the hands rasterised over
+// CLOCK_ICON each tick (a 6px minute hand, a 4px hour hand, Bresenham so
+// they stay pixel art at any angle); tapping it spells the time out for a
+// few seconds, the way OS 9's menubar clock showed the date on a click.
+let clockTextUntil = 0;
+function clockFace(d) {
+  const px = new Set();
+  const line = (x1, y1, x2, y2) => {
+    const dx = Math.abs(x2 - x1), dy = -Math.abs(y2 - y1), sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1;
+    let err = dx + dy;
+    for (;;) {
+      px.add(x1 + "," + y1);
+      if (x1 === x2 && y1 === y2) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x1 += sx; }
+      if (e2 <= dx) { err += dx; y1 += sy; }
+    }
+  };
+  const hand = (turn, len) => line(7, 7, Math.round(7 + len * Math.sin(turn * 2 * Math.PI)), Math.round(7 - len * Math.cos(turn * 2 * Math.PI)));
+  const m = d.getMinutes(), h = d.getHours() % 12;
+  hand(m / 60, 6);
+  hand((h + m / 60) / 12, 4);
+  const hands = [...px].map(p => { const [x, y] = p.split(","); return `M${x} ${y}h1v1H${x}z`; }).join("");
+  return CLOCK_ICON.replace("</svg>", `<path fill="#000" d="${hands}"/></svg>`);
+}
 function tickClock() {
-  $("#clock").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const now = new Date(), c = $("#clock");
+  const text = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (IS_MOBILE && Date.now() > clockTextUntil) c.innerHTML = clockFace(now);
+  else c.textContent = text;
+  c.title = now.toLocaleString([], { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 tickClock();
 setInterval(tickClock, 10000);
+if (IS_MOBILE) $("#clock").addEventListener("click", () => {
+  clockTextUntil = Date.now() + 3000;
+  tickClock();
+  setTimeout(tickClock, 3100);
+});
 
 // ---- global search (the menubar magnifier) ----
 // One window searches everything: VMs, chat sessions, and the Notes and
@@ -3313,6 +3357,8 @@ const ICON_DEFS = [
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
   { key: "search", label: "Search", size: 15, dom: "#search-btn svg" },
+  { key: "clock", label: "Clock (phone)", size: 15, get: () => CLOCK_ICON, set: s => CLOCK_ICON = s,
+    note: "the phone menubar's clock face; the hands are drawn live" },
 ];
 // factory art, captured before any override can land
 const ICON_FACTORY = {};
@@ -3349,6 +3395,7 @@ function applyIconOverrides(ovs, custom) {
   }
   renderIcons(lastVMs);
   cfStripPaint();
+  tickClock();
   $("#about-icon").innerHTML = macIcon("running", 48);
   document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
   if (!$("#win-myapps").hidden) loadMyApps().catch(() => {});
