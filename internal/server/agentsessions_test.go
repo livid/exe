@@ -35,7 +35,7 @@ func TestParseAgentSessions(t *testing.T) {
 		"exe-claude:1788692000:1788718700:1:0:second pane\n" +
 		"exe-claude-4:1788692009:1788718716:0:0:a title: with colons\n" +
 		"other:x\n"
-	list := parseAgentSessions(a, out, "spark", 1788718718)
+	list := parseAgentSessions(a, out, []string{"spark", "exe"}, 1788718718)
 	if len(list) != 3 {
 		t.Fatalf("got %d sessions: %+v", len(list), list)
 	}
@@ -48,8 +48,34 @@ func TestParseAgentSessions(t *testing.T) {
 	if list[1].Name != "exe-claude-3" || list[1].Number != 3 || list[1].Title != "" || list[1].Attached || !list[1].Bell || list[1].Created != 1788692008 || !list[1].Working {
 		t.Errorf("session 3 = %+v", list[1])
 	}
-	if got := parseAgentSessions(a, "", "spark", 1788718718); got == nil || len(got) != 0 {
+	if got := parseAgentSessions(a, "", []string{"spark"}, 1788718718); got == nil || len(got) != 0 {
 		t.Errorf("empty output = %#v, want an empty (not nil) list", got)
+	}
+
+	// Codex titles (codexArgs): a spinner in front while a turn runs is
+	// stripped and means working, however old the pane's last output; the
+	// thread id before the first prompt is no title, nor is the project
+	// folder's name a session started without the override shows
+	c := hostAgents["codex"]
+	out = "exe-codex:1788562035:1788700000:0:0:⠹ List numbers through 40\n" +
+		"exe-codex-2:1788562036:1788700000:0:1:01a0783c-153f-7ab3-b9da-5d7302aed8c7\n" +
+		"exe-codex-3:1788562037:1788718716:1:0:exe\n" +
+		"exe-codex-4:1788562038:1788700000:0:0:Inspect exe-city unstaged changes\n"
+	list = parseAgentSessions(c, out, []string{"spark", "exe"}, 1788718718)
+	if len(list) != 4 {
+		t.Fatalf("got %d codex sessions: %+v", len(list), list)
+	}
+	if l := list[0]; l.Title != "List numbers through 40" || !l.Working || !l.spinner {
+		t.Errorf("spinner row = %+v", l)
+	}
+	if l := list[1]; l.Title != "" || l.Working || l.spinner || !l.Bell {
+		t.Errorf("thread-id row = %+v", l)
+	}
+	if l := list[2]; l.Title != "" || !l.Working || l.spinner || !l.Attached {
+		t.Errorf("project-name row = %+v", l)
+	}
+	if l := list[3]; l.Title != "Inspect exe-city unstaged changes" || l.Working || l.spinner {
+		t.Errorf("titled idle row = %+v", l)
 	}
 }
 
@@ -101,7 +127,7 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatalf("timed out waiting for %s\nclients: %q\npty printed: %q", what, clients, seen)
 	}
 	waitFor("the client to attach", func() bool { return sh.Current() == a.session })
-	list := agentSessions(a)
+	list := s.agentSessions(a)
 	if len(list) != 1 || list[0].Number != 1 || !list[0].Attached {
 		t.Fatalf("after start: %+v", list)
 	}
@@ -116,7 +142,7 @@ func TestAgentSessionsLive(t *testing.T) {
 	if col.current() != "exe-test-sh-2" {
 		t.Fatalf("column current after open = %q", col.current())
 	}
-	list = agentSessions(a)
+	list = s.agentSessions(a)
 	if len(list) != 2 || list[0].Attached || !list[1].Attached {
 		t.Fatalf("after open: %+v", list)
 	}
@@ -142,7 +168,7 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor("the client on session 2 after the archive", func() bool { return sh.Current() == "exe-test-sh-2" })
-	if list = agentSessions(a); len(list) != 2 || list[1].Name != "exe-test-sh-2" {
+	if list = s.agentSessions(a); len(list) != 2 || list[1].Name != "exe-test-sh-2" {
 		t.Fatalf("after killing 3: %+v", list)
 	}
 	// archive one off screen: the window stays where it is
@@ -150,7 +176,7 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(200 * time.Millisecond)
-	if list = agentSessions(a); len(list) != 1 || list[0].Name != "exe-test-sh-2" || sh.Current() != "exe-test-sh-2" {
+	if list = s.agentSessions(a); len(list) != 1 || list[0].Name != "exe-test-sh-2" || sh.Current() != "exe-test-sh-2" {
 		t.Fatalf("after killing 1: %+v, current %q", list, sh.Current())
 	}
 	if err := col.archive("other"); err == nil {

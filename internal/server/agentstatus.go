@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -48,6 +49,29 @@ func claudeSettingsPath() string {
 	return filepath.Join(home, ".claude", "settings.json")
 }
 
+// codexConfigPath is Codex's per-user config file: config.toml in
+// $CODEX_HOME, ~/.codex by default.
+func codexConfigPath() string {
+	home := os.Getenv("CODEX_HOME")
+	if home == "" {
+		h, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		home = filepath.Join(h, ".codex")
+	}
+	return filepath.Join(home, "config.toml")
+}
+
+// agentSettingsPath is the CLI's per-user settings file, where a status
+// line or notify command of the user's own would be set up.
+func agentSettingsPath(a hostAgent) string {
+	if a.notify {
+		return codexConfigPath()
+	}
+	return claudeSettingsPath()
+}
+
 // claudeStatusLine reads the status line a user set up for Claude Code
 // themselves: the command and its padding from settings.json, "" when
 // there is none.
@@ -81,9 +105,11 @@ func stateFileOf(statusFile string) string {
 }
 
 // agentStatusArgs are the CLI arguments that install the hooks, none for
-// an agent without them. Claude Code's --settings takes a JSON object
-// that ranks above every settings file, so a status line of the user's
-// own (settings, normally ~/.claude/settings.json) would be hidden by the
+// an agent without them; settings is the user's own settings file for
+// that CLI (agentSettingsPath). For Codex they are its config overrides
+// (codexArgs). Claude Code's --settings takes a JSON object that ranks
+// above every settings file, so a status line of the user's own
+// (settings, normally ~/.claude/settings.json) would be hidden by the
 // bridge: it is run on the same JSON afterwards and keeps drawing the
 // in-terminal line. The bridge writes beside the file and moves the
 // result into place last, so the daemon never reads half a write; it is
@@ -91,6 +117,9 @@ func stateFileOf(statusFile string) string {
 // carries the state hooks (agentStateHooks); hook lists merge across
 // settings sources, so the user's own hooks keep running.
 func agentStatusArgs(a hostAgent, file, settings string) []string {
+	if a.notify {
+		return codexArgs(file, settings)
+	}
 	if !a.statusLine {
 		return nil
 	}
@@ -142,12 +171,221 @@ func agentStateHooks(state string) map[string]any {
 	}
 }
 
+// codexArgs are the config overrides a Codex session is launched with:
+// -c key=value pairs that outrank config.toml for that run alone (the
+// user's config is not written). Codex has no status-line hook, but
+// three of its settings give the session column what Claude Code's hooks
+// give it. notify runs a command at the end of every turn with a JSON
+// argument that names the thread: the command drops that JSON in the
+// session's status file — the thread id is what makes the conversation
+// resumable (readAgentResumable) — and the word "done" in its state
+// file, written beside and moved into place like the status bridge; a
+// notify command of the user's own (config, normally ~/.codex/config.toml)
+// runs afterwards with the same argument. tui.terminal_title puts the
+// thread's title on the terminal, a spinner in front while a turn runs:
+// the column's row title and its working mark (parseAgentSessions) —
+// before the first prompt the title is the thread's id, which the column
+// shows as no title. tui.notifications rings the terminal bell at the
+// end of a turn and when an approval waits, whether or not Codex thinks
+// the terminal is focused (inside tmux it cannot tell), so tmux's bell
+// flag marks a session that wants someone while no window shows it.
+func codexArgs(file, config string) []string {
+	tmp, state := file+".tmp", stateFileOf(file)
+	script := "printf %s \"$1\" > " + shQuote(tmp) + " && mv -f " + shQuote(tmp) + " " + shQuote(file) +
+		" && printf done > " + shQuote(state+".tmp") + " && mv -f " + shQuote(state+".tmp") + " " + shQuote(state)
+	if user := codexNotify(config); len(user) > 0 {
+		script += " && exec"
+		for _, w := range user {
+			script += " " + shQuote(w)
+		}
+		script += " \"$1\""
+	}
+	return []string{
+		"-c", "notify=" + tomlStrings([]string{"sh", "-c", script, "exe-notify"}),
+		"-c", "tui.notifications=true",
+		"-c", `tui.notification_method="bel"`,
+		"-c", `tui.notification_condition="always"`,
+		"-c", `tui.terminal_title=["activity","thread-title"]`,
+	}
+}
+
+// codexNotify reads the notify command a user set up for Codex
+// themselves: the top-level notify array in config.toml, nil when there
+// is none — or when it is written in more TOML than this reader knows
+// (a multi-line string, say), which is to say the command is not chained
+// rather than misread.
+func codexNotify(config string) []string {
+	b, err := os.ReadFile(config)
+	if err != nil {
+		return nil
+	}
+	var arr string
+	found := false
+	for _, line := range strings.Split(string(b), "\n") {
+		if !found {
+			t := strings.TrimSpace(line)
+			if strings.HasPrefix(t, "[") {
+				return nil // the tables begin: a top-level key cannot follow
+			}
+			k, v, ok := strings.Cut(t, "=")
+			if !ok || strings.TrimSpace(k) != "notify" {
+				continue
+			}
+			found, arr = true, v
+		} else {
+			arr += "\n" + line
+		}
+		if list, ok := tomlStringArray(arr); ok {
+			return list
+		}
+	}
+	return nil
+}
+
+// tomlStringArray parses a TOML array of strings — ["a", 'b'] over any
+// number of lines, comments and a trailing comma allowed — into its
+// strings; false when s is not one, or not complete yet.
+func tomlStringArray(s string) ([]string, bool) {
+	i := 0
+	skip := func() { // whitespace, newlines and comments
+		for i < len(s) {
+			switch s[i] {
+			case ' ', '\t', '\r', '\n':
+				i++
+			case '#':
+				for i < len(s) && s[i] != '\n' {
+					i++
+				}
+			default:
+				return
+			}
+		}
+	}
+	skip()
+	if i >= len(s) || s[i] != '[' {
+		return nil, false
+	}
+	i++
+	out := []string{}
+	for {
+		skip()
+		if i >= len(s) {
+			return nil, false
+		}
+		if s[i] == ']' {
+			return out, true
+		}
+		if len(out) > 0 {
+			if s[i] != ',' {
+				return nil, false
+			}
+			i++
+			skip()
+			if i >= len(s) {
+				return nil, false
+			}
+			if s[i] == ']' {
+				return out, true
+			}
+		}
+		q := s[i]
+		if q != '"' && q != '\'' {
+			return nil, false
+		}
+		i++
+		var sb strings.Builder
+		for {
+			if i >= len(s) {
+				return nil, false
+			}
+			c := s[i]
+			if c == q {
+				i++
+				break
+			}
+			if c == '\n' && q == '\'' || c == '\\' && q == '"' && i+1 >= len(s) {
+				return nil, false
+			}
+			if c == '\\' && q == '"' {
+				i++
+				switch s[i] {
+				case 'n':
+					sb.WriteByte('\n')
+				case 't':
+					sb.WriteByte('\t')
+				case 'r':
+					sb.WriteByte('\r')
+				case '"', '\\':
+					sb.WriteByte(s[i])
+				case 'u', 'U':
+					n := 4
+					if s[i] == 'U' {
+						n = 8
+					}
+					if i+n >= len(s) {
+						return nil, false
+					}
+					r, err := strconv.ParseUint(s[i+1:i+1+n], 16, 32)
+					if err != nil {
+						return nil, false
+					}
+					sb.WriteRune(rune(r))
+					i += n
+				default:
+					return nil, false
+				}
+				i++
+				continue
+			}
+			sb.WriteByte(c)
+			i++
+		}
+		out = append(out, sb.String())
+	}
+}
+
+// tomlStrings writes a TOML array of strings, and tomlString one basic
+// string, quoted and escaped so any path or command survives.
+func tomlStrings(list []string) string {
+	parts := make([]string, len(list))
+	for i, s := range list {
+		parts[i] = tomlString(s)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func tomlString(s string) string {
+	var sb strings.Builder
+	sb.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '"' || r == '\\':
+			sb.WriteByte('\\')
+			sb.WriteRune(r)
+		case r == '\n':
+			sb.WriteString(`\n`)
+		case r == '\t':
+			sb.WriteString(`\t`)
+		case r == '\r':
+			sb.WriteString(`\r`)
+		case r < 0x20 || r == 0x7f:
+			sb.WriteString(fmt.Sprintf(`\u%04X`, r))
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	sb.WriteByte('"')
+	return sb.String()
+}
+
 // readAgentResumable says whether a session's conversation is one the
-// CLI's own resume picker can find: the status file names the session
-// and its transcript, and the transcript exists (the CLI writes it with
-// the first message; a fresh session has none). The daemon keeps no
-// pointer of its own — archiving a session ends it, and /resume inside
-// the CLI is the way back.
+// CLI's own resume picker can find. For Claude Code the status file
+// names the session and its transcript, and the transcript exists (the
+// CLI writes it with the first message; a fresh session has none). For
+// Codex the file is its notify command's JSON, written at the end of a
+// turn, when the thread it names is on disk. The daemon keeps no pointer
+// of its own — archiving a session ends it, and /resume inside the CLI
+// is the way back.
 func readAgentResumable(statusFile string) bool {
 	b, err := os.ReadFile(statusFile)
 	if err != nil {
@@ -155,12 +393,19 @@ func readAgentResumable(statusFile string) bool {
 	}
 	var h struct {
 		SessionID      string `json:"session_id"`
+		ThreadID       string `json:"thread-id"`
 		TranscriptPath string `json:"transcript_path"`
 		ContextWindow  struct {
 			TotalInputTokens int64 `json:"total_input_tokens"`
 		} `json:"context_window"`
 	}
-	if json.Unmarshal(b, &h) != nil || h.SessionID == "" {
+	if json.Unmarshal(b, &h) != nil {
+		return false
+	}
+	if h.ThreadID != "" {
+		return true
+	}
+	if h.SessionID == "" {
 		return false
 	}
 	if h.TranscriptPath != "" {

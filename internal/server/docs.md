@@ -61,20 +61,26 @@ while the window is open; hover for the reset times.
 
 On a host with tmux, a Claude Code or Codex window lists the agent's
 sessions down its left, one row per tmux session, titled the way the CLI
-titles its terminal — Claude Code keeps that on its current task. Click a
+titles its terminal — Claude Code keeps that on its current task, and
+Codex, which the desktop starts with its terminal title set to the
+thread, on the thread's name (a session started before that keeps its
+old title until it is restarted). Click a
 row and the window moves to that session; **New** starts another
 conversation in a session of its own, beside the first. While the window
 shows another session, a pulsing green dot marks one still working and a
 black dot one that waits for you — its turn finished, or a permission or
-question pending, which Claude Code reports through its hooks; for
-Codex, whose CLI has none, the black dot means the terminal bell rang
-while no window was showing it. Hover a row for which. The status line's
+question pending. Claude Code reports those through its hooks; Codex
+through its `notify` command, which the desktop points at the session
+(a `notify` of your own in `~/.codex/config.toml` still runs after it),
+and through the terminal bell, which the desktop has Codex ring at the
+end of a turn and for an approval so tmux notes it while no window is
+looking. Hover a row for which. The status line's
 figures follow the session on screen. A window comes back to the session it was on last,
 and dragging the line between the list and the terminal sets the list's
 width, kept with the window's layout. A row's contextual menu opens
 with when the session started, in grey, then starts a new session,
 copies the row's title, or archives the session, after a dialog: the session and its process end, and the conversation stays on
-this machine for `/resume` inside Claude Code — the desktop keeps no list
+this machine for `/resume` inside Claude Code or Codex — the desktop keeps no list
 of its own. Archive shows only once the conversation exists; when the
 window was showing that session it moves to the one before it.
 

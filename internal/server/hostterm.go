@@ -57,17 +57,20 @@ func tmuxCmd(args ...string) *exec.Cmd {
 // statusLine marks a CLI with a status-line hook the window's status line
 // can draw the session's figures from; openaiUsage one that runs on the
 // ChatGPT sign-in, whose window's status line shows the subscription's
-// usage windows instead (both agentstatus.go).
+// usage windows instead (both agentstatus.go). notify marks Codex, which
+// has no such hook but runs a notify command at the end of each turn and
+// takes the terminal title and bell settings the session column reads
+// (codexArgs, agentstatus.go).
 type hostAgent struct {
-	app, bin, title, session string
-	homeDirs                 []string
-	statusLine, openaiUsage  bool
+	app, bin, title, session        string
+	homeDirs                        []string
+	statusLine, openaiUsage, notify bool
 }
 
 var hostAgents = map[string]hostAgent{
 	"claude": {app: "claude", bin: "claude", title: "Claude Code", session: "exe-claude",
 		homeDirs: []string{filepath.Join(".claude", "local")}, statusLine: true},
-	"codex": {app: "codex", bin: "codex", title: "Codex", session: "exe-codex", openaiUsage: true},
+	"codex": {app: "codex", bin: "codex", title: "Codex", session: "exe-codex", openaiUsage: true, notify: true},
 }
 
 // agentPath finds an agent's CLI on this host, "" when it is not installed.

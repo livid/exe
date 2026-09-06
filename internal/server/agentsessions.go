@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // An agent window has a session column: the agent's tmux sessions on this
@@ -21,14 +25,16 @@ import (
 // hostterm_unix.go) and a status file of its own. The window's tmux
 // client is what moves: switch-client on the pty that is already
 // attached, so one window and one WebSocket serve every session. Row
-// titles are the panes' titles, which Claude Code keeps on its current
-// task, and a row is marked when tmux's bell flag is up for its session:
-// the CLI rang the bell — a reply finished, or a permission is waited
-// on — while no window was looking. A session whose pane printed output
-// in the last few seconds is working — the CLI streams and repaints its
-// spinner for the whole of a turn, and falls silent at a prompt — so the
-// column can mark rows still going as the bell marks rows that want
-// someone.
+// titles are the panes' titles: Claude Code keeps its on the current
+// task, and Codex, launched with its title on the thread (codexArgs),
+// on the thread's name — with a spinner in front while a turn runs,
+// which the list strips and reads as working. A row is marked when
+// tmux's bell flag is up for its session: the CLI rang the bell — a
+// reply finished, or a permission is waited on — while no window was
+// looking. A session whose pane printed output in the last few seconds
+// is working too — the CLI streams and repaints its spinner for the
+// whole of a turn, and falls silent at a prompt — so the column can mark
+// rows still going as the bell marks rows that want someone.
 
 // agentSession is one row of the column.
 type agentSession struct {
@@ -48,9 +54,12 @@ type agentSession struct {
 	// the conversation exists for the CLI's own resume picker
 	// (readAgentResumable): the column offers Archive only then
 	Resumable bool `json:"resumable"`
+	// the pane title carried a spinner: a turn is in flight, whatever an
+	// older word in the state file says (markAgentStates)
+	spinner bool
 }
 
-// agentWorkingSeconds: activity this fresh means the session's CLI is
+// agentWorkingSeconds: pane output this fresh means the session's CLI is
 // mid-turn. The list is polled every two seconds and tmux stamps whole
 // seconds, so the window has to be a few of them wide.
 const agentWorkingSeconds = 5
@@ -85,14 +94,24 @@ func agentSessionNumber(a hostAgent, name string) int {
 // separate the fields and the pane title, free text, comes last: a
 // session name cannot hold a colon, and tmux prints control characters
 // in its output as octal escapes, so no unprintable separator would
-// survive the trip.
-const tmuxSessionFormat = "#{session_name}:#{session_created}:#{session_activity}:#{session_attached}:#{window_bell_flag}:#{pane_title}"
+// survive the trip. The activity stamp is the window's, which pane
+// output moves; the session's moves on keys from a client alone, so it
+// would never see a CLI at work in a session no window shows.
+const tmuxSessionFormat = "#{session_name}:#{session_created}:#{window_activity}:#{session_attached}:#{window_bell_flag}:#{pane_title}"
+
+// uuidTitle matches the title Codex puts on the terminal before the
+// thread has a name: the thread's id.
+var uuidTitle = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // parseAgentSessions picks the agent's sessions out of list-panes output
-// in tmuxSessionFormat, in number order. hostname is what tmux titles a
-// pane whose program has set no title, which counts as none; now is the
-// clock Working weighs each session's activity against.
-func parseAgentSessions(a hostAgent, out, hostname string, now int64) []agentSession {
+// in tmuxSessionFormat, in number order. untitled lists what a pane is
+// titled when its program has set no title of its own — the hostname,
+// tmux's default, and the project folder's name, Codex's default before
+// the daemon put the thread's name there — which counts as none, as
+// does a thread id; now is the clock Working weighs each session's
+// activity against. A spinner in front of a title (Codex, while a turn
+// runs) is stripped and read as working.
+func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) []agentSession {
 	list := []agentSession{}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(out, "\n") {
@@ -105,15 +124,18 @@ func parseAgentSessions(a hostAgent, out, hostname string, now int64) []agentSes
 			continue
 		}
 		seen[f[0]] = true
-		title := strings.TrimSpace(f[5])
-		if title == hostname {
+		title, spinner := strings.TrimSpace(f[5]), false
+		if r, size := utf8.DecodeRuneInString(title); r >= 0x2800 && r <= 0x28ff { // braille: a spinner frame
+			title, spinner = strings.TrimSpace(title[size:]), true
+		}
+		if slices.Contains(untitled, title) || uuidTitle.MatchString(title) {
 			title = ""
 		}
 		created, _ := strconv.ParseInt(f[1], 10, 64)
 		activity, _ := strconv.ParseInt(f[2], 10, 64)
 		list = append(list, agentSession{Name: f[0], Number: n, Title: title, Created: created,
 			Activity: activity, Attached: f[3] != "0" && f[3] != "", Bell: f[4] == "1",
-			Working: activity > 0 && now-activity <= agentWorkingSeconds})
+			Working: spinner || activity > 0 && now-activity <= agentWorkingSeconds, spinner: spinner})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Number < list[j].Number })
 	return list
@@ -121,7 +143,7 @@ func parseAgentSessions(a hostAgent, out, hostname string, now int64) []agentSes
 
 // agentSessions lists an agent's sessions on this host's tmux server —
 // none without tmux, or without a server running.
-func agentSessions(a hostAgent) []agentSession {
+func (s *Server) agentSessions(a hostAgent) []agentSession {
 	cmd := tmuxCmd("list-panes", "-a", "-F", tmuxSessionFormat)
 	if cmd == nil {
 		return []agentSession{}
@@ -131,7 +153,7 @@ func agentSessions(a hostAgent) []agentSession {
 		return []agentSession{}
 	}
 	host, _ := os.Hostname()
-	return parseAgentSessions(a, string(out), host, time.Now().Unix())
+	return parseAgentSessions(a, string(out), []string{host, filepath.Base(s.agentProjectDir())}, time.Now().Unix())
 }
 
 // markAgentStates reads each session's state file into the list. A
@@ -141,6 +163,9 @@ func agentSessions(a hostAgent) []agentSession {
 func (s *Server) markAgentStates(a hostAgent, list []agentSession) {
 	for i := range list {
 		list[i].Resumable = readAgentResumable(s.agentStatusFile(a, list[i].Name))
+		if list[i].spinner {
+			continue // the title's spinner: a turn is in flight, whatever the last word was
+		}
 		switch st := readAgentState(s.agentStateFile(a, list[i].Name)); st {
 		case agentStateWorking:
 			list[i].State, list[i].Working = st, true
@@ -211,7 +236,7 @@ func (c *agentColumn) follow(ctx context.Context) {
 		if cur := c.sh.Current(); cur != "" {
 			c.setCurrent(cur)
 		}
-		list := agentSessions(c.a)
+		list := c.s.agentSessions(c.a)
 		c.s.markAgentStates(c.a, list)
 		msg, _ := json.Marshal(map[string]any{"sessions": list, "current": c.current()})
 		if string(msg) != last {
@@ -256,7 +281,7 @@ func (c *agentColumn) archive(name string) error {
 	}
 	if name == c.current() {
 		var prev, next string
-		for _, s := range agentSessions(c.a) {
+		for _, s := range c.s.agentSessions(c.a) {
 			if s.Number < n {
 				prev = s.Name
 			} else if s.Number > n && next == "" {
@@ -289,7 +314,7 @@ func (c *agentColumn) archive(name string) error {
 // live one, and moves the window to it.
 func (c *agentColumn) open() error {
 	n := 2
-	for _, s := range agentSessions(c.a) {
+	for _, s := range c.s.agentSessions(c.a) {
 		if s.Number >= n {
 			n = s.Number + 1
 		}

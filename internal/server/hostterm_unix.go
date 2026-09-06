@@ -60,11 +60,11 @@ func (s *unixShell) Close() error {
 // detaches, and the desktop icon returns to the running conversation. -A
 // attaches when the session already exists, -D kicks any stale client so
 // the pty size follows the newest window. Without tmux each window is a
-// fresh CLI run. An agent with a status-line hook is launched with the
-// arguments that install it (agentCommand) — the session's first launch
-// decides, as -A attaching ignores the command line — and its status
-// file is cleared for a fresh conversation, so the window never opens on
-// the last one's figures.
+// fresh CLI run. The CLI is launched with the arguments that point its
+// hooks at the session's status file (agentCommand) — the session's
+// first launch decides, as -A attaching ignores the command line — and
+// that file is cleared for a fresh conversation, so the window never
+// opens on the last one's figures.
 func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 	bin := agentPath(a)
 	if bin == "" {
@@ -97,14 +97,15 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 }
 
 // agentCommand is the CLI's launch inside a tmux session: the arguments
-// that install its status-line hook on file (agentStatusArgs, none for
-// an agent without one) and the command line the session runs. That
-// goes through env so the CLI's own directory is on PATH inside the
+// that point its hooks at file — Claude Code's status line and state
+// hooks, Codex's notify command and terminal title (agentStatusArgs,
+// none for a CLI without any) — and the command line the session runs.
+// That goes through env so the CLI's own directory is on PATH inside the
 // session too: a tmux server's environment is fixed when it starts (by
 // the first agent opened), and an npm shim like codex under nvm needs
 // the node beside it.
 func agentCommand(a hostAgent, bin, file string) (args []string, line string) {
-	args = agentStatusArgs(a, file, claudeSettingsPath())
+	args = agentStatusArgs(a, file, agentSettingsPath(a))
 	line = "env " + shQuote("PATH="+cliPATH(bin)) + " " + shQuote(bin)
 	for _, arg := range args {
 		line += " " + shQuote(arg)

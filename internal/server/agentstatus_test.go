@@ -179,8 +179,136 @@ func TestAgentStatusArgs(t *testing.T) {
 		t.Fatalf("padding = %v, want the user's 0", padding)
 	}
 
-	if args := agentStatusArgs(hostAgents["codex"], file, settings); args != nil {
-		t.Fatalf("codex has no hook, got %q", args)
+	// Codex gets its config overrides instead (TestCodexArgs)
+	args := agentStatusArgs(hostAgents["codex"], filepath.Join(dir, "codex.status.json"), filepath.Join(dir, "none.toml"))
+	if len(args) != 10 || args[0] != "-c" || !strings.HasPrefix(args[1], "notify=[") {
+		t.Fatalf("codex args = %q", args)
+	}
+}
+
+// Codex's overrides, and the notify bridge as sh runs it with the JSON
+// Codex passes: the JSON lands whole in the status file, which makes the
+// session resumable, the state file says done, no temp file is left,
+// and a notify of the user's own runs after with the same argument
+func TestCodexArgs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the bridge is a sh one-liner")
+	}
+	dir := t.TempDir()
+	file := filepath.Join(dir, "it's here", "codex-2.status.json") // the quote proves the quoting
+	os.MkdirAll(filepath.Dir(file), 0o755)
+	config := filepath.Join(dir, "config.toml")
+	mine := filepath.Join(dir, "mine.json")
+	os.WriteFile(config, []byte("model = \"gpt-6-astra\"\nnotify = [\"sh\", \"-c\", \"printf %s \\\"$1\\\" > '"+mine+"'\", \"mine\"]\n\n[tui]\nnotifications = false\n"), 0o644)
+	args := codexArgs(file, config)
+	want := map[string]bool{"tui.notifications=true": false, `tui.notification_method="bel"`: false,
+		`tui.notification_condition="always"`: false, `tui.terminal_title=["activity","thread-title"]`: false}
+	var notify []string
+	for i := 0; i+1 < len(args); i += 2 {
+		if args[i] != "-c" {
+			t.Fatalf("args = %q: every override is a -c pair", args)
+		}
+		if v, ok := strings.CutPrefix(args[i+1], "notify="); ok {
+			list, ok := tomlStringArray(v)
+			if !ok {
+				t.Fatalf("notify is not a TOML array of strings: %s", v)
+			}
+			notify = list
+			continue
+		}
+		if _, ok := want[args[i+1]]; !ok {
+			t.Fatalf("unexpected override %q", args[i+1])
+		}
+		want[args[i+1]] = true
+	}
+	for k, seen := range want {
+		if !seen {
+			t.Errorf("missing override %s", k)
+		}
+	}
+	if len(notify) != 4 || notify[0] != "sh" || notify[1] != "-c" || notify[3] != "exe-notify" {
+		t.Fatalf("notify = %q", notify)
+	}
+	payload := `{"type":"agent-turn-complete","thread-id":"01a0783c-153f-7ab3-b9da-5d7302aed8c7","input-messages":["it's \"quoted\""],"last-assistant-message":"ok"}`
+	cmd := exec.Command(notify[0], append(notify[1:], payload)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("bridge: %v: %s", err, out)
+	}
+	if b, err := os.ReadFile(file); err != nil || string(b) != payload {
+		t.Fatalf("status file = %q, %v", b, err)
+	}
+	if !readAgentResumable(file) {
+		t.Error("a thread that has finished a turn should be resumable")
+	}
+	if got := readAgentState(stateFileOf(file)); got != agentStateDone {
+		t.Errorf("state = %q, want done", got)
+	}
+	for _, p := range []string{file + ".tmp", stateFileOf(file) + ".tmp"} {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("temp file left behind: %s", p)
+		}
+	}
+	if b, err := os.ReadFile(mine); err != nil || string(b) != payload {
+		t.Fatalf("the user's own notify got %q, %v", b, err)
+	}
+
+	// no config, no user notify: the bridge is the whole command
+	args = codexArgs(file, filepath.Join(dir, "none.toml"))
+	list, _ := tomlStringArray(strings.TrimPrefix(args[1], "notify="))
+	if len(list) != 4 || strings.Contains(list[2], "exec") {
+		t.Errorf("without a user notify the script should not exec one: %q", list)
+	}
+}
+
+// the user's notify out of config.toml: one line, many lines with
+// comments, literal strings, escapes; nothing for none, for one inside
+// a table, or for one this reader cannot follow
+func TestCodexNotify(t *testing.T) {
+	dir := t.TempDir()
+	read := func(body string) []string {
+		p := filepath.Join(dir, "config.toml")
+		os.WriteFile(p, []byte(body), 0o644)
+		return codexNotify(p)
+	}
+	eq := func(got []string, want ...string) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				return false
+			}
+		}
+		return true
+	}
+	if got := codexNotify(filepath.Join(dir, "missing.toml")); got != nil {
+		t.Errorf("missing config: %q", got)
+	}
+	if got := read("model = \"x\"\n"); got != nil {
+		t.Errorf("no notify: %q", got)
+	}
+	if got := read("notify = [\"python3\", \"/home/me/notify.py\"] # mine\n"); !eq(got, "python3", "/home/me/notify.py") {
+		t.Errorf("one line: %q", got)
+	}
+	if got := read("notify = [\n  'sh', # the shell\n  \"-c\",\n  \"say \\\"done\\\" \\u2713\",\n]\n[tui]\n"); !eq(got, "sh", "-c", `say "done" ✓`) {
+		t.Errorf("many lines: %q", got)
+	}
+	if got := read("[tui]\nnotify = [\"x\"]\n"); got != nil {
+		t.Errorf("inside a table: %q", got)
+	}
+	if got := read("notify = [\"x\"\n"); got != nil {
+		t.Errorf("unclosed: %q", got)
+	}
+	if got := read("notify = \"x\"\n"); got != nil {
+		t.Errorf("not an array: %q", got)
+	}
+	if got := read("notify = []\n"); got == nil || len(got) != 0 {
+		t.Errorf("empty array: %#v", got)
+	}
+	// the writer round-trips through the reader, whatever is in the strings
+	odd := []string{"sh", "-c", "printf %s \"$1\" > 'a\\b' \t\n", "tab\there", "ünïcode ✓"}
+	if got, ok := tomlStringArray(tomlStrings(odd)); !ok || !eq(got, odd...) {
+		t.Errorf("round trip: %q -> %q (%v)", odd, got, ok)
 	}
 }
 
@@ -318,11 +446,13 @@ func TestMarkAgentStates(t *testing.T) {
 	os.WriteFile(s.agentStateFile(a, "exe-claude"), []byte("done"), 0o644)
 	os.WriteFile(s.agentStateFile(a, "exe-claude-2"), []byte("working\n"), 0o644)
 	os.WriteFile(s.agentStateFile(a, "exe-claude-3"), []byte("waiting"), 0o644)
+	os.WriteFile(s.agentStateFile(a, "exe-claude-5"), []byte("done"), 0o644)
 	list := []agentSession{
 		{Name: "exe-claude", Working: true},    // repainting, but its turn is over
 		{Name: "exe-claude-2", Working: false}, // silent inside a long tool run
 		{Name: "exe-claude-3", Working: true},
-		{Name: "exe-claude-4", Working: true}, // no file: the activity guess stands
+		{Name: "exe-claude-4", Working: true},                // no file: the activity guess stands
+		{Name: "exe-claude-5", Working: true, spinner: true}, // the title's spinner: the next turn is on, the word is old
 	}
 	s.markAgentStates(a, list)
 	want := []agentSession{
@@ -330,6 +460,7 @@ func TestMarkAgentStates(t *testing.T) {
 		{Name: "exe-claude-2", State: "working", Working: true},
 		{Name: "exe-claude-3", State: "waiting", Working: false, Wants: true},
 		{Name: "exe-claude-4", Working: true},
+		{Name: "exe-claude-5", Working: true, spinner: true},
 	}
 	for i := range want {
 		if list[i] != want[i] {
@@ -367,6 +498,12 @@ func TestReadAgentResumable(t *testing.T) {
 	}
 	if !readAgentResumable(write("nopath.json", `{"session_id":"abc","context_window":{"total_input_tokens":12}}`)) {
 		t.Error("tokens exchanged without a transcript path should count")
+	}
+	if !readAgentResumable(write("codex.json", `{"type":"agent-turn-complete","thread-id":"01a0783c-153f-7ab3-b9da-5d7302aed8c7","turn-id":"x"}`)) {
+		t.Error("a Codex thread named by its notify should be resumable")
+	}
+	if readAgentResumable(write("codex-empty.json", `{"type":"agent-turn-complete","thread-id":""}`)) {
+		t.Error("an empty thread id should not be resumable")
 	}
 	s := &Server{StateDir: dir}
 	a := hostAgents["claude"]
