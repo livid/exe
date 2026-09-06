@@ -88,7 +88,9 @@ canvas.ava-big { image-rendering: pixelated; }
 /* `inline code` in a post: Monaco on a slightly darker Platinum field */
 .p-text code { font: 11px/1 var(--mono); background: #e4e4e4; border: 1px solid #ccc;
   border-radius: 2px; padding: 0 3px; }
-.p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; }
+/* flex-start, not the default stretch: a stretched flex line would pull every
+   picture in it to the tallest sibling's height and distort its shape */
+.p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
 .p-embeds img { max-width: 180px; max-height: 140px; border: 1px solid var(--black);
   background: var(--g300); cursor: pointer; }
 .p-file { font-size: 11px; border: 1px solid var(--black); background: var(--g200); padding: 2px 8px; }
