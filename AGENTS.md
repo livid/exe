@@ -34,8 +34,8 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 ## UI rules (details and numbers in docs/platinum.md)
 
 - Copy the shared Platinum blocks verbatim — `button.ghost`, the sunken
-  field, the 15px status bar, the grow box (unless the content dictates
-  the window's size: then `"grow": false` and none), the scrollbar
+  field, the 15px status bar, the grow box (a fixed-size window needs no
+  grow box: `"grow": false`), the scrollbar
   (exe-apps Tides/Notes), the `.popup` menu button (sysapps/BluePencil). Buttons are
   20px, OK/Cancel 58px, 12px apart and from edges; only the Return
   default wears the ring. 12px Charcoal type, `cursor: default`, no hover

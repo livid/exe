@@ -87,10 +87,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - Grow box: the 15px SVG sampled from OS 9, at the window's bottom right;
   its black top row lands on the status bar's line. An app streams
   `{exe:"grow", dx, dy}` through the bridge and the desktop resizes. A
-  window whose size the content dictates — a guest display shown at a
-  whole-number scale, like the Mac OS 9 app — is fixed-size, as OS 9
-  allowed: no grow box, `"grow": false` in app.json so the desktop adds no
-  edge grips either, and the window follows the content. On a phone every
+  fixed-size window needs no grow box: if the window cannot be resized
+  (a dialog, an About box, a guest display shown at whole-number scales
+  like the Mac OS 9 app) it has no tile, and an app says `"grow": false`
+  in app.json so the desktop adds no edge grips either. On a phone every
   app hides its grow box; the window fills the screen there.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
