@@ -118,6 +118,11 @@ canvas.ava-big { image-rendering: pixelated; }
 .ph .bar.w40 { width: 40%; } .ph .bar.w80 { width: 80%; }
 
 #thread-head { display: none; align-items: center; gap: 8px; }
+/* the back button's arrow is a pixel glyph, not a text triangle: U+25C0
+   comes out as a blue emoji on an iPhone. currentColor, so it inverts
+   with the label when pressed. */
+#back { display: inline-flex; align-items: center; gap: 5px; padding: 2px 12px 2px 9px; }
+#back .gl { display: block; }
 #thread-head.on { display: flex; }
 
 /* onboarding / profile dialog: a Platinum panel over everything */
@@ -206,7 +211,7 @@ canvas.ava-big { image-rendering: pixelated; }
 
 <div id="wrap">
   <div id="thread-head">
-    <button class="ghost" id="back">&#9664; Feed</button>
+    <button class="ghost" id="back"><svg class="gl" viewBox="0 0 11 9" width="11" height="9" aria-hidden="true"><path class="k" d="M4 0h1v1h-1zM3 1h2v1h-2zM2 2h3v1h-3zM1 3h10v1h-10zM0 4h11v1h-11zM1 5h10v1h-10zM2 6h3v1h-3zM3 7h2v1h-2zM4 8h1v1h-1z"/></svg><span>Feed</span></button>
     <span class="muted" style="padding:0" id="thread-title">Thread</span>
   </div>
   <div id="composer">
