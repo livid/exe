@@ -1,14 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
-  <!-- One-pixel grid; the shared folder blue-violet ramp, black and white. -->
-  <path fill="#000" d="M4 2h24v1h1v1h1v24h-1v1h-1v1H4v-1H3v-1H2V4h1V3h1z"/>
-  <path fill="#8080dc" d="M4 3h24v1h1v24h-1v1H4v-1H3V4h1z"/>
-  <path fill="#d2d2fa" d="M18 3h10v1h1v24h-1v1H17V18h-4v-3h1v-3h1V9h1V6h1V4h1z"/>
-  <path fill="#fff" d="M4 3h13v1H4zM3 4h1v23H3zM18 3h10v1H18z"/>
-  <path fill="#b6b6f4" d="M4 4h12v1H4zM4 5h1v20H4z"/>
-  <path fill="#ececfd" d="M18 4h10v1H18zM27 5h1v21h-1z"/>
-  <path fill="#6666be" d="M4 27h1v1h11v1H4zM5 26h1v1H5z"/>
-  <path fill="#9a9af4" d="M18 28h10v1H18zM28 5h1v23h-1z"/>
-  <!-- The central profile and both eyes remain legible when halved to 16px. -->
-  <path fill="#000" d="M17 3h1v3h-1v3h-1v3h-1v3h-1v2h4v12h-1V18h-4v-3h1v-3h1V9h1V6h1zM8 10h2v4H8zM22 10h2v4h-2z"/>
-  <path fill="#000" d="M7 19h1v2h2v1h3v1h7v-1h3v-1h1v-2h1v3h-2v1h-3v1h-7v-1h-3v-1H8v-1H7z"/>
+  <!-- The same compact Mac as the Terminal, Claude Code and Codex icons; its
+       white screen shows the Happy Mac face the machine boots with. -->
+  <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+  <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
+  <rect x="10.5" y="5.5" width="11" height="8" fill="#fff" stroke="#000"/>
+  <path fill="#000" d="M13 7h1v2h-1zM18 7h1v2h-1zM16 8h1v1h-1zM15 9h2v1h-2zM12 10h1v1h-1zM19 10h1v1h-1zM13 11h6v1h-6z"/>
+  <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+  <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
+  <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
 </svg>
