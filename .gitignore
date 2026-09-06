@@ -2,3 +2,6 @@
 /exe.exe
 /exe-net-helper
 *.log
+
+# Local runtime data and verification artifacts.
+/output/
