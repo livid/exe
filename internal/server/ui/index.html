@@ -5164,14 +5164,18 @@ async function termPaste(term) {
 // after the tool and ends when it exits
 function openHostTermWin(app, cmd) {
   const agent = app ? AGENT_APPS[app] : null;
-  const column = !!(agent && hostAgents[app] && hostAgents[app].sessions);
+  // the column needs tmux on the host, which hostinfo reports — but a
+  // reload restores the window before that fetch answers, so the tab
+  // remembers with its open flag whether the window had a column
+  const column = !!(agent && (hostAgents[app] ? hostAgents[app].sessions
+    : sessionStorage.getItem("exe_" + app + "_open") === "col"));
   const tool = cmd ? cmd.trim().split(/\s+/)[0].split("/").pop() : "";
   if (agent) {
     // one session, one window: reopening the icon just brings it forward
     // (a disconnected window is closed first, then reopened to reconnect)
     const old = document.getElementById("win-" + app);
     if (old) { openWin(old); return; }
-    sessionStorage.setItem("exe_" + app + "_open", "1"); // this tab restores it on reload
+    sessionStorage.setItem("exe_" + app + "_open", column ? "col" : "1"); // this tab restores it on reload
   }
   const n = agent ? 0 : ++termSeq;
   const w = el("div", { class: "window grow term-window", id: agent ? "win-" + app : "win-term-" + n });
