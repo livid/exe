@@ -42,7 +42,7 @@ func Mergeable(key string) bool {
 
 // clocksKey is the World Clock's city list; matched by full key since the
 // file name alone is too generic to claim.
-const clocksKey = "WorldClock/clocks.json"
+const clocksKey = "World Clock/clocks.json"
 
 // MergeFile merges two versions of a mergeable document. ok is false when
 // the file isn't mergeable or either side doesn't parse — callers fall back

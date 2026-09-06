@@ -1065,6 +1065,8 @@ body.mobile th.sorted {
   <div class="dd-item" data-act="winlog">Daemon Log</div>
 </div>
 <div class="dropdown" id="dd-special" hidden>
+  <div class="dd-item" data-act="macos9">Mac OS 9</div>
+  <div class="dd-sep"></div>
   <div class="dd-item" data-act="join">Join…</div>
   <div class="dd-sep"></div>
   <div class="dd-item" data-act="cfstatus">Cloudflare Status…</div>
@@ -2456,6 +2458,7 @@ const ACTIONS = {
   winnews: () => openNewsWin(),
   winconfig: openConfigWin,
   winlog: openLogWin,
+  macos9: () => openAppWin("Mac OS 9"),
   cfstatus: () => sumOpen(),
   cfwizard: () => wizOpen(false),
   join: () => joinOpen(),
@@ -2666,10 +2669,10 @@ function tickClock() {
 }
 tickClock();
 setInterval(tickClock, 10000);
-// the clock opens the World Clock app (exe-apps/WorldClock) when it is
+// the clock opens the World Clock app (exe-apps/"World Clock") when it is
 // mounted; a phone without it spells the time out for a few seconds instead
 $("#clock").addEventListener("click", () => {
-  if (appsList.some(a => a.name === "WorldClock")) { openAppWin("WorldClock"); return; }
+  if (appsList.some(a => a.name === "World Clock")) { openAppWin("World Clock"); return; }
   if (IS_MOBILE) {
     clockTextUntil = Date.now() + 3000;
     tickClock();
@@ -3067,7 +3070,7 @@ function openAppWin(name) {
     const n = document.querySelectorAll("#desktop .app-window").length;
     w.style.left = (120 + n * 24) + "px";
     w.style.top = (70 + n * 20) + "px";
-    w.style.width = ((app.window && app.window.width) || 420) + "px";
+    w.style.width = Math.min((app.window && app.window.width) || 420, Math.max(240, window.innerWidth - 160)) + "px";
     w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
       <div class="title"></div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
@@ -3075,7 +3078,7 @@ function openAppWin(name) {
     w.querySelector(".title").textContent = app.title || name;
     if (app.window && app.window.grow) w.classList.add("grow");
     const fr = w.querySelector(".app-frame");
-    if (app.window && app.window.height) fr.style.height = app.window.height + "px";
+    if (app.window && app.window.height) fr.style.height = Math.min(app.window.height, Math.max(120, window.innerHeight - 150)) + "px";
     // the token, and on a phone ?mobile=1 so the app can size its chrome
     // for one (the Hub swaps its composer labels for glyphs)
     const q = new URLSearchParams();

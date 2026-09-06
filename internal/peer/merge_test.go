@@ -203,13 +203,13 @@ func TestMergeClocksUnionTombstoneAndKey(t *testing.T) {
 		`{"id":"Los Angeles|America/Los_Angeles","name":"Los Angeles","region":"CA","tz":"America/Los_Angeles","created":1,"updated":1},` +
 		`{"id":"Tokyo|Asia/Tokyo","created":2,"updated":` + gone + `,"deleted":` + gone + `},` +
 		`{"id":"Paris|Europe/Paris","name":"Paris","region":"France","tz":"Europe/Paris","created":3,"updated":3}]}`)
-	if !Mergeable("WorldClock/clocks.json") {
+	if !Mergeable("World Clock/clocks.json") {
 		t.Fatal("clocks.json should merge")
 	}
 	if Mergeable("City/clocks.json") || Mergeable("City/cities.json") {
 		t.Fatal("only the World Clock's file carries the schema")
 	}
-	merged, ok := MergeFile("WorldClock/clocks.json", a, b)
+	merged, ok := MergeFile("World Clock/clocks.json", a, b)
 	if !ok {
 		t.Fatal("merge not ok")
 	}
@@ -227,11 +227,11 @@ func TestMergeClocksUnionTombstoneAndKey(t *testing.T) {
 	if byID["Paris|Europe/Paris"].TZ != "Europe/Paris" || byID["Los Angeles|America/Los_Angeles"].Region != "CA" {
 		t.Fatalf("fields stripped: %s", merged)
 	}
-	rev, ok := MergeFile("WorldClock/clocks.json", b, a)
+	rev, ok := MergeFile("World Clock/clocks.json", b, a)
 	if !ok || !bytes.Equal(merged, rev) {
 		t.Fatalf("merge not commutative:\n%s\n%s", merged, rev)
 	}
-	again, ok := MergeFile("WorldClock/clocks.json", merged, merged)
+	again, ok := MergeFile("World Clock/clocks.json", merged, merged)
 	if !ok || !bytes.Equal(merged, again) {
 		t.Fatal("canonical form is not a fixed point")
 	}
