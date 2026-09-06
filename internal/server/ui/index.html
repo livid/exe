@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#dddddd">
 <title>exe</title>
 <link rel="manifest" href="/ui/manifest.json">
@@ -17,6 +17,11 @@
 <style>
 /* Mac OS 9 Platinum — pixel values from macthemes.garden's implementation */
 :root {
+  /* a phone's unsafe edges — status bar, home indicator, the notch's
+     sides in landscape: viewport-fit=cover runs the page under them and
+     these keep the chrome clear of them; 0 everywhere else */
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
   --black: #262626;
   --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999; --g700: #808080; --g800: #666;
   --hl: #333399; --lav: #ccf;
@@ -29,7 +34,9 @@
    "auto" heuristic) and keeps the inflated size on the way back; 100% pins
    the type to its authored size */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-html, body { height: 100%; }
+/* a phone in keyboard mode sets --vvh to the visual viewport (fitViewport);
+   a document no taller than that leaves iOS nothing to pan to */
+html, body { height: var(--vvh, 100%); }
 body {
   margin: 0; overflow: hidden; font: 12px/1.45 var(--font); color: var(--black);
   background: var(--lav) url(data:image/png;base64,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) repeat;
@@ -45,7 +52,9 @@ a { color: #202a87; text-decoration: underline; }
 
 /* ---------- menu bar ---------- */
 #menubar {
-  position: fixed; top: 0; left: 0; right: 0; height: 20px; z-index: 3000;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 3000;
+  /* the bar's own 20px under the status bar, whose strip it paints too */
+  height: calc(20px + var(--sat)); padding: var(--sat) var(--sar) 0 var(--sal);
   background: var(--g300);
   border-bottom: 1px solid var(--black);
   box-shadow: inset 0 1px 0 #fff, inset 1px 0 0 #fff, inset -1px -1px 0 var(--g600);
@@ -64,7 +73,7 @@ a { color: #202a87; text-decoration: underline; }
 #clock { display: flex; align-items: center; padding: 0 12px; font-weight: bold;
   border-left: 1px solid var(--g600); box-shadow: inset 1px 0 0 #fff; }
 .dropdown {
-  position: fixed; top: 20px; z-index: 3001; min-width: 200px;
+  position: fixed; top: calc(20px + var(--sat)); z-index: 3001; min-width: 200px;
   background: var(--g200); border: 1px solid var(--black); padding: 2px 1px;
   /* single-line seam: the menubar's border-bottom is the menu's top line */
   border-top: 0;
@@ -105,7 +114,7 @@ a { color: #202a87; text-decoration: underline; }
    an editor window's title can be a long file name, so the list scrolls
    instead of running off the screen and a row clips instead of pushing
    the menu past the right edge */
-#dd-apple { max-height: calc(100dvh - 24px); overflow-y: auto; }
+#dd-apple { max-height: calc(var(--vvh, 100dvh) - 24px - var(--sat)); overflow-y: auto; }
 #dd-apple .dd-win { max-width: calc(100vw - 48px); overflow: hidden; text-overflow: ellipsis; }
 /* the Desktop Menu editor's status line goes red when the daemon refuses a save */
 .ed-info .ed-saved.err { color: #7a1010; }
@@ -131,7 +140,7 @@ a { color: #202a87; text-decoration: underline; }
 .sr-hint { padding: 10px; }
 
 /* ---------- desktop icons ---------- */
-#desktop { position: fixed; inset: 20px 0 0 0; }
+#desktop { position: fixed; inset: calc(20px + var(--sat)) 0 0 0; }
 /* Both icon groups share one rail: a column that the pointer passes straight
    through (only the icons themselves are hit), with the system icons pinned
    at its bottom and #icons taking whatever height is left above them — so
@@ -891,13 +900,22 @@ td .mono, td.mono { user-select: text; }
    home-screen grid and everything opens on a single tap. */
 body.mobile { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 body.mobile #icons { flex-flow: row wrap; align-content: flex-start; justify-content: flex-start; gap: 18px 6px; }
-body.mobile #desktop .window { position: fixed; inset: 20px 0 0 0 !important;
+body.mobile #desktop .window { position: fixed;
+  inset: calc(20px + var(--sat)) var(--sar) auto var(--sal) !important;
+  /* as tall as the visual viewport, not the layout one: the keyboard
+     shrinks only the former (fitViewport keeps --vvh) */
+  height: calc(var(--vvh, 100dvh) - 20px - var(--sat)) !important;
+  padding-bottom: var(--sab); /* the status bar clears the home indicator */
   width: auto !important; min-width: 0; box-shadow: none;
   border-top: 0; /* the menu bar's bottom border is the separator — two stacked black lines otherwise */
   display: flex; flex-direction: column; }
 body.mobile #desktop .window > .win-frame { flex: 1; min-height: 0;
   display: flex; flex-direction: column; }
 body.mobile .win-frame > .win-body { flex: 1; min-height: 0; max-height: none; }
+/* keyboard up: it covers the home indicator, and the window ends at the keys */
+body.mobile.kb { --sab: 0px; }
+/* the home-screen grid keeps its bottom row above the indicator */
+body.mobile #rail { inset: 14px calc(8px + var(--sar)) calc(16px + var(--sab)) calc(8px + var(--sal)); }
 body.mobile .tbox.zoom, body.mobile .tbox.shade, body.mobile .grow-box { display: none; }
 /* the grow tile is hidden, so keep the frame corner intact: drop the 2px
    chrome-merge strips that erase the border/bevel for the tile, and give
@@ -916,7 +934,7 @@ body.mobile #log-out { height: 100% !important; }
 body.mobile #news-list { height: 100% !important; }
 body.mobile #docs-body { height: 100% !important; }
 body.mobile .term-window .hostterm-box { height: 100%; }
-body.mobile #term-box { height: calc(100dvh - 260px); min-height: 180px; }
+body.mobile #term-box { height: calc(var(--vvh, 100dvh) - 260px); min-height: 180px; }
 /* chat: sessions become a strip on top, messages fill the rest */
 body.mobile .chat-wrap { height: 100% !important; flex-direction: column; }
 body.mobile .chat-side { width: auto; }
@@ -929,7 +947,7 @@ body.mobile #win-search .win-body { display: flex; flex-direction: column; }
 body.mobile #search-results { height: auto; flex: 1; min-height: 0; }
 /* the About window floats like the Cloudflare status modal instead of
    going fullscreen: centered, content-sized, dimming what's below */
-body.mobile #desktop #win-about { inset: auto !important;
+body.mobile #desktop #win-about { inset: auto !important; height: auto !important; padding-bottom: 0;
   left: 50% !important; top: 50% !important; transform: translate(-50%, -50%);
   width: min(92vw, 480px) !important; display: block;
   border-top: 1px solid var(--black);
@@ -1742,7 +1760,30 @@ const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "");
 // since iOS 10), keeping the 12px Platinum type. Scoped to iOS — the same
 // clamp would take away Android's pinch zoom entirely.
 if (IS_MOBILE && /iPhone|iPod|iPad/i.test(navigator.userAgent))
-  document.querySelector('meta[name="viewport"]').content = "width=device-width, initial-scale=1, maximum-scale=1";
+  document.querySelector('meta[name="viewport"]').content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+// A phone's keyboard: iOS keeps the layout viewport at full height under
+// the keys and pans it to show the focused field, so a fullscreen window's
+// bottom — a Claude Code window's input line — stays behind the keyboard.
+// The visual viewport knows the truth: the fullscreen windows take its
+// height (--vvh, see the mobile CSS), the pan is undone, and the terminals
+// are refit — they listen for window resizes, and the keyboard fires none.
+if (IS_MOBILE && window.visualViewport) {
+  const vv = window.visualViewport;
+  let lastH = 0;
+  const fitViewport = () => {
+    if (vv.offsetTop > 0 || window.scrollY > 0) window.scrollTo(0, 0);
+    const h = Math.round(vv.height);
+    if (h === lastH) return;
+    lastH = h;
+    document.documentElement.style.setProperty("--vvh", h + "px");
+    document.body.classList.toggle("kb", h < window.innerHeight - 120);
+    window.dispatchEvent(new Event("resize"));
+  };
+  vv.addEventListener("resize", fitViewport);
+  vv.addEventListener("scroll", fitViewport);
+  window.addEventListener("scroll", fitViewport);
+  fitViewport();
+}
 // icons and list rows open on double-click on the desktop, single tap on
 // mobile — double-tap is the browser's zoom gesture and fires unreliably
 const tapOpen = (n, fn) => n.addEventListener(IS_MOBILE ? "click" : "dblclick", fn);
