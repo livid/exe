@@ -131,10 +131,39 @@ restyling: `internal/server/ui/index.html` (the desktop),
   `#7fd67f` is reserved). Outlines pure black, highlights pure white,
   shadows are black at 0.2 to 0.5 opacity, never gray pixels; chromatic
   colours as 6-digit hex.
-- An app icon is a 32x32 `crispEdges` SVG of rects and paths, rendered at
-  exactly 32 CSS px. A new system icon registers in `ICON_DEFS` so the Icon
-  Editor can edit it; art that changes with state keeps a reserved colour
-  the code repaints (the VM screen, the Cloudflare lamp).
+- An icon is a 32x32 `crispEdges` SVG of rects and paths on a one-pixel
+  grid, rendered at exactly 32 CSS px; the window lists show the same art
+  halved to 16 (`sizeSvg`), and hand-drawn 16px minis are not wanted (tried
+  and reverted; the few that remain serve search results and About). The
+  icon carries no shadow of its own: the desktop adds the drop shadow with
+  a filter and darkens the art when selected. An icon is an object you can
+  name, drawn the way OS 9 drew its own (a machine, a document, a tool);
+  a logo is not an icon, and a 16px glyph scaled to 2x2 blocks is the
+  wrong grid.
+- The Icon Editor (Windows → Icon Editor) is a hand-maintained registry,
+  `ICON_DEFS` in index.html, not discovery. An entry has `key`, `label`,
+  `size` and either `dom` (a selector, when the art lives in one place in
+  the page) or `get` + `set` (when it lives in a `let` variable that every
+  draw site rereads, or repaints through `applyIconOverrides`); `disp`
+  re-stamps art displayed smaller than its grid (the Apple menu's 15px).
+  Factory art is captured at load into `ICON_FACTORY`; a repaint is saved
+  to the System app data as `icons.json` (`{icons: overrides, custom:
+  user-made}`), which reaches every desktop on the node and every joined
+  node like any app data, and the gallery offers Edit, Copy SVG (the
+  run-length form the editor writes) and Revert to Factory. The editor
+  rasterises an SVG one to one onto its grid, so it faithfully keeps
+  whatever grid it is given.
+- Art that changes with state keeps a reserved colour the code repaints
+  at draw time: the VM screen-green, the Cloudflare lamp's two greens; the
+  phone clock draws its hands live over registered face art.
+- User app bundles (exe-apps) stay outside the editor by design: their
+  `icon.svg` is drawn as an image. A system app embedded in the exe binary
+  (`internal/server/sysapps/*`) is system UI and its icon belongs in the
+  editor; today none registers (Hub, Blue Pencil, Mac OS 9), and the
+  generic fix is for the desktop to draw a sysapp's desktop icon from a
+  registry entry keyed `app-<name>` (get/set over the bundle's icon.svg
+  text) instead of an `<img>`. Until then, at least draw the art to the
+  rules above.
 
 ## Apps
 
