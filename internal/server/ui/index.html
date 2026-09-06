@@ -64,12 +64,9 @@ a { color: #202a87; text-decoration: underline; }
 .menu.appl { padding: 0 12px; }
 .menu.open { background: var(--hl); color: #fff; }
 .mb-right { margin-left: auto; display: flex; align-items: stretch; }
-#cf-dot, #search-btn { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
+#search-btn { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
   background: none; font: inherit; color: inherit; }
-#cf-dot:active, #search-btn:active { background: var(--hl); color: #fff; }
-.dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0,0,0,.55);
-  background: radial-gradient(circle at 30% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 55%), var(--gray);
-  display: inline-block; }
+#search-btn:active { background: var(--hl); color: #fff; }
 #clock { display: flex; align-items: center; padding: 0 12px; font-weight: bold;
   border-left: 1px solid var(--g600); box-shadow: inset 1px 0 0 #fff; }
 .dropdown {
@@ -173,6 +170,66 @@ a { color: #202a87; text-decoration: underline; }
    on the same 8px rail and 16px rhythm as #icons, so both groups share one
    center axis and pitch; hiding Chat keeps Trash pinned at the bottom */
 #sys-icons { flex: none; display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- Control Strip ---------- */
+/* OS 9's Control Strip, pixel-sampled from a Mac OS 9 boot on macos9.app
+   (Infinite Mac) at 1024×768: a 24px strip flush with the screen's bottom
+   left, its bottom-left corner rounded by two pixels, a 1px black outline
+   and 1px black lines between tiles. Module tiles are raised in the old
+   16-colour ramp (#c0c0c0 face, white top/left, #a0a0a0 then #808080
+   bottom/right) around a 16px icon and the solid menu triangle; a sunken
+   scroll well with an outlined arrow sits at each end; the ridged tab at
+   the right (Platinum #ccc with #555 grip dots) hides the strip down to the
+   tab alone. Every line is a border on a box of its own so it stays one
+   device pixel at fractional scale; only the tab, the arrows and the
+   triangle are crispEdges sprites. It floats over windows, as the original
+   did. */
+#cstrip { position: absolute; left: 0; bottom: var(--sab); z-index: 1000; height: 24px;
+  display: flex; align-items: stretch; }
+/* the rounded corner: the three pixels OS 9 blacks out at the bottom left */
+#cstrip::before, #cstrip::after { content: ""; position: absolute; bottom: 1px; z-index: 2; }
+#cstrip::before { left: 1px; width: 0; height: 2px; border-left: 1px solid #000; }
+#cstrip::after { left: 2px; width: 1px; height: 0; border-top: 1px solid #000; }
+.cs-body { display: flex; align-items: stretch; border: 1px solid #000; border-right: 0; background: #c0c0c0; }
+#cstrip.collapsed .cs-body { display: none; }
+/* scroll well: 13px sunk — dark top/left, white bottom/right, each L one
+   pixel short of the far corner */
+.cs-well { position: relative; width: 13px; flex: none; background: #c0c0c0; }
+.cs-well.cs-r { width: 14px; border-left: 1px solid #000; }
+.cs-well::before, .cs-well::after { content: ""; position: absolute; box-sizing: border-box; width: 12px; height: 21px; }
+.cs-well::before { left: 0; top: 0; border-top: 1px solid #808080; border-left: 1px solid #808080; }
+.cs-well::after { right: 0; bottom: 0; border-right: 1px solid #fff; border-bottom: 1px solid #fff; }
+.cs-well svg { position: absolute; left: 2px; top: 6px; display: block; }
+.cs-well.cs-r svg { transform: scaleX(-1); }
+.cs-mods { display: flex; flex: none; overflow: hidden; }
+/* module tile: 30px behind its separator — a face-colour frame along the
+   top and left, the raised bevel, then the #808080 outer shadow */
+.cs-mod { position: relative; width: 31px; flex: none; border-left: 1px solid #000;
+  background: #c0c0c0; padding: 1px 0 0 1px; }
+.cs-mod > .f { display: block; width: 29px; height: 21px; position: relative; background: #c0c0c0;
+  border-right: 1px solid #808080; border-bottom: 1px solid #808080; }
+.cs-mod .b { display: block; width: 28px; height: 20px; position: relative; }
+.cs-mod .b::before, .cs-mod .b::after { content: ""; position: absolute; box-sizing: border-box; width: 27px; height: 19px; }
+.cs-mod .b::before { left: 0; top: 0; border-top: 1px solid #fff; border-left: 1px solid #fff; }
+.cs-mod .b::after { right: 0; bottom: 0; border-right: 1px solid #a0a0a0; border-bottom: 1px solid #a0a0a0; }
+.cs-ico { position: absolute; left: 1px; top: 2px; width: 16px; height: 16px; }
+.cs-ico svg { display: block; width: 16px; height: 16px; }
+.cs-tri { position: absolute; left: 21px; top: 6px; display: block; fill: #000; }
+/* pressed, while its menu is up: the bevel turns in — #404040 top/left,
+   #808080 face, the shadows go light */
+.cs-mod.down { background: #404040; }
+.cs-mod.down > .f { background: #808080; border-color: #c0c0c0; }
+.cs-mod.down .b::before { border-color: #404040; }
+.cs-mod.down .b::after { border-color: #c0c0c0; }
+/* the tab sprite's colours, and the darkened set while it is held */
+#cs-tab { display: block; flex: none; }
+#cs-tab .f { fill: #ccc; } #cs-tab .h { fill: #fff; } #cs-tab .d { fill: #555; }
+#cs-tab .s1 { fill: #888; } #cs-tab .s2 { fill: #444; }
+#cs-tab.down .f { fill: #666; } #cs-tab.down .h, #cs-tab.down .d { fill: #7f7f7f; }
+#cs-tab.down .s1 { fill: #444; } #cs-tab.down .s2 { fill: #222; }
+/* a phone's windows fill the screen: the strip shows on the home grid and
+   goes under an open window instead of covering its status bar */
+body.mobile #cstrip { z-index: 5; }
 
 /* ---------- window chrome (macthemes.garden-accurate) ---------- */
 .window {
@@ -979,9 +1036,6 @@ body.mobile th.sorted {
     <button id="search-btn" title="Search VMs, chats, notes and todos">
       <svg width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges" fill="currentColor"><path d="M4 1h4v1H4zM3 2h1v1H3zM8 2h1v1H8zM2 3h1v4H2zM9 3h1v4H9zM3 7h1v1H3zM8 7h1v1H8zM4 8h4v1H4zM8 8h1v1H8zM9 9h2v2H9zM10 10h2v2h-2zM11 11h2v2h-2z"/></svg>
     </button>
-    <button id="cf-dot" title="Cloudflare status — checking…">
-      <span id="cf-dot-circle" class="dot"></span><span>Cloudflare</span>
-    </button>
     <div id="clock"></div>
   </div>
 </div>
@@ -1021,6 +1075,18 @@ body.mobile th.sorted {
 <div class="dropdown" id="ctx-menu" hidden></div>
 
 <div id="desktop">
+  <!-- Control Strip: OS 9's tray in the bottom-left corner. The Cloudflare
+       heartbeat lives here as a module; the #cstrip CSS has the sampling -->
+  <div id="cstrip">
+    <div class="cs-body">
+      <div class="cs-well cs-l" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
+      <div class="cs-mods">
+        <div class="cs-mod" id="cs-cf" title="Cloudflare status — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
+      </div>
+      <div class="cs-well cs-r" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
+    </div>
+    <svg id="cs-tab" width="18" height="24" viewBox="0 0 18 24" shape-rendering="crispEdges"><title>Control Strip — click to hide or show it</title><path d="M0 0h10v1H0zM0 1h2v1H0zM9 1h2v1H9zM0 2h2v1H0zM10 2h2v1H10zM0 3h2v1H0zM11 3h2v1H11zM0 4h2v1H0zM12 4h2v1H12zM0 5h2v1H0zM13 5h2v1H13zM0 6h2v1H0zM14 6h2v1H14zM0 7h2v1H0zM11 7h2v1H11zM15 7h2v1H15zM0 8h2v1H0zM11 8h1v1H11zM13 8h1v1H13zM16 8h2v1H16zM0 9h2v1H0zM11 9h1v1H11zM14 9h1v1H14zM17 9h1v1H17zM0 10h2v1H0zM11 10h1v1H11zM14 10h1v1H14zM17 10h1v1H17zM0 11h2v1H0zM11 11h1v1H11zM14 11h1v1H14zM17 11h1v1H17zM0 12h2v1H0zM11 12h1v1H11zM14 12h1v1H14zM17 12h1v1H17zM0 13h2v1H0zM11 13h1v1H11zM14 13h1v1H14zM17 13h1v1H17zM0 14h2v1H0zM11 14h1v1H11zM14 14h1v1H14zM17 14h1v1H17zM0 15h2v1H0zM11 15h1v1H11zM13 15h1v1H13zM16 15h2v1H16zM0 16h2v1H0zM11 16h2v1H11zM15 16h2v1H15zM0 17h2v1H0zM14 17h2v1H14zM0 18h2v1H0zM13 18h2v1H13zM0 19h2v1H0zM12 19h2v1H12zM0 20h2v1H0zM11 20h2v1H11zM0 21h2v1H0zM10 21h2v1H10zM0 22h2v1H0zM9 22h2v1H9zM0 23h10v1H0z"/><path class="f" d="M2 1h7v1H2zM2 2h1v1H2zM2 3h1v1H2zM4 3h7v1H4zM2 4h1v1H2zM5 4h7v1H5zM2 5h1v1H2zM4 5h1v1H4zM6 5h7v1H6zM2 6h1v1H2zM4 6h3v1H4zM8 6h6v1H8zM2 7h1v1H2zM4 7h4v1H4zM9 7h2v1H9zM13 7h2v1H13zM2 8h1v1H2zM5 8h6v1H5zM14 8h2v1H14zM2 9h1v1H2zM4 9h1v1H4zM6 9h5v1H6zM15 9h1v1H15zM2 10h1v1H2zM4 10h3v1H4zM8 10h3v1H8zM15 10h1v1H15zM2 11h1v1H2zM4 11h4v1H4zM9 11h2v1H9zM15 11h1v1H15zM2 12h1v1H2zM5 12h6v1H5zM15 12h1v1H15zM2 13h1v1H2zM4 13h1v1H4zM6 13h5v1H6zM15 13h1v1H15zM2 14h1v1H2zM4 14h3v1H4zM8 14h3v1H8zM15 14h1v1H15zM2 15h1v1H2zM4 15h4v1H4zM9 15h2v1H9zM14 15h2v1H14zM2 16h1v1H2zM5 16h6v1H5zM13 16h2v1H13zM2 17h1v1H2zM4 17h1v1H4zM6 17h8v1H6zM2 18h1v1H2zM4 18h9v1H4zM2 19h1v1H2zM4 19h8v1H4zM2 20h1v1H2zM4 20h7v1H4zM2 21h1v1H2z"/><path class="h" d="M3 2h7v1H3zM3 3h1v1H3zM3 4h2v1H3zM3 5h1v1H3zM3 6h1v1H3zM7 6h1v1H7zM3 7h1v1H3zM3 8h2v1H3zM12 8h1v1H12zM3 9h1v1H3zM12 9h2v1H12zM3 10h1v1H3zM7 10h1v1H7zM12 10h2v1H12zM3 11h1v1H3zM12 11h2v1H12zM3 12h2v1H3zM12 12h2v1H12zM3 13h1v1H3zM12 13h2v1H12zM3 14h1v1H3zM7 14h1v1H7zM12 14h2v1H12zM3 15h1v1H3zM12 15h1v1H12zM3 16h2v1H3zM3 17h1v1H3zM3 18h1v1H3zM3 19h1v1H3zM3 20h1v1H3z"/><path class="d" d="M5 5h1v1H5zM8 7h1v1H8zM5 9h1v1H5zM8 11h1v1H8zM5 13h1v1H5zM8 15h1v1H8zM5 17h1v1H5z"/><path class="s1" d="M16 9h1v1H16zM16 10h1v1H16zM16 11h1v1H16zM16 12h1v1H16zM16 13h1v1H16zM16 14h1v1H16zM3 21h7v1H3zM2 22h1v1H2z"/><path class="s2" d="M3 22h6v1H3z"/></svg>
+  </div>
   <div id="rail">
   <div id="icons"></div>
   <div id="sys-icons">
@@ -2589,11 +2655,25 @@ const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="$
 //             use it), terminal-green #33ff33, landscape-green #77bb77 /
 //             #336633, note-yellow #ffff99 / #ddbb55 / #cc9933,
 //             alert-yellow #ffdd30 / #fff3a0, chat-pink #ff8888,
-//             sky-blue #99ccff, sun #ffff33
+//             sky-blue #99ccff, sun #ffff33, cloudflare-orange #f38020 /
+//             #ffb060 / #c8600a, lamp-green #33cc33 / #99ee99 (reserved —
+//             the Control Strip repaints exactly these per heartbeat)
 // Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
 // they darken whatever sits beneath. Write chromatic colors as 6-digit hex
 // (pure grays may shorthand). ICX_PALETTE in the Icon Editor carries the
 // working subset; an icon's own colors join it when opened for editing.
+// the Control Strip's Cloudflare module: the orange cloud with a status
+// lamp at its foot — the lamp's two greens are reserved, cfStripPaint
+// repaints exactly them per heartbeat (the VM icon's screen-green trick)
+let CF_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#f38020" d="M12 2h1v1H12zM9 3h5v1H9zM6 4h8v1H6zM5 5h10v1H5zM3 6h12v1H3zM1 7h14v1H1zM1 8h14v1H1zM1 9h9v1H1zM1 10h1v1H1z"/>
+  <path fill="#ffb060" d="M9 2h3v1H9zM8 3h1v1H8zM4 5h1v1H4zM2 6h1v1H2z"/>
+  <path fill="#c8600a" d="M10 9h5v1H10zM2 10h9v1H2z"/>
+  <path fill="#000" d="M9 1h4v1H9zM8 2h1v1H8zM13 2h1v1H13zM6 3h2v1H6zM14 3h1v1H14zM4 4h2v1H4zM14 4h1v1H14zM2 5h2v1H2zM15 5h1v1H15zM1 6h1v1H1zM15 6h1v1H15zM0 7h1v1H0zM15 7h1v1H15zM0 8h1v1H0zM15 8h1v1H15zM0 9h1v1H0zM15 9h1v1H15zM0 10h1v1H0zM11 10h5v1H11zM1 11h10v1H1zM15 11h1v1H15zM10 12h1v1H10zM15 12h1v1H15zM10 13h1v1H10zM15 13h1v1H15zM10 14h1v1H10zM15 14h1v1H15zM11 15h4v1H11z"/>
+  <path fill="#33cc33" d="M13 11h2v1H13zM12 12h3v1H12zM11 13h4v1H11zM11 14h4v1H11z"/>
+  <path fill="#99ee99" d="M11 11h2v1H11zM11 12h1v1H11z"/>
+</svg>`;
+let cfLast = null; // the last Cloudflare heartbeat; declared here so an icon override can repaint before the strip code runs
 let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
   <path d="M4.5 10.5 v3 l3 -3 z" fill="#DAD5CA" stroke="#000"/>
@@ -3227,6 +3307,8 @@ const ICON_DEFS = [
   { key: "chat-mini", label: "Chat (mini)", size: 16, get: () => MINI_CHAT_ICON, set: s => MINI_CHAT_ICON = s },
   { key: "note-mini", label: "Note (mini)", size: 16, get: () => MINI_NOTE_ICON, set: s => MINI_NOTE_ICON = s },
   { key: "todo-mini", label: "Todo (mini)", size: 16, get: () => MINI_TODO_ICON, set: s => MINI_TODO_ICON = s },
+  { key: "cloudflare", label: "Cloudflare", size: 16, get: () => CF_ICON, set: s => CF_ICON = s,
+    note: "the lamp's greens follow the Cloudflare heartbeat" },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -3266,6 +3348,7 @@ function applyIconOverrides(ovs, custom) {
     if (d.dom) { const n = $(d.dom); if (n) n.outerHTML = d.disp ? sizeSvg(svg, d.disp) : svg; }
   }
   renderIcons(lastVMs);
+  cfStripPaint();
   $("#about-icon").innerHTML = macIcon("running", 48);
   document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
   if (!$("#win-myapps").hidden) loadMyApps().catch(() => {});
@@ -4111,7 +4194,7 @@ function showDeskMenu(x, y) {
   showCtxMenu(x, y, items);
 }
 // bare desktop: not a window, an icon, a menu or a dialog overlay
-const onDesk = t => !!t.closest("#desktop") && !t.closest(".window, .dicon, .dropdown, .overlay");
+const onDesk = t => !!t.closest("#desktop") && !t.closest(".window, .dicon, .dropdown, .overlay, #cstrip");
 let deskPressT = null;
 $("#desktop").addEventListener("contextmenu", e => {
   if (!onDesk(e.target)) return;
@@ -4127,7 +4210,7 @@ $("#desktop").addEventListener("contextmenu", e => {
 // claims two fingers, so it cannot collide. iOS never fires contextmenu,
 // Android does — showing twice is harmless
 const onTapSpot = t => IS_MOBILE
-  ? !!t.closest("#desktop") && !t.closest(".dropdown, .overlay, .window.modal, input, textarea, select, button")
+  ? !!t.closest("#desktop") && !t.closest(".dropdown, .overlay, .window.modal, #cstrip, input, textarea, select, button")
   : onDesk(t);
 let deskTap = null; // while two fingers are down: when, where, each finger's start
 const deskTapDrift = 10;
@@ -6788,20 +6871,64 @@ $("#wiz-next").onclick = async () => {
 };
 
 // ---- cloudflare heartbeat ----
-let cfLast = null;
 async function cfHeartbeat(force) {
   try {
-    const h = await j("/v1/cloudflare/health" + (force ? "?force=1" : ""));
-    cfLast = h;
-    $("#cf-dot-circle").style.background =
-      `radial-gradient(circle at 30% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 55%), ${h.status === "ok" ? "var(--green)" : "#e0c341"}`;
-    $("#cf-dot").title = h.message || ("Cloudflare status: " + h.status);
-  } catch (e) { /* keep last known color */ }
+    cfLast = await j("/v1/cloudflare/health" + (force ? "?force=1" : ""));
+    cfStripPaint();
+  } catch (e) { /* keep the last known lamp */ }
 }
-$("#cf-dot").onclick = () => {
-  if (cfLast && cfLast.status === "ok") sumOpen();
-  else wizOpen(false);
-};
+
+// ---- Control Strip ----
+// The one module so far is the Cloudflare heartbeat. Its lamp is the icon's
+// reserved greens repainted per status; its menu pops up from the tile the
+// way an OS 9 module's does; the tab hides the strip down to the tab alone,
+// remembered per browser the way OS 9 remembered it per machine. The scroll
+// wells page the module row by one tile once it holds more than it shows.
+const cstrip = $("#cstrip"), csTab = $("#cs-tab"), csCF = $("#cs-cf");
+const CF_LAMP = { ok: ["#33cc33", "#99ee99"], warn: ["#ffdd30", "#fff3a0"], off: ["#aaaaaa", "#dddddd"] };
+function cfStripPaint() {
+  const [lamp, glint] = CF_LAMP[!cfLast ? "off" : cfLast.status === "ok" ? "ok" : "warn"];
+  $("#cs-cf .cs-ico").innerHTML = iconCurrent("cloudflare").replace(/#33cc33/gi, lamp).replace(/#99ee99/gi, glint);
+  csCF.title = cfLast ? (cfLast.message || "Cloudflare status: " + cfLast.status) : "Cloudflare status — checking…";
+}
+let csMenuClosedAt = 0;
+function cfStripMenu() {
+  if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
+  const st = cfLast && cfLast.status;
+  const head = !st ? "Cloudflare: checking…" : st === "ok" ? "Cloudflare: working"
+    : st === "unconfigured" ? "Cloudflare: not set up" : "Cloudflare: needs attention";
+  showCtxMenu(0, 0, [
+    { label: head, dis: true },
+    "-",
+    { label: "Cloudflare Status…", act: () => sumOpen() },
+    { label: "Cloudflare Setup Wizard…", act: () => wizOpen(false) },
+    "-",
+    { label: "Check Now", act: () => cfHeartbeat(true).then(() =>
+      toast(cfLast ? (cfLast.message || "Cloudflare status: " + cfLast.status) : "The Cloudflare check did not answer.")) },
+  ], () => { csCF.classList.remove("down"); csMenuClosedAt = Date.now(); });
+  csCF.classList.add("down");
+  // a module's menu grows out of its tile: left edge on the tile's separator
+  // line, bottom line two rows into the strip (sampled from OS 9)
+  const t = csCF.getBoundingClientRect(), s = cstrip.getBoundingClientRect(), m = ctxMenu.getBoundingClientRect();
+  ctxMenu.style.left = t.left + "px";
+  ctxMenu.style.top = Math.max(0, s.top + 3 - m.height) + "px";
+}
+csCF.addEventListener("click", cfStripMenu);
+csCF.addEventListener("contextmenu", e => { e.preventDefault(); cfStripMenu(); });
+function csCollapse(on) {
+  cstrip.classList.toggle("collapsed", on);
+  try { localStorage.setItem("exe_cstrip", on ? "collapsed" : "open"); } catch (e) {}
+}
+try { csCollapse(localStorage.getItem("exe_cstrip") === "collapsed"); } catch (e) {}
+csTab.addEventListener("mousedown", e => {
+  if (e.button) return;
+  csTab.classList.add("down");
+  document.addEventListener("mouseup", () => csTab.classList.remove("down"), { once: true });
+});
+csTab.addEventListener("click", () => csCollapse(!cstrip.classList.contains("collapsed")));
+for (const [sel, dir] of [[".cs-l", -1], [".cs-r", 1]])
+  cstrip.querySelector(sel).addEventListener("click", () => cstrip.querySelector(".cs-mods").scrollBy({ left: dir * 31 }));
+cfStripPaint();
 
 // ---- cloudflare status summary ----
 async function sumOpen() {
