@@ -80,11 +80,12 @@ body.mobile #clock { padding: 0 10px; }
   border-top: 0;
   box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 var(--g500), 2px 2px 0 rgba(38,38,38,.85);
 }
-.dd-item { padding: 3px 22px 3px 18px; white-space: nowrap; }
+/* Whole-pixel rows keep each separator on the same device-pixel phase. */
+.dd-item { padding: 3px 22px 3px 18px; line-height: 18px; white-space: nowrap; }
 .dd-item:hover { background: var(--hl); color: #fff; }
 .dd-item.dis { color: #888; }
 .dd-item.dis:hover { background: none; color: #888; }
-.dd-sep { height: 1px; background: var(--g600); margin: 3px 2px; box-shadow: 0 1px 0 #fff; }
+.dd-sep { height: 2px; margin: 3px 2px; border-top: 1px solid var(--g600); border-bottom: 1px solid #fff; }
 /* Finder contextual menu, sampled from a real OS 9 capture: #ddd face
    (menubar menus are lighter), same groove separators and hard shadow.
    .ctx-panel is a hierarchical submenu: same face, opened beside its parent */
@@ -1942,6 +1943,34 @@ function mobSave() {
     vm: currentVM,
   }));
 }
+// System app IDs used display names in older layouts, menus and icon edits.
+// Normalize only those aliases; user app names remain case-sensitive.
+function canonicalAppName(name) {
+  switch (name) {
+    case "Mac OS 9": return "macos9";
+    case "Hub": return "hub";
+    case "BluePencil": return "bluepencil";
+    default: return name;
+  }
+}
+function canonicalAppIconKey(key) {
+  return key.startsWith("app-") ? "app-" + canonicalAppName(key.slice(4)) : key;
+}
+function canonicalWindowID(id) {
+  if (id.startsWith("win-app-")) return "win-app-" + canonicalAppName(id.slice(8));
+  if (id.startsWith("win-ic-")) return "win-ic-" + canonicalAppIconKey(id.slice(7));
+  return id;
+}
+function canonicalAppKeys(values, rename) {
+  const result = {...values};
+  for (const key of Object.keys(result)) {
+    const canonical = rename(key);
+    if (canonical === key) continue;
+    if (!Object.prototype.hasOwnProperty.call(result, canonical)) result[canonical] = result[key];
+    delete result[key];
+  }
+  return result;
+}
 // reopen the remembered stack bottom-up, then the visible window — each
 // open re-stacks the one before it, rebuilding mobileStack as it goes
 function mobRestore() {
@@ -1952,7 +1981,7 @@ function mobRestore() {
   // state where the user closed it stays closed, and it can't sneak into
   // the rebuilt stack under whatever window opens on top of it
   $("#win-vms").hidden = true;
-  for (const id of [...(st.stack || []), st.top].filter(Boolean).filter(mobRestorable)) {
+  for (const id of [...(st.stack || []), st.top].filter(Boolean).map(canonicalWindowID).filter(mobRestorable)) {
     if (id === "win-detail") { if (st.vm) openVM(st.vm); }
     else if (id.startsWith("win-app-")) openAppWin(id.slice(8));
     else if (id.startsWith("win-ws-")) openFinderWin(decodeURIComponent(id.slice(7)));
@@ -1976,6 +2005,7 @@ function openWin(sel) {
   w.hidden = false;
   if (wasHidden) tellApp(w, "show");
   w.classList.remove("shaded");
+  if (w._macDisplay) fitMacOS9Window(w);
   focusWin(w);
   if (IS_MOBILE) mobSave();
   return w;
@@ -2030,10 +2060,11 @@ function initWindow(w) {
   const cb = tb.querySelector(".tbox.close");
   if (cb && !cb.id) cb.addEventListener("click", e => { e.stopPropagation(); closeWin(w); });
   const sb = tb.querySelector(".tbox.shade");
-  if (sb) sb.addEventListener("click", e => { e.stopPropagation(); w.classList.toggle("shaded"); termResize(); winSave(); });
+  if (sb) sb.addEventListener("click", e => { e.stopPropagation(); w.classList.toggle("shaded"); if (w._macDisplay) fitMacOS9Window(w); termResize(); winSave(); });
   const zb = tb.querySelector(".tbox.zoom");
   if (zb) zb.addEventListener("click", e => {
     e.stopPropagation();
+    if (w._macDisplay) { fitMacOS9Window(w); focusWin(w); return; }
     if (w._zoom) {
       Object.assign(w.style, w._zoom);
       w._zoom = null;
@@ -2049,6 +2080,7 @@ function initWindow(w) {
   tb.addEventListener("dblclick", e => {
     if (IS_MOBILE || e.target.closest(".tbox") || w.classList.contains("modal")) return;
     w.classList.toggle("shaded");
+    if (w._macDisplay) fitMacOS9Window(w);
     termResize();
     winSave();
   });
@@ -2265,6 +2297,7 @@ function winSnapshot() {
 }
 function applyWinState(st) {
   if (!st || IS_MOBILE) return; // snapshots describe the spatial desktop, not the phone view
+  st = canonicalAppKeys(st, canonicalWindowID);
   // remember each agent window's geometry for its next open — never auto-open
   // one: connecting takes the tmux session over from whichever browser has it
   for (const app of Object.keys(AGENT_APPS)) if (st["win-" + app]) agentGeom[app] = st["win-" + app];
@@ -2458,7 +2491,7 @@ const ACTIONS = {
   winnews: () => openNewsWin(),
   winconfig: openConfigWin,
   winlog: openLogWin,
-  macos9: () => openAppWin("Mac OS 9"),
+  macos9: () => openAppWin("macos9"),
   cfstatus: () => sumOpen(),
   cfwizard: () => wizOpen(false),
   join: () => joinOpen(),
@@ -2946,9 +2979,7 @@ function renderIcons(vms) {
   for (const app of appsList) {
     const key = "app:" + app.name;
     const ic = el("div", { class: "dicon" + (selectedIcon === key ? " sel" : ""), title: app.title || app.name });
-    ic.innerHTML = app.icon
-      ? `<img src="/apps/${encodeURIComponent(app.name)}/${app.icon.split("/").map(encodeURIComponent).join("/")}" alt="">`
-      : APP_FALLBACK_ICON;
+    ic.innerHTML = appIcon(app);
     ic.append(el("span", { class: "lbl" }, app.title || app.name));
     ic.addEventListener("click", e => {
       e.stopPropagation();
@@ -3045,8 +3076,46 @@ let CODEX_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-renderin
   <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
   <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
 </svg>`;
+// Only the server's embedded bundles supply trusted inline SVG. Disk apps
+// stay image resources, including when they override a built-in app's name.
+const systemAppIcons = new Map();
+function appIcon(app, size = 32) {
+  const svg = app?.system_icon && systemAppIcons.get("app-" + app.name);
+  if (svg) return sizeSvg(svg, size);
+  return app?.icon
+    ? `<img src="/apps/${encodeURIComponent(app.name)}/${app.icon.split("/").map(encodeURIComponent).join("/")}" alt="">`
+    : sizeSvg(APP_FALLBACK_ICON, size);
+}
+function registerSystemAppIcons(apps) {
+  const current = new Set(apps.filter(a => a.system_icon).map(a => "app-" + a.name));
+  for (let i = ICON_DEFS.length - 1; i >= 0; i--) {
+    const d = ICON_DEFS[i];
+    if (!d.systemApp || current.has(d.key)) continue;
+    ICON_DEFS.splice(i, 1);
+    delete ICON_FACTORY[d.key];
+    systemAppIcons.delete(d.key);
+    const w = document.getElementById("win-ic-" + d.key);
+    if (w) { closeWin(w); w.remove(); }
+  }
+  for (const app of apps) {
+    if (!app.system_icon) continue;
+    const key = "app-" + app.name;
+    let d = ICON_DEFS.find(d => d.key === key);
+    if (!d) {
+      d = {key, size: svgGridSize(app.system_icon), systemApp: true,
+        get: () => systemAppIcons.get(key), set: svg => systemAppIcons.set(key, svg)};
+      ICON_DEFS.push(d);
+    }
+    d.label = app.title || app.name;
+    ICON_FACTORY[key] = app.system_icon;
+    d.set(iconOv[key] || app.system_icon);
+  }
+  if (!$("#win-icons").hidden) renderIconGallery();
+  for (const key of [...icxPending]) if (iconDef(key)) { icxPending.delete(key); openIconEditor(key); }
+}
 async function loadApps() {
   appsList = await j("/v1/apps");
+  registerSystemAppIcons(appsList);
   renderIcons(lastVMs);
   // app windows restored from a layout snapshot before the list arrived get
   // their real title and height once metadata is here
@@ -3062,6 +3131,7 @@ async function loadApps() {
   }
 }
 function openAppWin(name) {
+  name = canonicalAppName(name);
   const id = "win-app-" + name;
   let w = document.getElementById(id);
   if (!w) {
@@ -3090,10 +3160,31 @@ function openAppWin(name) {
     initWindow(w);
     // the app's grow box lives inside its iframe (postMessage bridge), so
     // the edge grips are wired here, with the bridge's own clamps
-    wireEdges(w, fr, 240, { minH: 120, hPad: 120 });
+    if (name !== "macos9") wireEdges(w, fr, 240, { minH: 120, hPad: 120 });
   }
   openWin(w);
 }
+// The emulated Mac chooses a guest resolution; fit its window to whole pixels
+// instead of giving it a second, independent resize control.
+function fitMacOS9Window(w) {
+  const size = w._macDisplay, fr = w.querySelector(".app-frame");
+  if (!size || !fr || IS_MOBILE || w.hidden || w.classList.contains("shaded") || fr.contentDocument?.fullscreenElement) return;
+  const desktop = $("#desktop");
+  const borderW = w.offsetWidth - fr.offsetWidth, borderH = w.offsetHeight - fr.offsetHeight;
+  const availableW = Math.max(1, desktop.clientWidth - 8 - borderW);
+  const availableH = Math.max(1, desktop.clientHeight - 8 - borderH - size.chromeHeight);
+  const fit = Math.min(availableW / size.width, availableH / size.height);
+  const scale = fit >= 1 ? Math.floor(fit) : fit;
+  w.style.width = Math.floor(size.width * scale) + borderW + "px";
+  fr.style.height = Math.floor(size.height * scale) + size.chromeHeight + "px";
+  w.style.left = Math.max(4, Math.min(w.offsetLeft, desktop.clientWidth - w.offsetWidth - 4)) + "px";
+  w.style.top = Math.max(4, Math.min(w.offsetTop, desktop.clientHeight - w.offsetHeight - 4)) + "px";
+  w._zoom = null;
+}
+window.addEventListener("resize", () => {
+  const w = document.getElementById("win-app-macos9");
+  if (w) fitMacOS9Window(w);
+});
 // app windows: an OS 9 grow box inside the app's iframe streams pointer
 // deltas up via postMessage (the app can't reach its own window chrome);
 // the desktop resizes the Platinum window and iframe around it
@@ -3115,6 +3206,12 @@ window.addEventListener("message", e => {
     // apps have no window chrome of their own, so a clicked picture (a hub
     // embed, say) opens in a desktop PictureViewer window via the bridge
     openImageWin(e.data.url, w, typeof e.data.name === "string" ? e.data.name : "");
+  } else if (e.data.exe === "display-size" && w.id === "win-app-macos9") {
+    const {width, height, chromeHeight} = e.data;
+    if (![[640, 480], [800, 600], [1024, 768]].some(([x, y]) => x === width && y === height) ||
+        !Number.isFinite(chromeHeight) || chromeHeight < 0 || chromeHeight > 2000) return;
+    w._macDisplay = {width, height, chromeHeight};
+    fitMacOS9Window(w);
   } else if (e.data.exe === "grow-start" && !IS_MOBILE) {
     appGrow = { win: w, frame: fr, w: w.offsetWidth, h: fr.offsetHeight };
     winDragging = w;
@@ -3388,7 +3485,7 @@ const putIcons = () => j("/v1/apps/System/data/icons.json", {
 // already drew from it. custom is only passed on a fetch — local saves
 // mutate iconCustom in place and leave it alone
 function applyIconOverrides(ovs, custom) {
-  iconOv = ovs || {};
+  iconOv = canonicalAppKeys(ovs || {}, canonicalAppIconKey);
   if (custom !== undefined) {
     iconCustom = custom || {};
     // a custom icon deleted on another desk takes its editor window with it
@@ -3415,8 +3512,11 @@ function applyIconOverrides(ovs, custom) {
 }
 async function loadIcons() {
   const d = await j("/v1/apps/System/data/icons.json").catch(() => null);
-  if (d && (Object.keys(d.icons || {}).length || Object.keys(d.custom || {}).length))
+  if (d && (Object.keys(d.icons || {}).length || Object.keys(d.custom || {}).length)) {
     applyIconOverrides(d.icons || {}, d.custom || {});
+    // A restored editor may have opened from factory art before this fetch.
+    document.querySelectorAll(".icx-window").forEach(w => { if (w._icx && !w._icx.dirty) icxLoad(w); });
+  }
 }
 // another window or a synced peer changed icons.json — refetch and apply;
 // open editors keep unsaved strokes, clean ones reload the new art
@@ -3571,12 +3671,13 @@ const ICX_PALETTE = [null,
   "#99ccff", "#ccccff", "#9c9af2", "#333399", "#3a3f46", "#7a1010", "#ffcccc", "#00cccc",
 ];
 
-// layout restore can ask for a custom icon's editor before icons.json has
-// loaded — park the key and applyIconOverrides opens it once the data lands
+// Layout restore can precede icons.json or the built-in app list. Park the
+// editor key until its custom or system app icon has been registered.
 const icxPending = new Set();
 function openIconEditor(key) {
+  key = canonicalAppIconKey(key);
   const d = iconDef(key);
-  if (!d) { if (key.startsWith("c-")) icxPending.add(key); return; }
+  if (!d) { if (key.startsWith("c-") || key.startsWith("app-")) icxPending.add(key); return; }
   const id = "win-ic-" + key;
   let w = document.getElementById(id);
   if (!w) {
@@ -4178,7 +4279,7 @@ const DESK_ACTS = {
   workspace: { run: p => openFinderWin(p || "") },
   edit: { run: p => openEditorWin(p) },
   vm: { run: (name, tab) => openVM(name, tab), dis: name => !lastVMs.some(v => v.name === name) },
-  app: { run: name => openAppWin(name), dis: name => !appsList.some(a => a.name === name) },
+  app: { run: name => openAppWin(name), dis: name => !appsList.some(a => a.name === canonicalAppName(name)) },
   chat: { run: vm => openChatWin(vm), dis: () => !chatDetected },
   winchat: { run: () => openChatWin(), dis: () => !chatDetected },
 };
@@ -4207,9 +4308,7 @@ function winIcon(w) {
   if (id === "win-detail") { const vm = lastVMs.find(v => v.name === currentVM); return macIcon(vm ? vm.state : "stopped", 16); }
   if (id.startsWith("win-app-")) {
     const app = appsList.find(a => a.name === id.slice(8));
-    return app && app.icon
-      ? `<img src="/apps/${encodeURIComponent(app.name)}/${app.icon.split("/").map(encodeURIComponent).join("/")}" alt="">`
-      : at16(APP_FALLBACK_ICON);
+    return appIcon(app, 16);
   }
   if (id.startsWith("win-ws-")) return at16(FOLDER_ICON);
   if (id.startsWith("win-ed-")) return at16(DOC_ICON);
@@ -7162,7 +7261,7 @@ function appDataSubscribe() {
     // Forward even to a closed window: closeWin only hides the iframe, which
     // keeps running, so a hidden app must still hear the change or it would
     // reopen with stale in-memory state and clobber the synced-in doc.
-    const w = document.getElementById("win-app-" + ev.app);
+    const w = document.getElementById("win-app-" + canonicalAppName(ev.app));
     const fr = w && w.querySelector(".app-frame");
     if (fr && fr.contentWindow) {
       fr.contentWindow.postMessage(

@@ -36,7 +36,7 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 - Copy the shared Platinum blocks verbatim — `button.ghost`, the sunken
   field, the 15px status bar, the grow box (a fixed-size window needs no
   grow box: `"grow": false`), the scrollbar
-  (exe-apps Tides/Notes), the `.popup` menu button (sysapps/BluePencil). Buttons are
+  (exe-apps Tides/Notes), the `.popup` menu button (sysapps/bluepencil). Buttons are
   20px, OK/Cancel 58px, 12px apart and from edges; only the Return
   default wears the ring. 12px Charcoal type, `cursor: default`, no hover
   states, no pointing hand.
@@ -59,6 +59,10 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   or macos9.app). Sample, then diff.
 
 ## Data and behaviour
+
+- Built-in app folders and IDs use lowercase names without spaces, such as
+  `macos9`, `hub`, and `bluepencil`. Keep display names in `app.json`'s
+  `title`; do not use a display title as a new source directory or app ID.
 
 - App state goes through `/v1/apps/<Name>/data/<file>` under the sync
   contract in `/www/exe-apps/CLAUDE.md`; a new record-bearing file also

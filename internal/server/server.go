@@ -27,6 +27,7 @@ import (
 	"exe/internal/config"
 	"exe/internal/github"
 	"exe/internal/hostinfo"
+	"exe/internal/macos9"
 	"exe/internal/peer"
 	"exe/internal/proxy"
 	"exe/internal/sshexec"
@@ -35,10 +36,12 @@ import (
 )
 
 type Server struct {
-	VMs      vmm.Manager
-	Proxy    *proxy.Proxy
-	KeyPath  string
-	StateDir string
+	macOS9Once sync.Once
+	macOS9     *macos9.Manager
+	VMs        vmm.Manager
+	Proxy      *proxy.Proxy
+	KeyPath    string
+	StateDir   string
 
 	// Logs, when set by main, holds the daemon log ring that GET /v1/logs
 	// streams to the web UI.
@@ -150,6 +153,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/hub/publish", s.handleHubPublish)
 	mux.HandleFunc("POST /v1/hub/upload", s.handleHubUpload)
 	mux.HandleFunc("POST /v1/hub/avatar", s.handleHubUpload)
+	mux.HandleFunc("GET /v1/macos9", s.handleMacOS9Status)
+	mux.HandleFunc("POST /v1/macos9/start", s.handleMacOS9Start)
+	mux.HandleFunc("POST /v1/macos9/cancel", s.handleMacOS9Cancel)
+	mux.HandleFunc("POST /v1/macos9/finish", s.handleMacOS9Finish)
+	mux.HandleFunc("GET /v1/macos9/console", s.handleMacOS9Console)
 	mux.HandleFunc("GET /v1/apps", s.handleApps)
 	mux.HandleFunc("GET /v1/apps/events", s.handleAppDataEvents)
 	mux.HandleFunc("GET /v1/apps/{app}/data", s.handleAppDataList)

@@ -15,7 +15,7 @@ The menu bar works like the classic Mac it resembles:
 - **File** — New VM…, Upload to Workspace…, Close Window, Refresh.
 - **Windows** — reopen the core windows: Virtual Machines, Chat, Newsfeed,
   Icon Editor, Configuration, Daemon Log.
-- **Special** — Join… (pair another exe machine), Cloudflare Status and
+- **Special** — Mac OS 9, Join… (pair another exe machine), Cloudflare Status and
   Setup Wizard, Set API Token….
 - **Help** — this page, and the Agent Skill Guide for handing exe to a
   coding agent.
@@ -72,7 +72,8 @@ like a phone's back button.
 
 Every system icon is hand-plotted pixel art, and **Windows → Icon Editor**
 lets you repaint it: the gallery lists each one (the VM Mac, folders,
-documents, the Trash, the minis in search results, even the Apple menu),
+documents, the Trash, built-in apps such as Mac OS 9, the minis in search
+results, even the Apple menu),
 and double-clicking opens a fat-bits editor — pencil, eraser, eyedropper,
 fill, undo, the Platinum palette plus a custom color well. Save applies the
 art everywhere at once, follows the desk into every browser and joined
@@ -81,6 +82,49 @@ icon, pixels painted the factory screen-green keep changing color with the
 VM's state. **New Icon…** adds icons of your own on a 32×32 or 16×16 grid —
 draw them, copy their SVG for use anywhere, delete them when done. System
 icons can only be repainted, never deleted.
+
+## Mac OS 9
+
+Choose **Special → Mac OS 9** (also available among the built-in apps) to open
+an interactive Power Mac G4 running Mac OS 9.2.2. Its Monitors control panel
+offers only 640×480, 800×600, and 1024×768, with 800×600 as the default. The first launch shows each
+setup step: preparing QEMU, downloading the 497 MiB Universal installer,
+checking its checksum, creating a 2 GB persistent disk, and starting the Mac.
+Automatic emulator installation supports Ubuntu 24.04; other hosts need
+`qemu-system-ppc` and `qemu-img` installed first (on macOS, `brew install qemu`).
+
+The app guides you through Drive Setup and Apple Software Restore inside the
+Mac. After Restore reports success, shut down the guest and click
+**Installation finished — start my Mac**. Subsequent launches use the saved
+installation. Setup can be paused and retried, and closing the window keeps
+both setup and a running Mac alive. An open window reconnects automatically
+after an exe restart or a temporary network interruption, returning to the same
+running Mac. If exe restarts during a download, choose Continue setup once
+the connection returns. Use **Resume installer** if the Mac was shut down before Restore completed.
+Completed installer downloads are reused
+after checksum verification; partial downloads restart.
+
+The pointer follows your browser cursor directly, including when you leave and
+re-enter the window. A bundled open-source USB tablet driver loads at boot;
+no guest installation is needed. Mouse-wheel scrolling is not supported by
+that driver; use the Mac’s scrollbar controls.
+
+The app window fits the selected guest resolution automatically, using the
+largest whole-number scale that fits the browser (1×, 2×, 3×, and so on).
+There is no separate grow tile. Smaller viewports shrink the display
+proportionally to keep the whole Mac visible. Full screen also uses integer scaling.
+
+Use **Full screen** for more room and **Mac keys…** for common Command-key
+shortcuts. Shut down from **Special → Shut Down inside the Mac** to save its
+files cleanly. The installed guest has a `sungem` Ethernet adapter with outbound NAT and
+DHCP; networking is disabled while booting the installer. Classic HTTP browsers work; modern HTTPS compatibility depends on the
+guest browser. Audio is not configured.
+
+The runtime, installer, setup progress and disk live in `~/.exe/mac-os9/`
+(or `$EXE_HOME/mac-os9/`), outside app-data sync. The display uses private local
+sockets and the same API token as exe. No public VNC port is opened. The API is
+`GET /v1/macos9`, `POST /v1/macos9/start`, `/cancel`, `/finish`, and the binary
+WebSocket at `/v1/macos9/console`.
 
 ## Virtual machines
 
@@ -213,6 +257,10 @@ New files brought in this way are announced on the Newsfeed, so every desk
 in the mesh sees them arrive; overwriting an existing file stays quiet.
 
 ## Apps
+
+Built-in app IDs use lowercase names (`macos9`, `hub`, `bluepencil`); their
+display titles come from `app.json`. Older links and saved settings still
+work. Existing app data keeps its original storage and sync namespace.
 
 Icons beyond the built-ins are desktop apps: folders in `~/.exe/apps`, each
 just an `app.json` plus an `index.html`, served straight from disk — edit

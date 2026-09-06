@@ -226,7 +226,7 @@ textarea:focus { outline: none; }
 "use strict";
 const $ = s => document.querySelector(s);
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
-const APP = decodeURIComponent(location.pathname.split("/")[2] || "BluePencil");
+const APP = decodeURIComponent(location.pathname.split("/")[2] || "bluepencil");
 const CONFIG_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/config.json";
 const DRAFT_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/draft.json";
 const CLIENT = Math.random().toString(36).slice(2, 10); // tags our writes in change events

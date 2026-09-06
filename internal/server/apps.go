@@ -38,7 +38,36 @@ import (
 //go:embed all:sysapps
 var sysAppsFS embed.FS
 
+// Only these historical system-app names are aliases. User app names retain
+// their spelling; display titles are independent of the stable bundle ID.
+func canonicalAppName(name string) string {
+	switch name {
+	case "Mac OS 9":
+		return "macos9"
+	case "Hub":
+		return "hub"
+	case "BluePencil":
+		return "bluepencil"
+	}
+	return name
+}
+
+// Keep the existing storage and peer-sync namespace, so renamed bundles do
+// not strand data or fork it when talking to a node running an older exe.
+func appDataName(name string) string {
+	switch canonicalAppName(name) {
+	case "macos9":
+		return "Mac OS 9"
+	case "hub":
+		return "Hub"
+	case "bluepencil":
+		return "BluePencil"
+	}
+	return name
+}
+
 func sysAppExists(name string) bool {
+	name = canonicalAppName(name)
 	if !validAppName(name) {
 		return false
 	}
@@ -47,6 +76,7 @@ func sysAppExists(name string) bool {
 }
 
 func loadSysAppMeta(name string) (*appMeta, error) {
+	name = canonicalAppName(name)
 	b, err := fs.ReadFile(sysAppsFS, "sysapps/"+name+"/app.json")
 	if err != nil {
 		return nil, err
@@ -64,6 +94,12 @@ func loadSysAppMeta(name string) (*appMeta, error) {
 	}
 	if m.Icon != "" && !filepath.IsLocal(m.Icon) {
 		m.Icon = ""
+	}
+	m.SystemIcon = ""
+	if strings.EqualFold(filepath.Ext(m.Icon), ".svg") {
+		if svg, err := fs.ReadFile(sysAppsFS, "sysapps/"+name+"/"+filepath.ToSlash(m.Icon)); err == nil {
+			m.SystemIcon = string(svg)
+		}
 	}
 	return m, nil
 }
@@ -96,20 +132,29 @@ func expandHome(p string) string {
 	return p
 }
 
-// findAppRoot returns the first root holding an app folder of this name.
-func (s *Server) findAppRoot(name string) (string, bool) {
+// findAppRoot prefers a canonical folder over its legacy alias within each
+// root. Root priority still wins, including an old-named disk override.
+// Skip incomplete bundles just as app discovery does.
+func (s *Server) findAppRoot(name string) (root, folder string, found bool) {
 	if !validAppName(name) {
-		return "", false
+		return "", "", false
+	}
+	name = canonicalAppName(name)
+	names := []string{name}
+	if legacy := appDataName(name); legacy != name {
+		names = append(names, legacy)
 	}
 	for _, root := range s.appRoots() {
-		if fi, err := os.Stat(filepath.Join(root, name)); err == nil && fi.IsDir() {
-			return root, true
+		for _, folder := range names {
+			if _, err := s.loadAppMeta(root, folder); err == nil {
+				return root, folder, true
+			}
 		}
 	}
-	return "", false
+	return "", "", false
 }
 func (s *Server) appDataDir(app string) string {
-	return filepath.Join(s.StateDir, "appdata", app)
+	return filepath.Join(s.StateDir, "appdata", appDataName(app))
 }
 
 // ensureStateDirs creates the writable state layout on startup.
@@ -134,10 +179,11 @@ type appWindow struct {
 }
 
 type appMeta struct {
-	Name   string     `json:"name"`
-	Title  string     `json:"title"`
-	Icon   string     `json:"icon,omitempty"`
-	Window *appWindow `json:"window,omitempty"`
+	Name       string     `json:"name"`
+	Title      string     `json:"title"`
+	Icon       string     `json:"icon,omitempty"`
+	SystemIcon string     `json:"system_icon,omitempty"` // trusted embedded SVG, never supplied by a disk bundle
+	Window     *appWindow `json:"window,omitempty"`
 }
 
 // loadAppMeta reads one bundle's app.json; a folder only counts as an app
@@ -155,7 +201,8 @@ func (s *Server) loadAppMeta(root, name string) (*appMeta, error) {
 	if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
 		return nil, errors.New("no index.html")
 	}
-	m.Name = name // the folder is the identity; app.json cannot claim another
+	m.SystemIcon = ""               // disk bundles must remain isolated as image resources
+	m.Name = canonicalAppName(name) // app.json cannot claim another identity
 	if strings.TrimSpace(m.Title) == "" {
 		m.Title = name
 	}
@@ -166,8 +213,7 @@ func (s *Server) loadAppMeta(root, name string) (*appMeta, error) {
 }
 
 func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
-	apps := []*appMeta{}
-	seen := map[string]bool{}
+	names := map[string]bool{}
 	for _, root := range s.appRoots() {
 		entries, err := os.ReadDir(root)
 		if err != nil {
@@ -177,33 +223,41 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, e := range entries {
-			if !e.IsDir() || !validAppName(e.Name()) || seen[e.Name()] {
-				continue
+			if e.IsDir() && validAppName(e.Name()) {
+				names[canonicalAppName(e.Name())] = true
 			}
-			m, err := s.loadAppMeta(root, e.Name())
-			if err != nil {
-				log.Printf("apps: skipping %s: %v", e.Name(), err)
-				continue
-			}
-			seen[e.Name()] = true
-			apps = append(apps, m)
 		}
 	}
 	if entries, err := fs.ReadDir(sysAppsFS, "sysapps"); err == nil {
 		for _, e := range entries {
-			if !e.IsDir() || seen[e.Name()] {
-				continue
+			if e.IsDir() {
+				names[e.Name()] = true
 			}
-			m, err := loadSysAppMeta(e.Name())
-			if err != nil {
-				log.Printf("apps: skipping embedded %s: %v", e.Name(), err)
-				continue
-			}
-			seen[e.Name()] = true
-			apps = append(apps, m)
 		}
 	}
-	sort.Slice(apps, func(i, j int) bool { return apps[i].Title < apps[j].Title })
+	apps := []*appMeta{}
+	for name := range names {
+		var m *appMeta
+		var err error
+		// Use the same resolution as static serving, so both spellings open
+		// the bundle described here and never produce duplicate app entries.
+		if root, folder, ok := s.findAppRoot(name); ok {
+			m, err = s.loadAppMeta(root, folder)
+		} else {
+			m, err = loadSysAppMeta(name)
+		}
+		if err != nil {
+			log.Printf("apps: skipping %s: %v", name, err)
+			continue
+		}
+		apps = append(apps, m)
+	}
+	sort.Slice(apps, func(i, j int) bool {
+		if apps[i].Title == apps[j].Title {
+			return apps[i].Name < apps[j].Name
+		}
+		return apps[i].Title < apps[j].Title
+	})
 	writeJSON(w, http.StatusOK, apps)
 }
 
@@ -214,23 +268,25 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 func (s *Server) appStatic() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/apps/"), "/")
-		root, ok := s.findAppRoot(name)
-		if !ok {
-			if sysAppExists(name) {
-				sub, _ := fs.Sub(sysAppsFS, "sysapps")
-				w.Header().Set("Cache-Control", "no-cache")
-				http.StripPrefix("/apps/", http.FileServerFS(sub)).ServeHTTP(w, r)
-				return
-			}
+		root, folder, ok := s.findAppRoot(name)
+		var files fs.FS
+		if ok {
+			files = os.DirFS(root)
+		} else if sysAppExists(name) {
+			folder = canonicalAppName(name)
+			files, _ = fs.Sub(sysAppsFS, "sysapps")
+		} else {
 			http.NotFound(w, r)
 			return
 		}
-		// Apps are edited live on disk; without this, browsers apply
-		// heuristic freshness to the bare Last-Modified and can serve a
-		// stale bundle for minutes after an edit. no-cache still allows
-		// 304 revalidation, so unchanged files stay cheap.
+		// Rewrite aliases internally, including nested assets. Old bookmarks
+		// and already-open iframes continue using their original URL.
+		r = r.Clone(r.Context())
+		r.URL.Path = "/apps/" + folder + strings.TrimPrefix(r.URL.Path, "/apps/"+name)
+		r.URL.RawPath = ""
+		// Revalidate live disk edits and embedded assets after a rebuild.
 		w.Header().Set("Cache-Control", "no-cache")
-		http.StripPrefix("/apps/", http.FileServerFS(os.DirFS(root))).ServeHTTP(w, r)
+		http.StripPrefix("/apps/", http.FileServerFS(files)).ServeHTTP(w, r)
 	})
 }
 
@@ -257,7 +313,7 @@ func scopedPath(root, rel string) (string, error) {
 // to joined nodes like any app data.
 func (s *Server) appDataRoot(name string) (string, error) {
 	if name != "System" {
-		if _, ok := s.findAppRoot(name); !ok && !sysAppExists(name) {
+		if _, _, ok := s.findAppRoot(name); !ok && !sysAppExists(name) {
 			return "", errors.New("no such app")
 		}
 	}
@@ -401,7 +457,7 @@ func (s *Server) handleAppDataGet(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
 	s.withAppData(w, r, func(root string) {
-		app, rel := r.PathValue("app"), r.PathValue("path")
+		app, rel := appDataName(r.PathValue("app")), r.PathValue("path")
 		// X-Exe-Seq is an optional monotonic content timestamp the app stamps
 		// on each save; it lets us reject a PUT whose content is older than
 		// one already stored, closing the window where two of an app's own
@@ -456,7 +512,7 @@ func (s *Server) recordSeq(key string, seq int64) {
 }
 func (s *Server) handleAppDataDelete(w http.ResponseWriter, r *http.Request) {
 	s.withAppData(w, r, func(root string) {
-		app, rel := r.PathValue("app"), r.PathValue("path")
+		app, rel := appDataName(r.PathValue("app")), r.PathValue("path")
 		deleted := false
 		s.withFileLock(func() {
 			if handleFileDelete(w, root, rel) {

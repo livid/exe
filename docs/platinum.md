@@ -6,7 +6,7 @@ the colours, the blocks to copy, and the rules Livid has asked for by name.
 The reference copies live in code — copy them verbatim rather than
 restyling: `internal/server/ui/index.html` (the desktop),
 `/www/exe-apps/Tides/index.html` and `Notes/index.html` (apps),
-`internal/server/sysapps/BluePencil/index.html` (the pop-up menu button).
+`internal/server/sysapps/bluepencil/index.html` (the pop-up menu button).
 
 ## Where the truth comes from
 
@@ -164,11 +164,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - User app bundles (exe-apps) stay outside the editor by design: their
   `icon.svg` is drawn as an image. A system app embedded in the exe binary
   (`internal/server/sysapps/*`) is system UI and its icon belongs in the
-  editor; today none registers (Hub, Blue Pencil, Mac OS 9), and the
-  generic fix is for the desktop to draw a sysapp's desktop icon from a
-  registry entry keyed `app-<name>` (get/set over the bundle's icon.svg
-  text) instead of an `<img>`. Until then, at least draw the art to the
-  rules above.
+  editor. The app-list API supplies a trusted `system_icon` SVG only for
+  embedded bundles. The desktop registers it as `app-<name>` with get/set,
+  keeps its factory art, and uses the registry on the desktop and in Windows
+  lists. Disk bundles cannot supply inline art through this field, including
+  when they override a built-in app's name.
 
 ## Apps
 

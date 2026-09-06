@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Mac OS 9</title>
+<style>
+/* Shared Platinum blocks copied from Tides and Blue Pencil. */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
+  user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column; }
+
+input[type=text] { background: #fff; color: var(--black);
+  border: 1px solid var(--black); border-radius: 0; padding: 2px 5px; font: inherit; font-size: 12px;
+  height: 20px; line-height: 14px;
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+/* the selected range stays depressed, like a Platinum segmented control */
+button.ghost.on { background: #888; color: #fff;
+  box-shadow: inset 1px 1px 0 #666, inset -1px -1px 0 #aaa,
+    inset 2px 2px 0 #777, inset -2px -2px 0 #999; }
+button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
+/* pop-up menu button, from the HIG's Figure 2-7 (Mac OS 8 HIG, "Pop-Up
+   Menu Buttons"): a rounded black outline; on the body a white top and
+   left highlight and a #aaa bottom shadow; on the right the raised arrow
+   well — #aaa separator, a 1px gap, its own white bevel, #aaa then #777
+   shadows, two 7px triangles. Every line is a CSS border on a nested
+   element rather than background art: borders paint as exactly one device
+   pixel at any display scale (Windows 150% included), where a sprite's
+   rows come out 1 or 2 pixels tall by turns and the arrows grow tails.
+   Only the triangles are art — crisp on the integer-scale grid, and
+   anti-aliased at fractional scales so the apex stays a clean point. The
+   list that opens is the browser's own. */
+.popup { position: relative; display: block; height: 19px; overflow: hidden;
+  border: 1px solid #000; border-radius: 3px; background: var(--g300); }
+.popup::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(100% - 21px);
+  border-top: 1px solid #fff; border-left: 1px solid #fff; border-bottom: 1px solid #aaa; }
+.popup .well { position: absolute; right: 0; top: 1px; bottom: 0; width: 21px;
+  border-left: 1px solid #aaa; pointer-events: none; }
+.popup .well i { position: absolute; left: 1px; top: 0; right: 0; bottom: 0;
+  border-right: 1px solid #777; border-bottom: 1px solid #777; }
+.popup .well b { position: absolute; inset: 0;
+  border-top: 1px solid #fff; border-left: 1px solid #fff;
+  border-right: 1px solid #aaa; border-bottom: 1px solid #aaa;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" shape-rendering="crispEdges"><path fill="black" d="M3 0h1v1H3zM2 1h3v1H2zM1 2h5v1H1zM0 3h7v1H0zM0 6h7v1H0zM1 7h5v1H1zM2 8h3v1H2zM3 9h1v1H3z"/></svg>') 4px 1px no-repeat; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .popup .well b { background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" shape-rendering="geometricPrecision"><path fill="black" d="M3.5 0L7 4H0zM0 6h7l-3.5 4z"/></svg>'); }
+}
+.popup select { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none;
+  background: transparent; border: 0; border-radius: 0; padding: 0 27px 0 6px; margin: 0;
+  color: #000; font: 12px/17px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.popup select:focus { outline: none; }
+
+/* 15px Platinum status bar. */
+#status { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
+  background: var(--g300); font-size: 11px; color: #333; padding: 0 8px; height: 15px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
+
+/* Mac OS 9 scrollbars — the desktop's pixel-sampled spec, adapted for a
+   document window: the host frame draws the outer black line, so bars are
+   15px (1px leading separator + the sampled 14px face) with no trailing
+   border of their own — otherwise the edge doubles to 2px. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:start:increment { display: none; }
+::-webkit-scrollbar-corner { background: var(--g300); }
+
+/* App layout. The shared component blocks above remain unchanged. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+[hidden] { display: none !important; }
+#bar { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; align-items: center; flex: none; }
+#bar button { min-width: 96px; }
+#mac-keys-popup { width: 184px; height: 20px; }
+.popup:focus-within, button:focus-visible, a:focus-visible { outline: 2px solid #9999fe; outline-offset: 1px; }
+.popup select:disabled { color: #777; }
+#bar-help { margin-left: auto; color: #555; font-size: 11px; }
+main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; border-top: 1px solid var(--black); background: #fff; }
+#setup { padding: 12px; max-width: 760px; width: 100%; margin: 0 auto; flex: none; }
+h2 { font-size: 12px; margin: 0 0 12px; }
+#intro { margin: 0 0 12px; }
+#steps { list-style: none; padding: 0; margin: 0; }
+#steps li { padding: 8px 0; border-bottom: 1px solid var(--g400); display: flex; gap: 12px; align-items: flex-start; }
+#steps .badge { width: 16px; flex: none; text-align: center; }
+#steps .done .badge { color: #336633; }
+#steps .working .badge { color: var(--hl); font-weight: bold; }
+#steps .error .badge { color: #993333; }
+#steps strong { font-weight: bold; }
+#steps small { display: block; color: #555; margin-top: 2px; font-size: 11px; }
+progress { appearance: none; width: 100%; height: 12px; margin-top: 12px; border: 1px solid var(--black); background: var(--g400); }
+progress::-webkit-progress-bar { background: var(--g400); box-shadow: inset 1px 1px 0 var(--g600); }
+progress::-webkit-progress-value { background: var(--hl); border-right: 1px solid var(--black); }
+progress::-moz-progress-bar { background: var(--hl); }
+#transfer { font-size: 11px; color: #555; margin-top: 4px; }
+#error { margin: 0 12px 12px; padding: 8px; background: #ffffcc; border: 1px solid var(--black); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; user-select: text; flex: none; }
+#guide { padding: 12px; background: var(--g200); border-bottom: 1px solid var(--black); flex: none; }
+#guide summary { font-weight: bold; }
+#guide ol { margin: 12px 0; padding-left: 22px; }
+#guide li { margin: 6px 0; }
+#guide p { font-size: 11px; margin: 12px 0 0; }
+#finish-row { display: flex; justify-content: flex-end; gap: 12px; margin: 12px 0; }
+#screen { background: #333; flex: 1; min-height: 280px; overflow: hidden; position: relative; }
+#screen:fullscreen { height: 100vh; }
+#display { position: absolute; inset: 0 auto auto 0; width: 100%; height: 100%; }
+#screen canvas { outline: none; }
+#screen.integer-scale canvas { image-rendering: pixelated; }
+#empty { margin: auto; padding: 24px 12px; text-align: center; color: #555; }
+#empty img { width: 32px; height: 32px; }
+#empty p { max-width: 440px; }
+#status { flex: none; }
+#lamp { width: 7px; height: 7px; flex: none; border: 1px solid #555; background: var(--g600); }
+#lamp.on { background: #669966; }
+#message { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#connection, #hardware { flex: none; white-space: nowrap; }
+a { color: var(--hl); }
+@media (max-width: 650px) {
+  #bar-help, #hardware { display: none; }
+  #bar { gap: 12px; }
+  #screen { min-height: 220px; }
+}
+</style>
+</head>
+<body>
+<header id="bar">
+  <button class="ghost" id="start" hidden>Start Mac</button>
+  <button class="ghost" id="cancel" hidden>Pause setup</button>
+  <button class="ghost" id="details" aria-pressed="false">Setup details</button>
+  <span class="popup" id="mac-keys-popup" hidden>
+    <select id="mac-keys" aria-label="Send Mac keyboard shortcut"><option value="">Mac keys…</option><option value="q">⌘ Q — Quit</option><option value="w">⌘ W — Close</option><option value="o">⌘ O — Open</option><option value="l">⌘ L — Open Location</option></select>
+    <span class="well" aria-hidden="true"><i><b></b></i></span>
+  </span>
+  <button class="ghost" id="full" hidden>Full screen</button>
+  <span id="bar-help">Click the Mac screen to type</span>
+</header>
+<div id="error" role="alert" hidden></div>
+<main>
+<section id="setup" hidden><h2>Setting up your Mac</h2><p id="intro">Setup runs on this computer and continues if you close this window. Your Mac’s hard disk is kept for your next visit. <a href="https://archive.org/details/mac-os-9.2.2-universal-inst" target="_blank" rel="noreferrer">Installer source</a>.</p><ol id="steps"></ol><progress id="progress" hidden></progress><div id="transfer"></div></section>
+<details id="guide" open hidden><summary>Install Mac OS 9 — follow these steps in the Mac screen</summary><ol>
+<li>Wait for the installer desktop. Close the Read Me with <b>File → Quit</b>. In <b>Drive Setup</b> (or open it from the CD’s Applications folder), select the <b>&lt;not initialized&gt;</b> hard disk, click <b>Initialize…</b>, then <b>Initialize</b>. Quit Drive Setup when it finishes.</li>
+<li>Open the <b>MacOS9Lives</b> CD, then <b>Apple Software Restore</b>. Keep the supplied image and the new hard disk selected. Click <b>Restore</b>, then confirm <b>OK</b>.</li>
+<li>Wait for <b>“The volume was successfully restored”</b>. Quit Restore. Choose <b>Special → Shut Down</b> from the Mac’s own menu bar.</li>
+<li>Once the Mac has stopped, click <b>Installation finished — start my Mac</b> below. On its first hard-disk boot, quit the Mac OS Setup Assistant if you do not need it.</li>
+</ol><div id="finish-row"><button class="ghost" id="finish" disabled>Installation finished — start my Mac</button></div><p>The installer’s Erase option applies to this Mac’s virtual hard disk. Use it only during this first installation.</p></details>
+<div id="screen" hidden aria-label="Mac OS 9 remote display"><div id="display"></div></div>
+<div id="empty" hidden><img src="icon.svg" alt=""><p id="empty-text">Your Mac is shut down. Its files are saved. Click Start Mac to return to the desktop.</p></div>
+</main>
+<footer id="status" role="status" aria-live="polite"><span id="lamp" aria-hidden="true"></span><span id="message">Checking your Mac…</span><span id="hardware">PowerPC G4 · 512 MB</span><span id="connection"></span></footer>
+
+<script type="module" src="app.js"></script>
+</body></html>

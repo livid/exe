@@ -249,7 +249,7 @@ canvas.ava-big { image-rendering: pixelated; }
 "use strict";
 const $ = s => document.querySelector(s);
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
-const APP = decodeURIComponent(location.pathname.split("/")[2] || "Hub");
+const APP = decodeURIComponent(location.pathname.split("/")[2] || "hub");
 const CONFIG_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/config.json";
 const PAGE = 30;
 // A phone gets the glyph-only composer buttons. The desktop passes its
