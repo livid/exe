@@ -38,6 +38,20 @@ button.ghost.sm { padding: 1px 8px; font-size: 10px; border-radius: 3px; height:
 /* a dialog's default button — Return presses it — wears the ring: outset
    3px from the button (HIG Fig. 2-3), drawn as the desktop draws it */
 button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+/* Find… / Refresh / Profile… carry a 13px pixel glyph beside their label;
+   a phone (body.mobile) shows only the glyph so the composer row keeps
+   room for its status text. The glyph is currentColor, so a pressed
+   button inverts it with the label; the magnifier's white lens goes
+   pressed-gray so it never reads as a hole. */
+button.ghost.icon .gl { display: none; }
+body.mobile button.ghost.icon { padding: 2px 8px; display: inline-flex; align-items: center; }
+body.mobile button.ghost.icon span { display: none; }
+body.mobile button.ghost.icon .gl { display: block; }
+.gl { shape-rendering: crispEdges; }
+.gl .k { fill: currentColor; }
+.gl .w { fill: #fff; }
+button.ghost:active .gl .w { fill: #666; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .gl { shape-rendering: geometricPrecision; } }
 
 input[type=text], textarea { font: inherit; color: var(--black); background: #fff;
   border: 1px solid var(--black); padding: 3px 5px; border-radius: 0;
@@ -202,9 +216,9 @@ canvas.ava-big { image-rendering: pixelated; }
       <button class="ghost" id="attach">Attach&#8230;</button>
       <input type="file" id="file" hidden multiple>
       <span id="c-status"></span>
-      <button class="ghost" id="find">Find&#8230;</button>
-      <button class="ghost" id="refresh">Refresh</button>
-      <button class="ghost" id="me">Profile&#8230;</button>
+      <button class="ghost icon" id="find" aria-label="Find&#8230;"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M3 0h3v1h-3zM1 1h2v1h-2zM6 1h2v1h-2zM0 2h1v1h-1zM8 2h1v1h-1zM0 3h1v1h-1zM8 3h1v1h-1zM0 4h1v1h-1zM8 4h1v1h-1zM0 5h1v1h-1zM8 5h1v1h-1zM0 6h1v1h-1zM8 6h1v1h-1zM1 7h2v1h-2zM6 7h2v1h-2zM3 8h3v1h-3zM7 8h3v1h-3zM8 9h3v1h-3zM9 10h3v1h-3zM10 11h3v1h-3zM11 12h2v1h-2z"/><path class="w" d="M3 1h3v1h-3zM1 2h7v1h-7zM1 3h7v1h-7zM1 4h7v1h-7zM1 5h7v1h-7zM1 6h7v1h-7zM3 7h3v1h-3z"/></svg><span>Find&#8230;</span></button>
+      <button class="ghost icon" id="refresh" aria-label="Refresh"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M8 0h1v1h-1zM8 1h2v1h-2zM5 2h6v1h-6zM3 3h2v1h-2zM8 3h2v1h-2zM2 4h1v1h-1zM8 4h1v1h-1zM2 5h1v1h-1zM1 6h1v1h-1zM11 6h1v1h-1zM1 7h1v1h-1zM11 7h1v1h-1zM1 8h1v1h-1zM11 8h1v1h-1zM2 9h1v1h-1zM10 9h1v1h-1zM2 10h1v1h-1zM10 10h1v1h-1zM3 11h2v1h-2zM8 11h2v1h-2zM5 12h3v1h-3z"/></svg><span>Refresh</span></button>
+      <button class="ghost icon" id="me" aria-label="Profile&#8230;"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M5 0h3v1h-3zM4 1h5v1h-5zM3 2h7v1h-7zM3 3h7v1h-7zM3 4h7v1h-7zM4 5h5v1h-5zM5 6h3v1h-3zM4 8h5v1h-5zM2 9h9v1h-9zM1 10h11v1h-11zM0 11h13v1h-13zM0 12h13v1h-13z"/></svg><span>Profile&#8230;</span></button>
       <button class="ghost" id="post" disabled>Post</button>
     </div>
   </div>
@@ -238,6 +252,14 @@ const TOKEN = new URLSearchParams(location.search).get("token") || "";
 const APP = decodeURIComponent(location.pathname.split("/")[2] || "Hub");
 const CONFIG_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/config.json";
 const PAGE = 30;
+// A phone gets the glyph-only composer buttons. The desktop passes its
+// own verdict as ?mobile=1 (it also honours ?mobile=0); opened bare, the
+// app runs the desktop's test itself: phone UA, or a small coarse-pointer screen.
+const IS_MOBILE = new URLSearchParams(location.search).has("mobile")
+  ? new URLSearchParams(location.search).get("mobile") !== "0"
+  : /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent)
+    || (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 700);
+if (IS_MOBILE) document.body.classList.add("mobile");
 
 // daemon API (same origin, token-guarded)
 async function api(url, opts = {}) {

@@ -2905,8 +2905,13 @@ function openAppWin(name) {
     if (app.window && app.window.grow) w.classList.add("grow");
     const fr = w.querySelector(".app-frame");
     if (app.window && app.window.height) fr.style.height = app.window.height + "px";
-    const tok = tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "";
-    fr.src = "/apps/" + encodeURIComponent(name) + "/" + tok;
+    // the token, and on a phone ?mobile=1 so the app can size its chrome
+    // for one (the Hub swaps its composer labels for glyphs)
+    const q = new URLSearchParams();
+    if (tokenInput.value) q.set("token", tokenInput.value);
+    if (IS_MOBILE) q.set("mobile", "1");
+    const qs = q.toString(); // not .size: iOS 16 Safari lacks it
+    fr.src = "/apps/" + encodeURIComponent(name) + "/" + (qs ? "?" + qs : "");
     $("#desktop").append(w);
     initWindow(w);
     // the app's grow box lives inside its iframe (postMessage bridge), so
