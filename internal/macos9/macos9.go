@@ -160,12 +160,16 @@ func (m *Manager) Start() error {
 	if m.running() {
 		return nil
 	}
-	if err := os.MkdirAll(m.root, 0700); err != nil {
-		return err
-	}
 	m.state = Status{Phase: "setup", Message: "Preparing your Mac…", Steps: newSteps(), Active: true}
 	if err := m.saveLocked(); err != nil {
+		// Saving can fail before the setup worker starts. Keep the failure in
+		// memory so later status polls and a reopened app still explain it.
+		err = fmt.Errorf("Cannot save setup progress: %w", err)
 		m.state.Active = false
+		m.state.Phase = "error"
+		m.state.Message = err.Error()
+		m.state.Steps[0].State = "error"
+		m.state.Steps[0].Detail = err.Error()
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)

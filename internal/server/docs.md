@@ -81,7 +81,8 @@ node, and survives restarts; Revert brings the factory icon back. On a VM
 icon, pixels painted the factory screen-green keep changing color with the
 VM's state. **New Icon…** adds icons of your own on a 32×32 or 16×16 grid —
 draw them, copy their SVG for use anywhere, delete them when done. System
-icons can only be repainted, never deleted.
+icons can only be repainted, never deleted. Restored editors keep their position,
+stacking and shaded state even when their icon loads after the desktop layout.
 
 ## Mac OS 9
 
@@ -99,7 +100,8 @@ Mac. After Restore reports success, shut down the guest and click
 installation. Setup can be paused and retried, and closing the window keeps
 both setup and a running Mac alive. An open window reconnects automatically
 after an exe restart or a temporary network interruption, returning to the same
-running Mac. If exe restarts during a download, choose Continue setup once
+running Mac. A failed Start keeps its error visible so you can address the cause
+and retry. If exe restarts during a download, choose Continue setup once
 the connection returns. Use **Resume installer** if the Mac was shut down before Restore completed.
 Completed installer downloads are reused
 after checksum verification; partial downloads restart.

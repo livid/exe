@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http/httptest"
@@ -98,5 +100,48 @@ func TestMacOS9BuiltInAssets(t *testing.T) {
 		if _, err := sysAppsFS.ReadFile(p); err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+func TestMacOS9StartFailureRemainsInStatus(t *testing.T) {
+	for _, installed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("installed=%v", installed), func(t *testing.T) {
+			root := t.TempDir()
+			macDir := filepath.Join(root, "mac-os9")
+			// Deterministically fail saving progress before any setup worker starts.
+			if err := os.MkdirAll(filepath.Join(macDir, "setup.json.tmp"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if installed {
+				if err := os.WriteFile(filepath.Join(macDir, "installed.json"), []byte(`{}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s := New(&config.Config{APIToken: "test-secret"}, nil, nil, "", root)
+			handler := s.Handler()
+			start := appRequest(handler, "POST", "/v1/macos9/start", "", 0)
+			if start.Code != 500 || !strings.Contains(start.Body.String(), "Cannot save setup progress:") {
+				t.Fatalf("startup failure: %d %s", start.Code, start.Body.String())
+			}
+			// Polling must not replace the failed action with a generic stopped or
+			// preparing message, including when an installed guest is shut down.
+			for i := 0; i < 2; i++ {
+				w := appRequest(handler, "GET", "/v1/macos9", "", 0)
+				var status struct {
+					Phase, Message             string
+					Active, Running, Installed bool
+					Steps                      []struct{ State, Detail string }
+				}
+				if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+					t.Fatal(err)
+				}
+				if w.Code != 200 || status.Phase != "error" || status.Active || status.Running || status.Installed != installed || status.Message != strings.TrimSpace(start.Body.String()) {
+					t.Fatalf("lost startup failure: %+v", status)
+				}
+				if len(status.Steps) != 6 || status.Steps[0].State != "error" || status.Steps[0].Detail != status.Message {
+					t.Fatalf("lost failed step: %+v", status.Steps)
+				}
+			}
+		})
 	}
 }

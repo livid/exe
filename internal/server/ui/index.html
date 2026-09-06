@@ -2260,6 +2260,9 @@ const agentGeom = {}; // app → { l, t, w, h, … }
 const winResizable = w => w.classList.contains("grow") || w.classList.contains("edge-grow") || !!w._edge;
 function winSnapshot() {
   const st = {};
+  // Metadata may still be loading when another window triggers a save.
+  // Carry delayed editors forward until their DOM windows can be created.
+  for (const [key, layout] of icxPending) st["win-ic-" + key] = {...(layout || {open: true})};
   document.querySelectorAll("#desktop .window").forEach(w => {
     // Terminal windows are one-off live sessions under ephemeral ids — only
     // the agent windows (one persistent session each, stable ids) are saved
@@ -2325,8 +2328,10 @@ function applyWinState(st) {
         continue;
       }
       if (id.startsWith("win-ic-")) {
-        // icon-editor windows: on demand too, keyed by the icon name
-        if (v.open && !w) openIconEditor(id.slice(7));
+        // A newer close cancels an editor still waiting for its icon data.
+        const key = id.slice(7);
+        if (!v.open) icxPending.delete(key);
+        if (v.open && !w) openIconEditor(key, v);
         else if (w && v.open && w.hidden) openWin(w);
         else if (w && !v.open && !w.hidden) closeWin(w);
         continue;
@@ -3111,7 +3116,7 @@ function registerSystemAppIcons(apps) {
     d.set(iconOv[key] || app.system_icon);
   }
   if (!$("#win-icons").hidden) renderIconGallery();
-  for (const key of [...icxPending]) if (iconDef(key)) { icxPending.delete(key); openIconEditor(key); }
+  openPendingIconEditors();
 }
 async function loadApps() {
   appsList = await j("/v1/apps");
@@ -3508,7 +3513,7 @@ function applyIconOverrides(ovs, custom) {
   if (!$("#win-search").hidden) renderSearch();
   if (!$("#win-icons").hidden) renderIconGallery();
   // custom-icon editors whose restore beat the icons.json fetch open now
-  for (const k of [...icxPending]) if (iconDef(k)) { icxPending.delete(k); openIconEditor(k); }
+  openPendingIconEditors();
 }
 async function loadIcons() {
   const d = await j("/v1/apps/System/data/icons.json").catch(() => null);
@@ -3671,13 +3676,30 @@ const ICX_PALETTE = [null,
   "#99ccff", "#ccccff", "#9c9af2", "#333399", "#3a3f46", "#7a1010", "#ffcccc", "#00cccc",
 ];
 
-// Layout restore can precede icons.json or the built-in app list. Park the
-// editor key until its custom or system app icon has been registered.
-const icxPending = new Set();
-function openIconEditor(key) {
+// Layout restore can precede icons.json or the built-in app list. Preserve
+// the full snapshot until the icon is registered; null means a manual open.
+const icxPending = new Map();
+function openPendingIconEditors() {
+  const restored = {}, manual = [];
+  for (const [key, layout] of icxPending) {
+    if (!iconDef(key)) continue;
+    icxPending.delete(key);
+    if (layout) restored["win-ic-" + key] = layout;
+    else manual.push(key);
+  }
+  // Reuse normal geometry, shade and stacking restoration without echoing
+  // the saved layout to other browsers or moving any existing windows.
+  if (Object.keys(restored).length) applyWinState(restored);
+  for (const key of manual) openIconEditor(key);
+}
+function openIconEditor(key, layout = null) {
   key = canonicalAppIconKey(key);
   const d = iconDef(key);
-  if (!d) { if (key.startsWith("c-") || key.startsWith("app-")) icxPending.add(key); return; }
+  if (!d) {
+    if (key.startsWith("c-") || key.startsWith("app-")) icxPending.set(key, layout && {...layout});
+    return;
+  }
+  icxPending.delete(key);
   const id = "win-ic-" + key;
   let w = document.getElementById(id);
   if (!w) {

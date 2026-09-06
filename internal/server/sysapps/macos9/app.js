@@ -11,8 +11,10 @@ async function api(path = '', method = 'GET') {
     const response = await fetch('/v1/macos9' + path, {method, signal: controller.signal,
       headers: token ? {Authorization: 'Bearer ' + token} : {}, cache: 'no-store'});
     if (!response.ok) {
-      const e = new Error(response.status === 401 ? 'Set your API token in exe’s Special menu, then reopen this app.' : (await response.text()).trim());
-      e.retryable = response.status >= 500 || response.status === 408 || response.status === 429;
+      const e = new Error(response.status === 401 ? 'Set your API token in exe’s Special menu, then reopen this app.' : (await response.text()).trim() || `HTTP ${response.status}`);
+      // A failed action (including HTTP 500) needs attention. Status polling
+      // and temporary gateway failures can recover through reconnection.
+      e.retryable = (method === 'GET' && response.status >= 500) || [408, 429, 502, 503, 504].includes(response.status);
       throw e;
     }
     return await response.json();
