@@ -204,6 +204,45 @@ func (c *agentColumn) switchTo(name string) error {
 	return nil
 }
 
+// kill ends one of the agent's sessions, and the CLI's conversation in
+// it. When it is the one the window shows, the window moves to a
+// neighbour first — the session before it, else the one after — so it
+// stays open; the last session goes without one, and the window ends
+// as it does when the CLI exits.
+func (c *agentColumn) kill(name string) error {
+	n := agentSessionNumber(c.a, name)
+	if n == 0 {
+		return fmt.Errorf("not a %s session: %q", c.a.title, name)
+	}
+	if name == c.current() {
+		var prev, next string
+		for _, s := range agentSessions(c.a) {
+			if s.Number < n {
+				prev = s.Name
+			} else if s.Number > n && next == "" {
+				next = s.Name
+			}
+		}
+		if other := prev; other != "" || next != "" {
+			if other == "" {
+				other = next
+			}
+			if err := c.switchTo(other); err != nil {
+				return err
+			}
+		}
+	}
+	cmd := tmuxCmd("kill-session", "-t", "="+name)
+	if cmd == nil {
+		return fmt.Errorf("sessions need tmux on this host")
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux kill-session: %s", strings.TrimSpace(string(out)))
+	}
+	c.refresh()
+	return nil
+}
+
 // open starts a new session of the agent's, numbered after the highest
 // live one, and moves the window to it.
 func (c *agentColumn) open() error {

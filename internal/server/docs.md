@@ -68,7 +68,10 @@ session that rang the bell while no window was showing it — a reply
 finished, or a permission waits — and the status line's figures follow
 the session on screen. A window comes back to the session it was on last,
 and dragging the line between the list and the terminal sets the list's
-width, kept with the window's layout.
+width, kept with the window's layout. A row's contextual menu switches
+to it, starts a new session, copies its title, or kills it — the session
+and the conversation in it end, after a dialog; when the window was
+showing that session it moves to the one before it.
 
 Windows behave like OS 9 windows: drag the title bar to move, drag the
 left/right/bottom edges or the grow corner to resize, click the shade box to

@@ -165,8 +165,8 @@ func shQuote(s string) string {
 // Codex; and for its session column (agentsessions.go)
 // {"sessions":[…],"current":…}, the agent's tmux sessions and the one the
 // window shows. The window sends {"switch":"exe-claude-2"} to move to
-// another and {"new":true} to start one; what goes wrong comes back as
-// {"error":…}.
+// another, {"new":true} to start one and {"kill":"exe-claude-2"} to end
+// one; what goes wrong comes back as {"error":…}.
 // ?cmd=<command line> runs that one command in a login shell — the desktop
 // menu's "terminal <command>" shortcut to a CLI tool; the session ends
 // with the command.
@@ -238,6 +238,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				Resize []int  `json:"resize"`
 				Switch string `json:"switch"`
 				New    bool   `json:"new"`
+				Kill   string `json:"kill"`
 			}
 			if json.Unmarshal(data, &msg) != nil {
 				continue
@@ -245,13 +246,16 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			if len(msg.Resize) == 2 {
 				sh.Resize(msg.Resize[0], msg.Resize[1])
 			}
-			if col == nil || (msg.Switch == "" && !msg.New) {
+			if col == nil || (msg.Switch == "" && !msg.New && msg.Kill == "") {
 				continue
 			}
 			var err error
-			if msg.Switch != "" {
+			switch {
+			case msg.Switch != "":
 				err = col.switchTo(msg.Switch)
-			} else {
+			case msg.Kill != "":
+				err = col.kill(msg.Kill)
+			default:
 				err = col.open()
 			}
 			if err != nil {
