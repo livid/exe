@@ -9,13 +9,15 @@ import (
 	"time"
 )
 
-// Item-level merging for the two record-bearing app documents. Everything
-// else syncs whole-file last-writer-wins; these two union by record id with
+// Item-level merging for the record-bearing app documents. Everything
+// else syncs whole-file last-writer-wins; these union by record id with
 // per-record updated stamps, so concurrent edits on two nodes both survive.
-// The schemas mirror what the apps write (exe-apps Todo and Notes):
+// The schemas mirror what the apps write (exe-apps Todo, Notes, World Clock):
 //
-//	todos.json  {"version":2,"items":[{id,text,done,created,updated,order?,deleted?}]}
-//	notes.json  {"notes":[{id,text,created,updated,deleted?}]}
+//	todos.json   {"version":2,"items":[{id,text,done,created,updated,order?,deleted?}]}
+//	notes.json   {"notes":[{id,text,created,updated,deleted?}]}
+//	clocks.json  {"version":1,"items":[{id,name,region,tz,created,updated,deleted?}]}
+//	             (World Clock only — the City app has a cities.json of its own shape)
 //
 // deleted is a tombstone stamp (ms); merged output GCs tombstones older
 // than 30 days — the same TTL the apps use. Merge output is canonical
@@ -35,8 +37,12 @@ func Mergeable(key string) bool {
 	case "todos.json", "notes.json":
 		return true
 	}
-	return false
+	return key == clocksKey
 }
+
+// clocksKey is the World Clock's city list; matched by full key since the
+// file name alone is too generic to claim.
+const clocksKey = "WorldClock/clocks.json"
 
 // MergeFile merges two versions of a mergeable document. ok is false when
 // the file isn't mergeable or either side doesn't parse — callers fall back
@@ -47,6 +53,9 @@ func MergeFile(key string, local, remote []byte) (merged []byte, ok bool) {
 		return mergeTodos(local, remote)
 	case "notes.json":
 		return mergeNotes(local, remote)
+	}
+	if key == clocksKey {
+		return mergeClocks(local, remote)
 	}
 	return nil, false
 }
@@ -212,6 +221,76 @@ func mergeNotes(local, remote []byte) ([]byte, bool) {
 		return notes[i].ID < notes[j].ID
 	})
 	out, err := json.MarshalIndent(noteDoc{Notes: notes}, "", "  ")
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// ---- World Clock ----
+
+type clockItem struct {
+	ID      string `json:"id"`
+	Name    string `json:"name,omitempty"` // tombstones keep only id and stamps
+	Region  string `json:"region,omitempty"`
+	TZ      string `json:"tz,omitempty"`
+	Created int64  `json:"created"`
+	Updated int64  `json:"updated"`
+	Deleted int64  `json:"deleted,omitempty"`
+}
+
+type clockDoc struct {
+	Version int         `json:"version"`
+	Items   []clockItem `json:"items"`
+}
+
+func parseClocks(b []byte) (*clockDoc, bool) {
+	var d clockDoc
+	if json.Unmarshal(b, &d) != nil || d.Version != 1 || d.Items == nil {
+		return nil, false
+	}
+	for _, it := range d.Items {
+		if it.ID == "" {
+			return nil, false
+		}
+	}
+	return &d, true
+}
+
+func mergeClocks(local, remote []byte) ([]byte, bool) {
+	a, ok := parseClocks(local)
+	if !ok {
+		return nil, false
+	}
+	b, ok := parseClocks(remote)
+	if !ok {
+		return nil, false
+	}
+	m := map[string]clockItem{}
+	for _, it := range a.Items {
+		m[it.ID] = it
+	}
+	for _, it := range b.Items {
+		old, seen := m[it.ID]
+		if !seen || wins(it.Updated, it.Deleted != 0, old.Updated, old.Deleted != 0, it, old) {
+			m[it.ID] = it
+		}
+	}
+	now := time.Now().UnixMilli()
+	items := make([]clockItem, 0, len(m))
+	for _, it := range m {
+		if it.Deleted != 0 && now-it.Deleted > tombstoneTTL.Milliseconds() {
+			continue
+		}
+		items = append(items, it)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Created != items[j].Created {
+			return items[i].Created < items[j].Created
+		}
+		return items[i].ID < items[j].ID
+	})
+	out, err := json.MarshalIndent(clockDoc{Version: 1, Items: items}, "", "  ")
 	if err != nil {
 		return nil, false
 	}

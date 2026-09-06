@@ -69,6 +69,7 @@ a { color: #202a87; text-decoration: underline; }
 #search-btn:active { background: var(--hl); color: #fff; }
 #clock { display: flex; align-items: center; padding: 0 12px; font-weight: bold;
   border-left: 1px solid var(--g600); box-shadow: inset 1px 0 0 #fff; }
+#clock:active { background: var(--hl); color: #fff; }
 /* a phone shows the clock as a 15px analog face (tickClock) */
 #clock svg { display: block; }
 body.mobile #clock { padding: 0 10px; }
@@ -2665,10 +2666,15 @@ function tickClock() {
 }
 tickClock();
 setInterval(tickClock, 10000);
-if (IS_MOBILE) $("#clock").addEventListener("click", () => {
-  clockTextUntil = Date.now() + 3000;
-  tickClock();
-  setTimeout(tickClock, 3100);
+// the clock opens the World Clock app (exe-apps/WorldClock) when it is
+// mounted; a phone without it spells the time out for a few seconds instead
+$("#clock").addEventListener("click", () => {
+  if (appsList.some(a => a.name === "WorldClock")) { openAppWin("WorldClock"); return; }
+  if (IS_MOBILE) {
+    clockTextUntil = Date.now() + 3000;
+    tickClock();
+    setTimeout(tickClock, 3100);
+  }
 });
 
 // ---- global search (the menubar magnifier) ----

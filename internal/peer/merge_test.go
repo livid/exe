@@ -191,3 +191,48 @@ func TestVersionVectorOrdering(t *testing.T) {
 		t.Fatal("SameVersion must ignore MTime and match equal vectors")
 	}
 }
+
+func TestMergeClocksUnionTombstoneAndKey(t *testing.T) {
+	// a fresh tombstone stamp, so the 30-day GC leaves it alone
+	gone := fmt.Sprint(time.Now().UnixMilli())
+	a := []byte(`{"version":1,"items":[` +
+		`{"id":"Los Angeles|America/Los_Angeles","name":"Los Angeles","region":"CA","tz":"America/Los_Angeles","created":1,"updated":1},` +
+		`{"id":"Tokyo|Asia/Tokyo","name":"Tokyo","region":"Japan","tz":"Asia/Tokyo","created":2,"updated":2}]}`)
+	// the other node removed Tokyo later and added Paris
+	b := []byte(`{"version":1,"items":[` +
+		`{"id":"Los Angeles|America/Los_Angeles","name":"Los Angeles","region":"CA","tz":"America/Los_Angeles","created":1,"updated":1},` +
+		`{"id":"Tokyo|Asia/Tokyo","created":2,"updated":` + gone + `,"deleted":` + gone + `},` +
+		`{"id":"Paris|Europe/Paris","name":"Paris","region":"France","tz":"Europe/Paris","created":3,"updated":3}]}`)
+	if !Mergeable("WorldClock/clocks.json") {
+		t.Fatal("clocks.json should merge")
+	}
+	if Mergeable("City/clocks.json") || Mergeable("City/cities.json") {
+		t.Fatal("only the World Clock's file carries the schema")
+	}
+	merged, ok := MergeFile("WorldClock/clocks.json", a, b)
+	if !ok {
+		t.Fatal("merge not ok")
+	}
+	var d clockDoc
+	if err := json.Unmarshal(merged, &d); err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]clockItem{}
+	for _, it := range d.Items {
+		byID[it.ID] = it
+	}
+	if len(d.Items) != 3 || byID["Tokyo|Asia/Tokyo"].Deleted == 0 || byID["Tokyo|Asia/Tokyo"].Name != "" {
+		t.Fatalf("tombstone lost: %s", merged)
+	}
+	if byID["Paris|Europe/Paris"].TZ != "Europe/Paris" || byID["Los Angeles|America/Los_Angeles"].Region != "CA" {
+		t.Fatalf("fields stripped: %s", merged)
+	}
+	rev, ok := MergeFile("WorldClock/clocks.json", b, a)
+	if !ok || !bytes.Equal(merged, rev) {
+		t.Fatalf("merge not commutative:\n%s\n%s", merged, rev)
+	}
+	again, ok := MergeFile("WorldClock/clocks.json", merged, merged)
+	if !ok || !bytes.Equal(merged, again) {
+		t.Fatal("canonical form is not a fixed point")
+	}
+}
