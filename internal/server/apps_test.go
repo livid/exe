@@ -18,7 +18,11 @@ func TestSystemAppIconComesFromEmbeddedBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(m.SystemIcon, `viewBox="0 0 32 32"`) || !strings.Contains(m.SystemIcon, "blue smiling Mac face") {
+	svg, err := sysAppsFS.ReadFile("sysapps/macos9/icon.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.SystemIcon != string(svg) || !strings.Contains(m.SystemIcon, `viewBox="0 0 32 32"`) {
 		t.Fatal("missing embedded Mac OS 9 icon")
 	}
 }

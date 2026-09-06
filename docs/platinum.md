@@ -167,7 +167,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   editor. The app-list API supplies a trusted `system_icon` SVG only for
   embedded bundles. The desktop registers it as `app-<name>` with get/set,
   keeps its factory art, and uses the registry on the desktop and in Windows
-  lists. Disk bundles cannot supply inline art through this field, including
+  lists. Leave `<title>` out of these decorative SVGs: inline titles create
+  browser tooltips that override the surrounding app label. Disk bundles
+  cannot supply inline art through this field, including
   when they override a built-in app's name.
 
 ## Apps

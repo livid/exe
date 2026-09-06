@@ -1,5 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
-  <title>Mac OS 9 — blue smiling Mac face</title>
   <!-- One-pixel grid; the shared folder blue-violet ramp, black and white. -->
   <path fill="#000" d="M4 2h24v1h1v1h1v24h-1v1h-1v1H4v-1H3v-1H2V4h1V3h1z"/>
   <path fill="#8080dc" d="M4 3h24v1h1v24h-1v1H4v-1H3V4h1z"/>
