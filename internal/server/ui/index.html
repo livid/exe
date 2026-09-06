@@ -742,6 +742,10 @@ a.svc:hover { text-decoration: underline; }
    finished, or a permission waits */
 .sess-bell { flex: none; width: 7px; height: 7px; display: block; }
 .sess-bell svg { display: block; }
+/* the green dot: the session's CLI is still working — its pane printed
+   output in the last few seconds — while the window shows another; the
+   Chat list's streaming dot, so green means the same thing everywhere */
+.sess-live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: cs-pulse 1.2s ease-in-out infinite; }
 .sess-btns { flex: none; border-top: 1px solid var(--black); padding: 12px; display: flex; justify-content: center; }
 .sess-btns button { min-width: 58px; }
 /* Text inset lives on .xterm, not the box: FitAddon subtracts element padding
@@ -5240,10 +5244,13 @@ function openHostTermWin(app, cmd) {
   function renderSessions() {
     if (!list) return;
     list.replaceChildren(...sessions.map(s => {
+      const working = s.working && s.name !== current; // the terminal itself shows the current one's state
       const row = el("div", { class: "sess-row" + (s.name === current ? " sel" : "") + (s.title ? "" : " untitled"),
-        title: sessTitle(s) + (s.bell ? "\nrang the bell while no window was showing it" : "")
+        title: sessTitle(s) + (s.bell ? "\nrang the bell while no window was showing it"
+          : working ? "\nstill working" : "")
           + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") });
       if (s.bell) row.append(sessBell());
+      else if (working) row.append(el("span", { class: "sess-live" }));
       row.append(el("span", { class: "t" }, sessTitle(s)));
       row.onclick = () => { if (s.name && s.name !== current) switchSession(s.name); term.focus(); };
       row.addEventListener("contextmenu", e => sessMenu(e, s));

@@ -35,20 +35,20 @@ func TestParseAgentSessions(t *testing.T) {
 		"exe-claude:1788692000:1788718700:1:0:second pane\n" +
 		"exe-claude-4:1788692009:1788718716:0:0:a title: with colons\n" +
 		"other:x\n"
-	list := parseAgentSessions(a, out, "spark")
+	list := parseAgentSessions(a, out, "spark", 1788718718)
 	if len(list) != 3 {
 		t.Fatalf("got %d sessions: %+v", len(list), list)
 	}
-	if list[2].Name != "exe-claude-4" || list[2].Title != "a title: with colons" {
+	if list[2].Name != "exe-claude-4" || list[2].Title != "a title: with colons" || !list[2].Working {
 		t.Errorf("session 4 = %+v", list[2])
 	}
-	if list[0].Name != "exe-claude" || list[0].Number != 1 || list[0].Title != "✳ Daily routine not running" || !list[0].Attached || list[0].Bell {
+	if list[0].Name != "exe-claude" || list[0].Number != 1 || list[0].Title != "✳ Daily routine not running" || !list[0].Attached || list[0].Bell || list[0].Working {
 		t.Errorf("session 1 = %+v", list[0])
 	}
-	if list[1].Name != "exe-claude-3" || list[1].Number != 3 || list[1].Title != "" || list[1].Attached || !list[1].Bell || list[1].Created != 1788692008 {
+	if list[1].Name != "exe-claude-3" || list[1].Number != 3 || list[1].Title != "" || list[1].Attached || !list[1].Bell || list[1].Created != 1788692008 || !list[1].Working {
 		t.Errorf("session 3 = %+v", list[1])
 	}
-	if got := parseAgentSessions(a, "", "spark"); got == nil || len(got) != 0 {
+	if got := parseAgentSessions(a, "", "spark", 1788718718); got == nil || len(got) != 0 {
 		t.Errorf("empty output = %#v, want an empty (not nil) list", got)
 	}
 }

@@ -63,10 +63,11 @@ On a host with tmux, a Claude Code or Codex window lists the agent's
 sessions down its left, one row per tmux session, titled the way the CLI
 titles its terminal — Claude Code keeps that on its current task. Click a
 row and the window moves to that session; **New** starts another
-conversation in a session of its own, beside the first. A dot marks a
-session that rang the bell while no window was showing it — a reply
-finished, or a permission waits — and the status line's figures follow
-the session on screen. A window comes back to the session it was on last,
+conversation in a session of its own, beside the first. A pulsing green
+dot marks a session still working while the window shows another; a bell,
+one that rang while no window was showing it — a reply finished, or a
+permission waits. The status line's figures follow the session on
+screen. A window comes back to the session it was on last,
 and dragging the line between the list and the terminal sets the list's
 width, kept with the window's layout. A row's contextual menu switches
 to it, starts a new session, copies its title, or kills it — the session

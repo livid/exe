@@ -131,7 +131,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   text, its one seam with the terminal the 1px line on its right — a 6px
   grip astride it drags the list's width, saved in the layout — and its
   button in a row of its own under the list. On a phone the column turns
-  into a strip of tabs above the terminal.
+  into a strip of tabs above the terminal. A row's mark sits left of its
+  title: the 7px bell, or the Chat list's 6px pulsing green dot while the
+  session works unwatched — green means "live" everywhere.
 
 ## Icons
 

@@ -24,7 +24,11 @@ import (
 // titles are the panes' titles, which Claude Code keeps on its current
 // task, and a row is marked when tmux's bell flag is up for its session:
 // the CLI rang the bell — a reply finished, or a permission is waited
-// on — while no window was looking.
+// on — while no window was looking. A session whose pane printed output
+// in the last few seconds is working — the CLI streams and repaints its
+// spinner for the whole of a turn, and falls silent at a prompt — so the
+// column can mark rows still going as the bell marks rows that want
+// someone.
 
 // agentSession is one row of the column.
 type agentSession struct {
@@ -35,7 +39,13 @@ type agentSession struct {
 	Activity int64  `json:"activity"`
 	Attached bool   `json:"attached"`
 	Bell     bool   `json:"bell"`
+	Working  bool   `json:"working"`
 }
+
+// agentWorkingSeconds: activity this fresh means the session's CLI is
+// mid-turn. The list is polled every two seconds and tmux stamps whole
+// seconds, so the window has to be a few of them wide.
+const agentWorkingSeconds = 5
 
 // agentSessionName is the tmux session for an agent's nth session: the
 // icon's own for 1, numbered after it from 2.
@@ -72,8 +82,9 @@ const tmuxSessionFormat = "#{session_name}:#{session_created}:#{session_activity
 
 // parseAgentSessions picks the agent's sessions out of list-panes output
 // in tmuxSessionFormat, in number order. hostname is what tmux titles a
-// pane whose program has set no title, which counts as none.
-func parseAgentSessions(a hostAgent, out, hostname string) []agentSession {
+// pane whose program has set no title, which counts as none; now is the
+// clock Working weighs each session's activity against.
+func parseAgentSessions(a hostAgent, out, hostname string, now int64) []agentSession {
 	list := []agentSession{}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(out, "\n") {
@@ -93,7 +104,8 @@ func parseAgentSessions(a hostAgent, out, hostname string) []agentSession {
 		created, _ := strconv.ParseInt(f[1], 10, 64)
 		activity, _ := strconv.ParseInt(f[2], 10, 64)
 		list = append(list, agentSession{Name: f[0], Number: n, Title: title, Created: created,
-			Activity: activity, Attached: f[3] != "0" && f[3] != "", Bell: f[4] == "1"})
+			Activity: activity, Attached: f[3] != "0" && f[3] != "", Bell: f[4] == "1",
+			Working: activity > 0 && now-activity <= agentWorkingSeconds})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Number < list[j].Number })
 	return list
@@ -111,7 +123,7 @@ func agentSessions(a hostAgent) []agentSession {
 		return []agentSession{}
 	}
 	host, _ := os.Hostname()
-	return parseAgentSessions(a, string(out), host)
+	return parseAgentSessions(a, string(out), host, time.Now().Unix())
 }
 
 // agentColumn is the daemon's side of one window's column. It keeps the
