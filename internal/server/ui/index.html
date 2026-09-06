@@ -5241,6 +5241,17 @@ function openHostTermWin(app, cmd) {
   const sessKey = "exe_" + app + "_session";
   let sessions = [{ name: "", number: 1, title: "" }], current = "", restored = false;
   const sessTitle = s => s.title ? s.title.replace(/^✳\s*/, "") : agent.title + " " + s.number;
+  // when a session started, short enough for a menu line: the time alone
+  // today, weekday and date before that, the year once it differs
+  const sessWhen = unix => {
+    const d = new Date(unix * 1000), now = new Date();
+    const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (d.toDateString() === now.toDateString()) return "today, " + t;
+    const date = d.getFullYear() === now.getFullYear()
+      ? d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
+      : d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+    return date + ", " + t;
+  };
   function renderSessions() {
     if (!list) return;
     list.replaceChildren(...sessions.map(s => {
@@ -5271,9 +5282,9 @@ function openHostTermWin(app, cmd) {
   }
   const sendNew = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
   if (newBtn) newBtn.onclick = sendNew;
-  // a row's contextual menu: what a session can have done to it beyond a
-  // click (a click switches, so no Switch To) — and the list's own, off
-  // any row, just starts one. Archive ends the session and the CLI in it,
+  // a row's contextual menu: when the session started, then what it can
+  // have done to it beyond a click (a click switches, so no Switch To) —
+  // and the list's own, off any row, just starts one. Archive ends the session and the CLI in it,
   // after a dialog; the conversation stays on this machine for the CLI's
   // own /resume, which is why the item shows only once one exists. The
   // daemon moves the window to a neighbour when it was showing that one
@@ -5281,7 +5292,11 @@ function openHostTermWin(app, cmd) {
     e.preventDefault(); e.stopPropagation();
     focusWin(w);
     term.blur(); // keys go to the menu while it is up; focus returns when it closes
-    const items = [{ label: "New Session", act: sendNew }];
+    // a row's menu opens on when the session started, greyed: a fact
+    // about the row, not a command. The placeholder row before the first
+    // frame has no start yet, so no line
+    const items = s && s.created ? [{ label: "Started " + sessWhen(s.created), dis: true }, "-"] : [];
+    items.push({ label: "New Session", act: sendNew });
     if (s) {
       items.push("-", { label: "Copy Title", act: () => copyText(sessTitle(s), "title") });
       if (s.resumable) items.push("-", { label: "Archive…", act: () => archiveSession(s) });

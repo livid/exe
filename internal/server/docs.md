@@ -71,9 +71,9 @@ Codex, whose CLI has none, the black dot means the terminal bell rang
 while no window was showing it. Hover a row for which. The status line's
 figures follow the session on screen. A window comes back to the session it was on last,
 and dragging the line between the list and the terminal sets the list's
-width, kept with the window's layout. A row's contextual menu starts a
-new session, copies the row's title, or archives the session, after a
-dialog: the session and its process end, and the conversation stays on
+width, kept with the window's layout. A row's contextual menu opens
+with when the session started, in grey, then starts a new session,
+copies the row's title, or archives the session, after a dialog: the session and its process end, and the conversation stays on
 this machine for `/resume` inside Claude Code — the desktop keeps no list
 of its own. Archive shows only once the conversation exists; when the
 window was showing that session it moves to the one before it.
