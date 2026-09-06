@@ -727,8 +727,10 @@ a.svc:hover { text-decoration: underline; }
    right, and New gets a row of its own under the list */
 .agent-wrap { display: flex; align-items: stretch; }
 .agent-wrap .hostterm-box { flex: 1; min-width: 0; }
-.sess-col { width: 160px; flex: none; display: flex; flex-direction: column;
+.sess-col { width: 160px; flex: none; display: flex; flex-direction: column; position: relative;
   border-right: 1px solid var(--black); background: var(--g300); }
+/* the seam drags the column's width: a 6px grip astride the 1px line */
+.sess-grip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 2; }
 .sess-list { flex: 1; min-height: 0; overflow-y: auto; background: #fff; }
 .sess-row { display: flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 8px;
   white-space: nowrap; border-bottom: 1px solid #efefef; }
@@ -1024,6 +1026,7 @@ body.mobile .sess-col { width: auto; flex-direction: row; border-right: 0; borde
 body.mobile .sess-list { display: flex; overflow-x: auto; overflow-y: hidden; }
 body.mobile .sess-row { flex: none; max-width: 150px; height: auto; padding: 0 8px; border-bottom: 0; border-right: 1px solid #efefef; }
 body.mobile .sess-btns { border-top: 0; border-left: 1px solid var(--black); padding: 6px 8px; }
+body.mobile .sess-grip { display: none; }
 body.mobile #term-box { height: calc(var(--vvh, 100dvh) - 260px); min-height: 180px; }
 /* chat: sessions become a strip on top, messages fill the rest */
 body.mobile .chat-wrap { height: 100% !important; flex-direction: column; }
@@ -2305,6 +2308,9 @@ function winSnapshot() {
     // app, Finder, editor, image, chat and agent windows are also resizable
     const g = w.querySelector(".app-frame, .finder-icons, .ed-text, .iv-box, .chat-wrap, .hostterm-box");
     if (g) st[w.id].h = parseInt(g.style.height) || g.offsetHeight || 0;
+    // an agent window's session column keeps its dragged width
+    const sc = w.querySelector(".sess-col");
+    if (sc && (parseInt(sc.style.width) || sc.offsetWidth)) st[w.id].cw = parseInt(sc.style.width) || sc.offsetWidth;
   });
   // an agent window is removed from the DOM on close, so its last
   // geometry is carried forward instead of dropped from the snapshot
@@ -2408,6 +2414,10 @@ function applyWinState(st) {
         if (v.h) {
           const g = w.querySelector(".hostterm-box");
           if (g) g.style.height = Math.max(160, Math.min(window.innerHeight - 170, v.h)) + "px";
+        }
+        if (v.cw) {
+          const sc = w.querySelector(".sess-col");
+          if (sc) sc.style.width = Math.max(100, Math.min((parseInt(w.style.width) || 760) - 400, v.cw)) + "px";
         }
         if (w._fit) w._fit(); // xterm refits to the remotely applied geometry
       }
@@ -5183,7 +5193,7 @@ function openHostTermWin(app, cmd) {
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
       <div class="win-body" style="padding:0">${column
-        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button></div></div><div class="hostterm-box"></div></div>`
+        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button></div><div class="sess-grip"></div></div><div class="hostterm-box"></div></div>`
         : `<div class="hostterm-box"></div>`}</div>
       <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
       ${GROW_TILE}
@@ -5196,6 +5206,11 @@ function openHostTermWin(app, cmd) {
   // (desktop only — mobile keeps its fullscreen 100% height)
   if (geom && geom.h && !IS_MOBILE)
     box.style.height = Math.max(160, Math.min(window.innerHeight - 170, geom.h)) + "px";
+  // the session column's saved width goes on before fit() too; the
+  // terminal keeps at least 400px beside it, whatever the window's width
+  const col = w.querySelector(".sess-col");
+  const colWidth = cw => Math.max(100, Math.min((parseInt(w.style.width) || w.offsetWidth) - 400, cw));
+  if (col && geom && geom.cw && !IS_MOBILE) col.style.width = colWidth(geom.cw) + "px";
   box.addEventListener("wheel", e => e.preventDefault(), { passive: false });
   $("#desktop").append(w);
   initWindow(w);
@@ -5237,6 +5252,26 @@ function openHostTermWin(app, cmd) {
   }
   if (newBtn) newBtn.onclick = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
   renderSessions();
+  // the seam between the column and the terminal drags the column's
+  // width; the terminal refits as it goes and the layout snapshot keeps
+  // the width (cw) beside the terminal's height, like a grow-box drag
+  const grip = w.querySelector(".sess-grip");
+  if (grip && !IS_MOBILE) grip.addEventListener("pointerdown", e => {
+    e.preventDefault(); e.stopPropagation();
+    focusWin(w);
+    const sx = e.clientX, sw = col.offsetWidth;
+    winDragging = w;
+    const move = ev => { col.style.width = colWidth(sw + ev.clientX - sx) + "px"; resize(); winSaveLive(); };
+    const up = () => {
+      winDragging = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      winSave();
+      term.focus();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const qs = new URLSearchParams();
   if (tokenInput.value) qs.set("token", tokenInput.value);

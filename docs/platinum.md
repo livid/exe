@@ -128,7 +128,8 @@ restyling: `internal/server/ui/index.html` (the desktop),
   when words will not fit (the Hub's Find, Refresh, Profile).
 - A list beside a terminal (the agent windows' session column): a 160px
   sunken white list of 18px rows, the selected row `--hl` with white
-  text, its one seam with the terminal the 1px line on its right, and its
+  text, its one seam with the terminal the 1px line on its right — a 6px
+  grip astride it drags the list's width, saved in the layout — and its
   button in a row of its own under the list. On a phone the column turns
   into a strip of tabs above the terminal.
 

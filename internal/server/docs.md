@@ -66,7 +66,9 @@ row and the window moves to that session; **New** starts another
 conversation in a session of its own, beside the first. A dot marks a
 session that rang the bell while no window was showing it — a reply
 finished, or a permission waits — and the status line's figures follow
-the session on screen. A window comes back to the session it was on last.
+the session on screen. A window comes back to the session it was on last,
+and dragging the line between the list and the terminal sets the list's
+width, kept with the window's layout.
 
 Windows behave like OS 9 windows: drag the title bar to move, drag the
 left/right/bottom edges or the grow corner to resize, click the shade box to
