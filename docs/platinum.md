@@ -84,9 +84,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   11px `#333` text, `inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px
   0 #aaa`. Text only. Buttons never sit on a status line; they get a row of
   their own in the content area, laid out as above.
-- Grow box: the 15px SVG sampled from OS 9 (in every app), at the window's
-  bottom right; its black top row lands on the status bar's line. An app
-  streams `{exe:"grow", dx, dy}` through the bridge and the desktop resizes.
+- Grow box: the 15px SVG sampled from OS 9, at the window's bottom right;
+  its black top row lands on the status bar's line. An app streams
+  `{exe:"grow", dx, dy}` through the bridge and the desktop resizes. A
+  window whose size the content dictates — a guest display shown at a
+  whole-number scale, like the Mac OS 9 app — is fixed-size, as OS 9
+  allowed: no grow box, `"grow": false` in app.json so the desktop adds no
+  edge grips either, and the window follows the content. On a phone every
+  app hides its grow box; the window fills the screen there.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
