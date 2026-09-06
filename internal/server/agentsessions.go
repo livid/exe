@@ -45,6 +45,9 @@ type agentSession struct {
 	// — its turn finished, or a permission or question is pending
 	State string `json:"state,omitempty"`
 	Wants bool   `json:"wants"`
+	// the conversation exists for the CLI's own resume picker
+	// (readAgentResumable): the column offers Archive only then
+	Resumable bool `json:"resumable"`
 }
 
 // agentWorkingSeconds: activity this fresh means the session's CLI is
@@ -137,6 +140,7 @@ func agentSessions(a hostAgent) []agentSession {
 // or waiting session is not working however much it repaints.
 func (s *Server) markAgentStates(a hostAgent, list []agentSession) {
 	for i := range list {
+		list[i].Resumable = readAgentResumable(s.agentStatusFile(a, list[i].Name))
 		switch st := readAgentState(s.agentStateFile(a, list[i].Name)); st {
 		case agentStateWorking:
 			list[i].State, list[i].Working = st, true
@@ -238,12 +242,14 @@ func (c *agentColumn) switchTo(name string) error {
 	return nil
 }
 
-// kill ends one of the agent's sessions, and the CLI's conversation in
-// it. When it is the one the window shows, the window moves to a
-// neighbour first — the session before it, else the one after — so it
-// stays open; the last session goes without one, and the window ends
-// as it does when the CLI exits.
-func (c *agentColumn) kill(name string) error {
+// archive ends one of the agent's sessions: the tmux session and the
+// CLI in it. The conversation stays on disk, where the CLI's own resume
+// picker finds it — the desktop keeps no list of its own. When it is the
+// session the window shows, the window moves to a neighbour first — the
+// session before it, else the one after — so it stays open; the last
+// session goes without one, and the window ends as it does when the CLI
+// exits.
+func (c *agentColumn) archive(name string) error {
 	n := agentSessionNumber(c.a, name)
 	if n == 0 {
 		return fmt.Errorf("not a %s session: %q", c.a.title, name)

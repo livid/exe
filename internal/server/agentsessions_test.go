@@ -137,27 +137,27 @@ func TestAgentSessionsLive(t *testing.T) {
 	if got := col.statusFile(); got != s.agentStatusFile(a, "exe-test-sh-3") {
 		t.Fatalf("status file = %q", got)
 	}
-	// kill the session on screen: the window moves to the one before it
-	if err := col.kill("exe-test-sh-3"); err != nil {
+	// archive the session on screen: the window moves to the one before it
+	if err := col.archive("exe-test-sh-3"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor("the client on session 2 after the kill", func() bool { return sh.Current() == "exe-test-sh-2" })
+	waitFor("the client on session 2 after the archive", func() bool { return sh.Current() == "exe-test-sh-2" })
 	if list = agentSessions(a); len(list) != 2 || list[1].Name != "exe-test-sh-2" {
 		t.Fatalf("after killing 3: %+v", list)
 	}
-	// kill one off screen: the window stays where it is
-	if err := col.kill(a.session); err != nil {
+	// archive one off screen: the window stays where it is
+	if err := col.archive(a.session); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(200 * time.Millisecond)
 	if list = agentSessions(a); len(list) != 1 || list[0].Name != "exe-test-sh-2" || sh.Current() != "exe-test-sh-2" {
 		t.Fatalf("after killing 1: %+v, current %q", list, sh.Current())
 	}
-	if err := col.kill("other"); err == nil {
-		t.Fatal("killing a stranger's session should fail")
+	if err := col.archive("other"); err == nil {
+		t.Fatal("archiving a stranger's session should fail")
 	}
 	// the last session goes without a neighbour: the client detaches
-	if err := col.kill("exe-test-sh-2"); err != nil {
+	if err := col.archive("exe-test-sh-2"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor("the client to detach with the last session", func() bool { return sh.Current() == "" })

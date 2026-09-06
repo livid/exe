@@ -5272,31 +5272,32 @@ function openHostTermWin(app, cmd) {
   const sendNew = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
   if (newBtn) newBtn.onclick = sendNew;
   // a row's contextual menu: what a session can have done to it beyond a
-  // click — and the list's own, off any row, just starts one. Kill ends
-  // the session and the conversation in it, after a dialog; the daemon
-  // moves the window to a neighbour when it was showing that session
+  // click (a click switches, so no Switch To) — and the list's own, off
+  // any row, just starts one. Archive ends the session and the CLI in it,
+  // after a dialog; the conversation stays on this machine for the CLI's
+  // own /resume, which is why the item shows only once one exists. The
+  // daemon moves the window to a neighbour when it was showing that one
   function sessMenu(e, s) {
     e.preventDefault(); e.stopPropagation();
     focusWin(w);
     term.blur(); // keys go to the menu while it is up; focus returns when it closes
-    const items = s ? [
-      { label: "Switch To", dis: !s.name || s.name === current, act: () => switchSession(s.name) },
-      { label: "New Session", act: sendNew },
-      "-",
-      { label: "Copy Title", act: () => copyText(sessTitle(s), "title") },
-      "-",
-      { label: "Kill Session…", dis: !s.name, act: () => killSession(s) },
-    ] : [{ label: "New Session", act: sendNew }];
+    const items = [{ label: "New Session", act: sendNew }];
+    if (s) {
+      items.push("-", { label: "Copy Title", act: () => copyText(sessTitle(s), "title") });
+      if (s.resumable) items.push("-", { label: "Archive…", act: () => archiveSession(s) });
+    }
     showCtxMenu(e.clientX, e.clientY, items, () => term.focus());
   }
-  async function killSession(s) {
+  async function archiveSession(s) {
     const ok = await confirmDialog({
-      message: `Kill “${sessTitle(s)}”?`,
-      detail: "The session ends and the " + agent.title + " conversation in it is gone"
-        + (s.name === current ? " — the window moves to another session, or ends with the last one." : "."),
-      action: "Kill", danger: true,
+      message: `Archive “${sessTitle(s)}”?`,
+      detail: "The session ends, and " + agent.title + " with it. The conversation stays on this machine: /resume in any "
+        + agent.title + " session brings it back."
+        + (s.working ? " It is still working — the turn in flight is lost." : "")
+        + (s.name === current ? " The window moves to another session, or ends with the last one." : ""),
+      action: "Archive",
     });
-    if (ok && ws && ws.readyState === 1) ws.send(JSON.stringify({ kill: s.name }));
+    if (ok && ws && ws.readyState === 1) ws.send(JSON.stringify({ archive: s.name }));
     term.focus();
   }
   if (list) list.addEventListener("contextmenu", e => { if (e.target === list) sessMenu(e, null); });

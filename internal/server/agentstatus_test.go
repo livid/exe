@@ -340,3 +340,41 @@ func TestMarkAgentStates(t *testing.T) {
 		t.Errorf("state file = %q", got)
 	}
 }
+
+// Archive is offered only for a conversation the CLI's resume picker can
+// find: the status file names the session and a transcript that exists.
+func TestReadAgentResumable(t *testing.T) {
+	dir := t.TempDir()
+	transcript := filepath.Join(dir, "abc.jsonl")
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		os.WriteFile(p, []byte(body), 0o644)
+		return p
+	}
+	if readAgentResumable(filepath.Join(dir, "missing.json")) {
+		t.Error("no status file should not be resumable")
+	}
+	fresh := write("fresh.json", `{"session_id":"abc","transcript_path":"`+transcript+`","context_window":{"total_input_tokens":0}}`)
+	if readAgentResumable(fresh) {
+		t.Error("a session whose transcript is not written yet should not be resumable")
+	}
+	os.WriteFile(transcript, []byte("{}\n"), 0o644)
+	if !readAgentResumable(fresh) {
+		t.Error("a session with a transcript on disk should be resumable")
+	}
+	if readAgentResumable(write("noid.json", `{"transcript_path":"`+transcript+`"}`)) {
+		t.Error("no session id should not be resumable")
+	}
+	if !readAgentResumable(write("nopath.json", `{"session_id":"abc","context_window":{"total_input_tokens":12}}`)) {
+		t.Error("tokens exchanged without a transcript path should count")
+	}
+	s := &Server{StateDir: dir}
+	a := hostAgents["claude"]
+	os.MkdirAll(filepath.Join(dir, "agents"), 0o755)
+	os.WriteFile(s.agentStatusFile(a, "exe-claude-2"), []byte(`{"session_id":"abc","transcript_path":"`+transcript+`"}`), 0o644)
+	list := []agentSession{{Name: "exe-claude"}, {Name: "exe-claude-2"}}
+	s.markAgentStates(a, list)
+	if list[0].Resumable || !list[1].Resumable {
+		t.Errorf("resumable = %v %v, want false true", list[0].Resumable, list[1].Resumable)
+	}
+}

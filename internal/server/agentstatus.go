@@ -142,6 +142,34 @@ func agentStateHooks(state string) map[string]any {
 	}
 }
 
+// readAgentResumable says whether a session's conversation is one the
+// CLI's own resume picker can find: the status file names the session
+// and its transcript, and the transcript exists (the CLI writes it with
+// the first message; a fresh session has none). The daemon keeps no
+// pointer of its own — archiving a session ends it, and /resume inside
+// the CLI is the way back.
+func readAgentResumable(statusFile string) bool {
+	b, err := os.ReadFile(statusFile)
+	if err != nil {
+		return false
+	}
+	var h struct {
+		SessionID      string `json:"session_id"`
+		TranscriptPath string `json:"transcript_path"`
+		ContextWindow  struct {
+			TotalInputTokens int64 `json:"total_input_tokens"`
+		} `json:"context_window"`
+	}
+	if json.Unmarshal(b, &h) != nil || h.SessionID == "" {
+		return false
+	}
+	if h.TranscriptPath != "" {
+		_, err := os.Stat(h.TranscriptPath)
+		return err == nil
+	}
+	return h.ContextWindow.TotalInputTokens > 0
+}
+
 // readAgentState is the word in a session's state file, "" for none.
 func readAgentState(file string) string {
 	b, err := os.ReadFile(file)
