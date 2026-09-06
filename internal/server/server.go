@@ -654,7 +654,8 @@ func (s *Server) StopVMs(ctx context.Context, names []string) {
 
 // RestartDaemon stops the named VMs, spawns a fresh copy of the binary with
 // EXE_AUTOSTART naming them so the new process starts them again, and exits
-// this process. Spawn-then-exit rather than exec-in-place:
+// this process; under systemd it exits and leaves the spawning to the
+// manager. Spawn-then-exit rather than exec-in-place:
 // Virtualization.framework keeps non-Go threads alive that wedge
 // syscall.Exec's runtime hooks. Called from the restart API and the macOS
 // menu bar icon.
@@ -665,6 +666,15 @@ func (s *Server) RestartDaemon(delay time.Duration, running []string) {
 		return
 	}
 	time.Sleep(delay)
+	// Under systemd (it sets INVOCATION_ID for every service it starts) the
+	// manager starts the new binary: a replacement we spawned would sit in
+	// the same cgroup and race the one systemd starts for the ports. The
+	// daemon's own SIGTERM path drains, stops the VMs, records them for the
+	// next start and exits 0; Restart=always does the rest.
+	if os.Getenv("INVOCATION_ID") != "" && termSelf() {
+		log.Printf("restart: under systemd, exiting for the manager to start the new binary (autostart: %s)", strings.Join(running, ","))
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	// Let detached chat replies persist what they have and tell their

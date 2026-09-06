@@ -364,12 +364,17 @@ func cmdServe() error {
 	}
 	log.Printf("note: VMs run inside this process and power off when it exits")
 
-	// After an in-place restart (POST /v1/daemon/restart) the previous
-	// process hands us the VMs that were running so we bring them back.
+	// Bring back the VMs that were running when the last daemon stopped:
+	// a spawn-and-exit restart names them in EXE_AUTOSTART, a stop under
+	// systemd (or a reboot) leaves them in the state dir's autostart record.
+	autostart := server.TakeAutostart(stateDir)
 	if names := os.Getenv("EXE_AUTOSTART"); names != "" {
 		os.Unsetenv("EXE_AUTOSTART")
+		autostart = append(autostart, strings.Split(names, ",")...)
+	}
+	if len(autostart) > 0 {
 		go func() {
-			for _, name := range strings.Split(names, ",") {
+			for _, name := range autostart {
 				if name == "" {
 					continue
 				}
@@ -413,6 +418,10 @@ func cmdServe() error {
 			return err
 		case <-sig:
 			log.Printf("shutting down")
+			// the VMs still running now come back with the next start
+			if err := server.SaveAutostart(stateDir, srv.RunningVMNames(context.Background())); err != nil {
+				log.Printf("autostart record: %v", err)
+			}
 			shutdown()
 			return nil
 		}

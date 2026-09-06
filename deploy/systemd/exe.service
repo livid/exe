@@ -1,0 +1,28 @@
+# exe daemon as a systemd *user* unit: install to ~/.config/systemd/user/,
+# then `systemctl --user enable --now exe`. With lingering enabled
+# (`loginctl enable-linger $USER`) it starts at boot without a login, and
+# anyone running as this user can restart it, read its journal and check
+# its status without sudo — that is the point of a user unit here.
+#
+# KillMode=process is deliberate: the daemon spawns tmux servers for the
+# Terminal, Claude Code and Codex windows and they live in this cgroup.
+# systemd's default would kill them on every restart; signalling only the
+# main process keeps them up across a redeploy, as Supervisor's per-group
+# kill used to. On shutdown the daemon stops its VMs itself and records
+# them, so they come back with the next start.
+[Unit]
+Description=exe daemon
+
+[Service]
+WorkingDirectory=/www/exe
+ExecStart=/www/exe/exe serve
+Environment=EXE_HOME=/home/livid/.exe
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Restart=always
+RestartSec=1
+TimeoutStopSec=75
+KillMode=process
+UMask=0027
+
+[Install]
+WantedBy=default.target

@@ -48,26 +48,35 @@ into `~/.exe/images/`. Linux also downloads the configured direct-boot kernel.
   uid, and outbound interface names. Privileged child tools are resolved only
   from root-owned system directories and run with a minimal environment.
 
-For the Supervisor deployment in this repository:
+For the systemd deployment in this repository (a user unit, so the daemon
+restarts, reports status and shows its journal without sudo):
 
 ```sh
 sudo usermod -aG kvm livid
 make build
 sudo install -o root -g livid -m 0750 exe-net-helper /usr/local/libexec/exe-net-helper
 sudo setcap cap_net_admin=ep /usr/local/libexec/exe-net-helper
-sudo install -m 0644 deploy/supervisor/exe.conf /etc/supervisor/conf.d/exe.conf
-sudo supervisorctl reread
-sudo supervisorctl update
+sudo loginctl enable-linger livid
+install -m 0644 deploy/systemd/exe.service ~/.config/systemd/user/exe.service
+systemctl --user daemon-reload
+systemctl --user enable --now exe
 ```
 
 Install Firecracker from its official release archive before starting the
 service. Reapply `setcap` whenever the helper binary is replaced. The
-checked-in Supervisor config is specific to `/www/exe` and
-`/home/livid/.exe`.
+checked-in unit is specific to `/www/exe` and `/home/livid/.exe`.
+
+After `make build`, `systemctl --user restart exe` runs the new binary;
+`journalctl --user -u exe` is the log. The daemon stops its VMs on the way
+down and starts them again on the way up, and the unit's `KillMode=process`
+leaves the tmux servers behind the Terminal, Claude Code and Codex windows
+running across the restart. The restart endpoint (`POST
+/v1/daemon/restart`, the desktop's Restart item) does the same under
+systemd: it exits and lets the manager start the new binary.
 
 At boot the daemon may come up before Tailscale has its address. It waits
 up to five minutes for `listen` (likewise `proxy_listen` and `ssh_listen`)
-to become bindable, and exits non-zero after that so Supervisor starts it
+to become bindable, and exits non-zero after that so systemd starts it
 again.
 
 ### Windows requirements
