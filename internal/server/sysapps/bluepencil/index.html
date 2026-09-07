@@ -141,6 +141,10 @@ textarea:focus { outline: none; }
 #st-model:active { color: #000; }
 #grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
   touch-action: none; z-index: 6; }
+/* a phone's window fills the screen: no grow tile, so the status line
+   keeps its plain 8px edge instead of the room left for the tile */
+body.mobile #grow { display: none; }
+body.mobile #status { padding-right: 8px; }
 
 /* Mac OS 9 scrollbars — the desktop's pixel-sampled spec (same as Notes) */
 ::-webkit-scrollbar { width: 15px; height: 15px; }
@@ -230,6 +234,14 @@ const APP = decodeURIComponent(location.pathname.split("/")[2] || "bluepencil");
 const CONFIG_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/config.json";
 const DRAFT_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/draft.json";
 const CLIENT = Math.random().toString(36).slice(2, 10); // tags our writes in change events
+// A phone shows no grow tile. The desktop passes its own verdict as
+// ?mobile=1 (it also honours ?mobile=0); opened bare, the app runs the
+// desktop's test itself: phone UA, or a small coarse-pointer screen.
+const IS_MOBILE = new URLSearchParams(location.search).has("mobile")
+  ? new URLSearchParams(location.search).get("mobile") !== "0"
+  : /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent)
+    || (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 700);
+if (IS_MOBILE) document.body.classList.add("mobile");
 const DEBOUNCE = 700;     // ms of quiet before a changed paragraph goes to the model
 const MAX_CHARS = 20000;  // per document
 const CACHE_MAX = 500;    // checked paragraphs remembered
