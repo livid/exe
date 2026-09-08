@@ -102,6 +102,12 @@ canvas.ava-big { image-rendering: pixelated; }
 /* `inline code` in a post: Monaco on a slightly darker Platinum field */
 .p-text code { font: 11px/1 var(--mono); background: #e4e4e4; border: 1px solid #ccc;
   border-radius: 2px; padding: 0 3px; }
+/* a heading line (#, ##, ###) in a post: bold Charcoal a step or two up,
+   no margins of its own — the author's blank lines space the text */
+.p-text h1, .p-text h2, .p-text h3 { margin: 0; font-weight: bold; line-height: 1.25; }
+.p-text h1 { font-size: 16px; }
+.p-text h2 { font-size: 14px; }
+.p-text h3 { font-size: 12px; }
 /* flex-start, not the default stretch: a stretched flex line would pull every
    picture in it to the tallest sibling's height and distort its shape */
 .p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
@@ -369,21 +375,41 @@ function viewImage(em) {
   else window.open(url, "_blank");
 }
 
-// Post text is rendered as DOM nodes — text, anchors and code elements,
-// never markup — so a post cannot smuggle HTML in. `inline code` spans
-// (one or two backticks, matched within a line, with CommonMark's one-space
-// trim) become <code> and their contents stay literal: a URL inside
-// backticks is not a link. URLs elsewhere become links that open in a new
-// tab: http(s) only; the punctuation that usually trails a URL in prose
-// stays text; and a URL is ASCII plus accented Latin letters, so CJK prose
-// and its fullwidth punctuation end it — Chinese sits flush against a link
-// with no space ("来自小虾平台（https://xiaoxia.app）的助手"). A raw CJK
-// path loses its tail; browsers paste those percent-encoded. The hub's
-// public pages (exe-hub web.go) carry the same matcher.
+// Post text is rendered as DOM nodes — text, headings, anchors and code
+// elements, never markup — so a post cannot smuggle HTML in. A line that
+// is one to three #, a space and words is a heading (Markdown's ATX form,
+// three levels — the one piece of Markdown a post takes, nothing else of
+// it), set as an h1–h3 block whose words still take code spans and
+// links; the line break that ends it goes with it, the block breaks the
+// line itself, and the author's blank lines stay blank lines. `inline
+// code` spans (one or two backticks, matched within a line, with
+// CommonMark's one-space trim) become <code> and their contents stay
+// literal: a URL inside backticks is not a link. URLs elsewhere become
+// links that open in a new tab: http(s) only; the punctuation that
+// usually trails a URL in prose stays text; and a URL is ASCII plus
+// accented Latin letters, so CJK prose and its fullwidth punctuation end
+// it — Chinese sits flush against a link with no space
+// ("来自小虾平台（https://xiaoxia.app）的助手"). A raw CJK path loses its
+// tail; browsers paste those percent-encoded. The hub's public pages
+// (exe-hub web.go) carry the same pipeline.
 const URL_LATIN = "\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F";
 const URL_RE = new RegExp("https?:\\/\\/[\\w#$%&+,\\-./:;=?@\\[\\]~" + URL_LATIN + "]*[\\w#$%&+\\-/;=@" + URL_LATIN + "]", "g");
 const CODE_RE = /(`{1,2})(?!`)(.+?)(?<!`)\1(?!`)/g;
+const HEADING_RE = /^(#{1,3}) +(\S.*?) *$/;
 function formatText(text) {
+  const out = [];
+  let plain = "";
+  const flush = () => { if (plain) out.push(...formatInline(plain)); plain = ""; };
+  const lines = text.split("\n");
+  lines.forEach((line, i) => {
+    const m = HEADING_RE.exec(line);
+    if (m) { flush(); out.push(el("h" + m[1].length, {}, ...formatInline(m[2]))); }
+    else plain += line + (i < lines.length - 1 ? "\n" : "");
+  });
+  flush();
+  return out;
+}
+function formatInline(text) {
   const out = [];
   let last = 0;
   for (const m of text.matchAll(CODE_RE)) {
