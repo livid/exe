@@ -295,11 +295,26 @@ func (m *Manager) prepare(ctx context.Context) error {
 	return nil
 }
 func (m *Manager) binary(name string) string {
+	if name == "qemu-system-ppc" && m.hasAudioRuntime() {
+		return m.path("audio/qemu-system-ppc")
+	}
 	local := m.path(filepath.Join("runtime", "usr", "bin", name))
 	if _, err := os.Stat(local); err == nil {
 		return local
 	}
 	return name
+}
+
+// Screamer is not in upstream QEMU. An optional locally installed build and
+// its matching OpenBIOS must be present together before selecting it.
+func (m *Manager) hasAudioRuntime() bool {
+	for _, name := range []string{"audio/qemu-system-ppc", "audio/openbios-ppc"} {
+		info, err := os.Stat(m.path(name))
+		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+			return false
+		}
+	}
+	return true
 }
 func (m *Manager) env() []string { return runtimeEnv(m.path("runtime")) }
 func runtimeEnv(dir string) []string {
@@ -585,6 +600,17 @@ func (m *Manager) launchArgs(installer bool) []string {
 	args := []string{"-L", m.path("firmware"), "-name", "exe-mac-os9", "-machine", "mac99", "-cpu", "G4", "-m", "512", "-accel", "tcg,tb-size=128", "-prom-env", "vga-ndrv?=true", "-g", "800x600x32", "-vga", "none", "-device", "VGA,edid=on,xres=800,yres=600,xmax=1024,ymax=768", "-usb", "-device", "usb-tablet", "-prom-env", "use-nvramrc?=true", "-prom-env", "nvramrc=" + strings.TrimSpace(tabletNVRAMRC), "-drive", "file=" + strings.ReplaceAll(m.path("macos9.qcow2"), ",", ",,") + ",format=qcow2,media=disk", "-rtc", "base=2003-06-01T12:00:00,clock=vm", "-display", "none", "-vnc", "unix:" + m.path("vnc.sock"), "-qmp", "unix:" + m.path("qmp.sock") + ",server=on,wait=off", "-monitor", "none", "-serial", "file:" + m.path("serial.log"), "-pidfile", m.path("qemu.pid"), "-daemonize"}
 	if _, err := os.Stat(m.path("runtime/usr/share/qemu/openbios-ppc")); err == nil {
 		args = append(args, "-L", m.path("runtime/usr/share/qemu"))
+	}
+	if m.hasAudioRuntime() {
+		// The dummy host backend still supplies PCM to VNC's capture channel.
+		// Playback stays in the authenticated browser, never on host speakers.
+		args = append(args, "-bios", m.path("audio/openbios-ppc"), "-audiodev", "none,id=mac-audio", "-global", "screamer.audiodev=mac-audio")
+		for i := range args {
+			if args[i] == "-vnc" {
+				args[i+1] += ",audiodev=mac-audio"
+				break
+			}
+		}
 	}
 	if installer {
 		args = append(args, "-nic", "none")

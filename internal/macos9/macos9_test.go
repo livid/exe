@@ -112,3 +112,35 @@ func TestMalformedProgressDoesNotBreakFirstRun(t *testing.T) {
 		t.Fatalf("bad recovery: %+v", s)
 	}
 }
+
+func TestAudioRuntimeRequiresEmulatorAndFirmware(t *testing.T) {
+	root := t.TempDir()
+	m := New(root)
+	base := m.binary("qemu-system-ppc")
+	if err := os.MkdirAll(filepath.Join(root, "audio"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "audio/qemu-system-ppc"), []byte("test emulator"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if m.binary("qemu-system-ppc") != base || strings.Contains(strings.Join(m.launchArgs(false), " "), "audiodev") {
+		t.Fatal("selected incomplete audio runtime")
+	}
+	if err := os.WriteFile(filepath.Join(root, "audio/openbios-ppc"), []byte("test firmware"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if m.binary("qemu-system-ppc") != filepath.Join(root, "audio/qemu-system-ppc") {
+		t.Fatal("did not select complete audio runtime")
+	}
+	if m.binary("qemu-img") != "qemu-img" {
+		t.Fatal("audio runtime replaced unrelated disk tool")
+	}
+	for _, installer := range []bool{false, true} {
+		args := strings.Join(m.launchArgs(installer), " ")
+		for _, want := range []string{"-bios " + filepath.Join(root, "audio/openbios-ppc"), "-audiodev none,id=mac-audio", "-global screamer.audiodev=mac-audio", "vnc.sock,audiodev=mac-audio"} {
+			if !strings.Contains(args, want) {
+				t.Errorf("installer=%v: missing %q", installer, want)
+			}
+		}
+	}
+}

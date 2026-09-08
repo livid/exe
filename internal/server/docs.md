@@ -141,6 +141,14 @@ re-enter the window. A bundled open-source USB tablet driver loads at boot;
 no guest installation is needed. Mouse-wheel scrolling is not supported by
 that driver; use the Mac’s scrollbar controls.
 
+If this node has the optional Mac audio runtime installed, click **Sound off**
+to enable sound in your browser; the button changes to **Sound on**. Click it
+again to mute. Browser playback needs this first click. Sound stops when the
+window is closed or hidden, and an enabled session resumes after reconnecting.
+The button is disabled on nodes without audio support. On narrow screens it
+shows a speaker glyph. Sound travels through the existing authenticated display
+connection; it does not play through the server's speakers.
+
 If the connected display turns black after being idle, choose **Mac keys… →
 Wake display**, or press Shift with the Mac focused. This wakes Energy Saver
 without typing or restarting the guest; mouse movement alone may not wake it.

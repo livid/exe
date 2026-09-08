@@ -1,8 +1,42 @@
 import RFB from './core/rfb.js';
+import MacAudio from './audio.js';
 const $ = s => document.querySelector(s);
 const token = new URLSearchParams(location.search).get('token') || '';
 let status, rfb, pending = false, connected = false, nextConnect = 0;
 let errorSource = '', apiOffline = false, connectTimer;
+const audio = new MacAudio();
+let soundWanted = false, soundError = '', soundAttempt = 0;
+function updateSound() {
+  const available = connected && !!rfb?.capabilities.audio;
+  $('#sound').hidden = !status?.running;
+  $('#sound').disabled = !available;
+  $('#sound').classList.toggle('on', audio.enabled);
+  $('#sound').setAttribute('aria-pressed', String(audio.enabled));
+  $('#sound').setAttribute('aria-label', audio.enabled ? 'Mute sound' : 'Enable sound');
+  $('#sound-label').textContent = audio.enabled ? 'Sound on' : 'Sound off';
+  $('#sound').title = soundError || (!available ? 'Sound is unavailable on this Mac.' : audio.enabled ? 'Mute sound' : 'Enable sound');
+}
+function stopSound() {
+  ++soundAttempt;
+  rfb?.setAudioEnabled(false); audio.stop(); updateSound();
+}
+async function startSound() {
+  const client = rfb, attempt = ++soundAttempt;
+  if (!connected || !client?.capabilities.audio || !viewActive || document.hidden) return;
+  try {
+    const started = await audio.start();
+    if (attempt !== soundAttempt) return;
+    if (started && rfb === client && connected && viewActive && !document.hidden) {
+      client.setAudioEnabled(true); soundError = '';
+    } else audio.stop();
+  } catch (e) { if (attempt === soundAttempt) { soundError = e.message; audio.stop(); } }
+  if (attempt === soundAttempt) updateSound();
+}
+$('#sound').onclick = () => {
+  soundError = '';
+  if (audio.enabled) { soundWanted = false; stopSound(); }
+  else { soundWanted = true; startSound(); }
+};
 async function api(path = '', method = 'GET') {
   const controller = new AbortController();
   // A half-open connection must not prevent every later status poll.
@@ -103,6 +137,16 @@ function connect() {
   if (token) url.searchParams.set('token', token);
   const client = new RFB(display, url.href, {wsProtocols: ['binary']});
   rfb = client; client.scaleViewport = true; client.resizeSession = false; client.background = '#333';
+  client.addEventListener('capabilities', () => {
+    if (rfb !== client) return;
+    updateSound();
+    if (soundWanted && client.capabilities.audio && !audio.enabled) startSound();
+  });
+  client.addEventListener('audio', e => {
+    if (rfb !== client) return;
+    if (e.detail.type === 'data') audio.push(e.detail.data);
+    else audio.reset();
+  });
   $('#connection').textContent = 'Connecting…';
   connectTimer = setTimeout(() => { if (rfb === client && !connected) client.disconnect(); }, 10000);
   client.addEventListener('connect', () => {
@@ -111,11 +155,14 @@ function connect() {
     $('#mac-keys').disabled = shortcutBusy;
     connected = true; $('#connection').textContent = 'Connected'; $('#lamp').classList.add('on');
     $('#mac-keys-popup').hidden = false; $('#full').hidden = false;
+    updateSound();
+    if (soundWanted && client.capabilities.audio) startSound();
   });
   client.addEventListener('disconnect', () => {
     if (rfb !== client) return;
     clearTimeout(connectTimer);
     connected = false; rfb = null;
+    stopSound();
     nextConnect = Date.now() + 3000;
     $('#connection').textContent = status?.running || apiOffline ? 'Reconnecting…' : '';
     $('#lamp').classList.remove('on'); $('#mac-keys').disabled = true;
@@ -153,6 +200,7 @@ function render(s) {
   $('#bar-help').hidden = !s.running;
   $('#mac-keys-popup').hidden = !s.running; $('#full').hidden = !s.running;
   $('#mac-keys').disabled = !connected || shortcutBusy;
+  updateSound();
   $('#empty').hidden = s.running;
   $('#empty-text').textContent = s.active ? 'Your Mac is being set up. Open Setup details to follow its progress.' :
     s.phase === 'installing' ? 'The Mac has stopped. If Apple Software Restore finished successfully, use the button above to start from your hard disk.' :
@@ -295,6 +343,7 @@ window.addEventListener('online', () => {
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || e.source !== parent || !e.data) return;
   if (e.data.exe === 'hide') {
+    stopSound();
     setupDetails(false, false);
     expandDisplay(false);
     viewActive = false; clearTimeout(pollTimer); rfb?.disconnect();
@@ -302,5 +351,9 @@ window.addEventListener('message', e => {
     viewActive = true; nextConnect = 0; lastWindowSize = ''; clearTimeout(pollTimer); poll();
   }
 });
-window.addEventListener('pagehide', () => { setupDetails(false, false); expandDisplay(false); viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopSound();
+  else if (soundWanted) startSound();
+});
+window.addEventListener('pagehide', () => { stopSound(); setupDetails(false, false); expandDisplay(false); viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
 poll();

@@ -130,6 +130,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 [hidden] { display: none !important; }
 #bar { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; align-items: center; flex: none; }
 #bar button { min-width: 96px; }
+#sound { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+#sound svg { width: 12px; height: 12px; flex: none; }
 #mac-keys-popup { width: 184px; height: 20px; }
 .popup:focus-within, button:focus-visible, a:focus-visible { outline: 2px solid #9999fe; outline-offset: 1px; }
 .popup select:disabled { color: #777; }
@@ -190,6 +192,8 @@ progress::-moz-progress-bar { background: var(--hl); }
 a { color: var(--hl); }
 @media (max-width: 650px) {
   #bar-help, #hardware { display: none; }
+  #sound-label { display: none; }
+  #bar #sound { min-width: 28px; padding: 0; }
   #bar { gap: 12px; }
   #screen { min-height: 220px; }
 }
@@ -205,6 +209,7 @@ a { color: var(--hl); }
     <span class="well" aria-hidden="true"><i><b></b></i></span>
   </span>
   <button class="ghost" id="full" hidden>Full screen</button>
+  <button class="ghost" id="sound" aria-label="Enable sound" aria-pressed="false" disabled hidden><svg viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 4h3V3h1V2h1V1h1v10H5v-1H4V9H3V8H0zM8 3h1v1h1v4H9v1H8V8h1V4H8zM10 1h1v1h1v8h-1v1h-1v-1h1V2h-1z"/></svg><span id="sound-label">Sound off</span></button>
   <span id="bar-help">Click the Mac screen to type</span>
 </header>
 <div id="error" role="alert" hidden></div>

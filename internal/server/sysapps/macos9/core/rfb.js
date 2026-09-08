@@ -87,6 +87,8 @@ const extendedClipboardActionPeek    = 1 << 26;
 const extendedClipboardActionNotify  = 1 << 27;
 const extendedClipboardActionProvide = 1 << 28;
 
+import {readAudio, requestAudio} from './qemu-audio.js';
+
 export default class RFB extends EventTargetMixin {
     constructor(target, urlOrChannel, options) {
         if (!target) {
@@ -153,6 +155,8 @@ export default class RFB extends EventTargetMixin {
         this._lastResize = 0;
 
         this._qemuExtKeyEventSupported = false;
+        this._audioEnabled = false;
+        this._audioStreaming = false;
 
         this._extendedPointerEventSupported = false;
 
@@ -423,6 +427,14 @@ export default class RFB extends EventTargetMixin {
     }
 
     // ===== PUBLIC METHODS =====
+
+    setAudioEnabled(enabled) {
+        this._audioEnabled = !!enabled;
+        if (!this._capabilities.audio || this._rfbConnectionState !== 'connected') return;
+        if (this._audioStreaming === this._audioEnabled) return;
+        requestAudio(this._sock, this._audioEnabled);
+        this._audioStreaming = this._audioEnabled;
+    }
 
     disconnect() {
         this._updateConnectionState('disconnecting');
@@ -2282,6 +2294,7 @@ export default class RFB extends EventTargetMixin {
         encs.push(encodings.pseudoEncodingDesktopSize);
         encs.push(encodings.pseudoEncodingLastRect);
         encs.push(encodings.pseudoEncodingQEMUExtendedKeyEvent);
+        encs.push(encodings.pseudoEncodingQEMUAudio);
         encs.push(encodings.pseudoEncodingQEMULedEvent);
         encs.push(encodings.pseudoEncodingExtendedDesktopSize);
         encs.push(encodings.pseudoEncodingXvp);
@@ -2637,6 +2650,15 @@ export default class RFB extends EventTargetMixin {
             case 250:  // XVP
                 return this._handleXvpMsg();
 
+            case 255: { // QEMU audio
+                try {
+                    const detail = readAudio(this._sock);
+                    if (!detail) return false;
+                    this.dispatchEvent(new CustomEvent('audio', {detail}));
+                    return true;
+                } catch (e) { return this._fail(e.message); }
+            }
+
             default:
                 this._fail("Unexpected server message (type " + msgType + ")");
                 Log.Debug("sock.rQpeekBytes(30): " + this._sock.rQpeekBytes(30));
@@ -2707,6 +2729,11 @@ export default class RFB extends EventTargetMixin {
 
             case encodings.pseudoEncodingQEMUExtendedKeyEvent:
                 this._qemuExtKeyEventSupported = true;
+                return true;
+
+            case encodings.pseudoEncodingQEMUAudio:
+                this._setCapability('audio', true);
+                this.setAudioEnabled(this._audioEnabled);
                 return true;
 
             case encodings.pseudoEncodingDesktopName:
