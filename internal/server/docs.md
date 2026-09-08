@@ -369,10 +369,14 @@ wording left alone. Every correction is marked in pencil blue; hover one to
 see what it replaced. **Copy** takes the corrected text, **Accept** puts it
 back into the top field, **Clear** empties it to start over (undo brings
 the text back). Click the model name in the status bar for the
-options: a different model just for this app, how hard it thinks (Max by
-default — the best reading of the passage is worth the wait; Off is
-fastest, but some models then think out loud in the answer), and whether
-changes are marked at all.
+options: which backend the check runs on — the Ollama endpoint, or the
+ChatGPT subscription signed in under **Configuration → OpenAI** — a model
+of that backend just for this app (the ChatGPT list is what the
+subscription serves, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, …),
+how hard it thinks (Max by default — the best reading of the passage is
+worth the wait; Ollama's Off is fastest, but some models then think out
+loud in the answer; a level a ChatGPT model rejects runs at its default),
+and whether changes are marked at all.
 
 Drafts are listed down the window's left, the way a Claude Code or Codex
 window lists its sessions: one row per draft, newest first, titled by its
@@ -393,15 +397,19 @@ comes back as it was without asking the model again; which draft is open
 is this browser's own.
 
 The check runs on the Ollama endpoint in **Configuration**
-(`ollama.base_url`, `ollama.model`), so with a local model nothing you
-write leaves this machine. Text is checked a paragraph at a time and only
-the paragraph you touched is re-checked, which keeps long documents cheap.
+(`ollama.base_url`, `ollama.model`) unless the options point it at
+ChatGPT, so with a local model nothing you write leaves this machine; on
+ChatGPT the passage goes to OpenAI. Text is checked a paragraph at a time
+and only the paragraph you touched is re-checked, which keeps long
+documents cheap.
 
 Any app can ask that model a question the same way: `POST
 /v1/chat/complete` with `{"system": …, "prompt": …}` streams the answer as
 newline-delimited JSON — `{"delta": …}` lines, then `{"done": true}` — and
 optional `model`, `effort` and Ollama `options` (`temperature`, `seed`, …)
-fields override the configuration for that one call.
+fields override the configuration for that one call. `"provider":
+"openai"` runs it on the ChatGPT subscription instead (`openai.model`,
+`openai.effort`, and the sign-in under Configuration → OpenAI).
 
 ## Configuration
 

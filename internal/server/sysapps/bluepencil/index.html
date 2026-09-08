@@ -377,15 +377,27 @@ async function copyText(text, label) {
 }
 
 const src = $("#src"), out = $("#out"), stState = $("#st-state"), stModel = $("#st-model");
-let cfg = { model: "", effort: "max", marks: true }; // this app's settings (synced app data)
+let cfg = { provider: "", model: "", effort: "max", marks: true }; // this app's settings (synced app data)
 let loaded = false;      // settings fetched — saving stays off until they are
-let defaultModel = "";   // ollama.model from the daemon's configuration
-let defaultEffort = "";  // ollama.effort likewise ("" = the model's own default)
-// Ollama's thinking levels, hardest first; "default" defers to the daemon's
-// ollama.effort. Off is offered but warned about: a reasoning model told
-// not to think reasons out loud in its answer instead.
-const EFFORTS = [["max", "Max"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["off", "Off"], ["default", ""]];
-const effortOf = c => EFFORTS.some(([v]) => v === c.effort) ? c.effort : "max";
+// The two backends the daemon can run a check on: the Ollama endpoint, and
+// the ChatGPT subscription signed in under Configuration → OpenAI. What
+// the daemon has configured for each — its model and effort, and why it
+// cannot run right now, or "" — comes from loadDaemon.
+const PROVIDERS = [["ollama", "Ollama"], ["openai", "ChatGPT"]];
+const providerOf = c => c.provider === "openai" ? "openai" : "ollama";
+const daemon = { ollama: { model: "", effort: "", ready: "" }, openai: { model: "", effort: "", ready: "" } };
+// Each backend's thinking levels, hardest first — Ollama's think levels,
+// the Responses API's reasoning efforts; "default" defers to the daemon's
+// configured effort for that backend. Ollama's Off is offered but warned
+// about: a reasoning model told not to think reasons out loud in its
+// answer instead. A level a ChatGPT model rejects falls back to its
+// default in the daemon.
+const EFFORTS = {
+  ollama: [["max", "Max"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["off", "Off"], ["default", ""]],
+  openai: [["max", "Max"], ["xhigh", "Extra high"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["minimal", "Minimal"], ["none", "None"], ["default", ""]],
+};
+const effortOf = c => EFFORTS[providerOf(c)].some(([v]) => v === c.effort) ? c.effort : "max";
+const backendKey = c => providerOf(c) + "|" + (c.model || "") + "|" + effortOf(c); // what a change of opinion is
 let blocked = "";        // why no check can run right now (unconfigured), or ""
 const cache = new Map(); // paragraph text → {fixed, ops}
 let current = null;      // the paragraph in flight: {id (its draft), text, ctrl, partial, el}
@@ -632,8 +644,8 @@ function landed(id, text) {
 async function complete(text, signal, onDelta) {
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system: SYSTEM, prompt: ask(text), model: cfg.model || "", effort: effortOf(cfg) === "default" ? "" : effortOf(cfg),
-      options: { temperature: 0 } }) });
+    body: JSON.stringify({ provider: providerOf(cfg), system: SYSTEM, prompt: ask(text), model: cfg.model || "",
+      effort: effortOf(cfg) === "default" ? "" : effortOf(cfg), options: { temperature: 0 } }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     throw new Error(e.error || "HTTP " + r.status);
@@ -875,9 +887,10 @@ window.addEventListener("message", async e => {
   if (e.data.client && e.data.client === CLIENT) return; // our own write
   if (e.data.path === "config.json") {
     if (!loaded) return;
-    const was = (cfg.model || "") + "|" + effortOf(cfg);
+    const was = backendKey(cfg);
     await loadCfg();
-    if ((cfg.model || "") + "|" + effortOf(cfg) !== was) { forget(); lastInput = 0; render(); kick(); }
+    syncBackend();
+    if (backendKey(cfg) !== was) { forget(); lastInput = 0; render(); kick(); }
     modelLabel();
     render();
     return;
@@ -1135,60 +1148,91 @@ async function loadDaemon() {
   try {
     const r = await api("/v1/config");
     if (!r.ok) throw new Error("HTTP " + r.status);
-    const c = await r.json();
-    defaultModel = (c.ollama && c.ollama.model) || "";
-    defaultEffort = (c.ollama && c.ollama.effort) || "";
-    blocked = c.ollama && c.ollama.base_url ? "" : "Ollama is not configured (Windows → Configuration)";
-  } catch (e) { blocked = "Daemon unreachable: " + e.message; }
+    const c = await r.json(), o = c.ollama || {}, g = c.openai || {};
+    daemon.ollama = { model: o.model || "", effort: o.effort || "",
+      ready: o.base_url ? "" : "Ollama is not configured (Windows → Configuration)" };
+    daemon.openai = { model: g.model || "", effort: g.effort || "", ready: "" };
+    // the sign-in is a file on the daemon, not a setting: ask its status
+    const st = await api("/v1/openai/status");
+    const signed = st.ok && !!(await st.json()).authenticated;
+    if (!signed) daemon.openai.ready = "Not signed in to ChatGPT (Windows → Configuration → OpenAI)";
+  } catch (e) { daemon.ollama.ready = daemon.openai.ready = "Daemon unreachable: " + e.message; }
+}
+// syncBackend settles what the chosen backend can do: blocked is why the
+// check cannot run on it — the backend is not set up, or no model is
+// named for it here or in the daemon's configuration
+function syncBackend() {
+  const p = providerOf(cfg), d = daemon[p];
+  blocked = d.ready;
+  if (!blocked && !(cfg.model || d.model)) blocked = "No " + (p === "openai" ? "ChatGPT" : "Ollama") + " model chosen (click the model name for options)";
 }
 function modelLabel() {
-  const eff = effortOf(cfg) === "default" ? defaultEffort : effortOf(cfg);
-  stModel.textContent = (cfg.model || defaultModel || "no model") + (eff ? " (" + eff + ")" : "");
+  const d = daemon[providerOf(cfg)];
+  const eff = effortOf(cfg) === "default" ? d.effort : effortOf(cfg);
+  stModel.textContent = (cfg.model || d.model || "no model") + (eff ? " (" + eff + ")" : "");
 }
 
 function options() {
   const dlg = $("#dlg");
   dlg.classList.remove("confirm");
   const popup = s => el("span", { class: "popup" }, s, el("span", { class: "well" }, el("i", {}, el("b"))));
-  const sel = el("select", { id: "o-model" });
-  const own = cfg.model || "";
-  sel.append(el("option", { value: "" }, "Configured" + (defaultModel ? " — " + defaultModel : "")));
-  if (own) sel.append(el("option", { value: own }, own));
-  sel.value = own;
-  const eff = el("select", { id: "o-effort" });
-  for (const [v, l] of EFFORTS) {
-    eff.append(el("option", { value: v }, l || "Configured — " + (defaultEffort || "model default")));
+  // the backend, then that backend's model and thinking level; picking
+  // another backend refills the two popups below it
+  const prov = el("select", { id: "o-provider" });
+  for (const [v, l] of PROVIDERS) {
+    const why = daemon[v].ready ? (v === "openai" ? " — not signed in" : " — not configured") : "";
+    prov.append(el("option", { value: v }, l + why));
   }
-  eff.value = effortOf(cfg);
+  prov.value = providerOf(cfg);
+  const sel = el("select", { id: "o-model" });
+  const eff = el("select", { id: "o-effort" });
+  const modelHint = el("span", { class: "hint" }), effHint = el("span", { class: "hint" });
+  const fill = () => {
+    const p = prov.value, d = daemon[p], own = p === providerOf(cfg) ? (cfg.model || "") : "";
+    sel.replaceChildren(el("option", { value: "" }, "Configured" + (d.model ? " — " + d.model : "")));
+    if (own) sel.append(el("option", { value: own }, own));
+    sel.value = own;
+    eff.replaceChildren(...EFFORTS[p].map(([v, l]) => el("option", { value: v }, l || "Configured — " + (d.effort || "model default"))));
+    eff.value = p === providerOf(cfg) ? effortOf(cfg) : "max";
+    modelHint.textContent = p === "openai"
+      ? "Runs on the ChatGPT subscription signed in under Configuration; the passage goes to OpenAI."
+      : "A small local model is plenty for proofreading and answers faster.";
+    effHint.textContent = p === "openai"
+      ? "Max reads hardest and slowest; None is fastest. A level the model rejects runs at its default."
+      : "Max reads hardest and slowest. Off is fastest, but some models then think out loud.";
+    // the list fills in behind the current choice, so the menu never jumps
+    api("/v1/chat/models?provider=" + p).then(r => r.ok ? r.json() : null).then(dd => {
+      if (prov.value !== p || !dd || !Array.isArray(dd.models)) return;
+      for (const m of dd.models) {
+        if (m === own) continue;
+        sel.append(el("option", { value: m }, m));
+      }
+    }).catch(() => {});
+  };
+  prov.addEventListener("change", fill);
+  fill();
   const chk = el("input", { type: "checkbox", id: "o-marks" });
   chk.checked = cfg.marks !== false;
   const cancel = el("button", { class: "ghost" }, "Cancel");
   const ok = el("button", { class: "ghost default" }, "OK"); // Return's button wears the ring
   dlg.replaceChildren(
     el("h2", {}, "Blue Pencil Options"),
-    el("div", { class: "row" }, el("label", { for: "o-model" }, "Model:"), popup(sel),
-      el("span", { class: "hint" }, "A small local model is plenty for proofreading and answers faster.")),
-    el("div", { class: "row" }, el("label", { for: "o-effort" }, "Thinking:"), popup(eff),
-      el("span", { class: "hint" }, "Max reads hardest and slowest. Off is fastest, but some models then think out loud.")),
+    el("div", { class: "row" }, el("label", { for: "o-provider" }, "Check on:"), popup(prov)),
+    el("div", { class: "row" }, el("label", { for: "o-model" }, "Model:"), popup(sel), modelHint),
+    el("div", { class: "row" }, el("label", { for: "o-effort" }, "Thinking:"), popup(eff), effHint),
     el("label", { class: "check" }, chk, "Mark changes in the checked text"),
     el("div", { class: "btns" }, cancel, ok));
   $("#veil").classList.add("on");
-  sel.focus();
-  // the list fills in behind the current choice, so the menu never jumps
-  api("/v1/chat/models?provider=ollama").then(r => r.ok ? r.json() : null).then(d => {
-    if (!d || !Array.isArray(d.models)) return;
-    for (const m of d.models) {
-      if (m === own) continue;
-      sel.append(el("option", { value: m }, m));
-    }
-  }).catch(() => {});
+  prov.focus();
   const close = () => { $("#veil").classList.remove("on"); document.removeEventListener("keydown", keys); src.focus(); };
   const submit = () => {
-    const changed = sel.value !== own || eff.value !== effortOf(cfg);
+    const was = backendKey(cfg);
+    cfg.provider = prov.value === "openai" ? "openai" : "";
     cfg.model = sel.value;
     cfg.effort = eff.value;
     cfg.marks = chk.checked;
-    if (changed) forget();
+    syncBackend();
+    if (backendKey(cfg) !== was) forget(); // another backend, model or budget: another opinion
     saveCfg();
     modelLabel();
     close();
@@ -1209,6 +1253,7 @@ stModel.addEventListener("click", options);
 (async () => {
   render();
   await Promise.all([loadCfg(), loadDaemon(), loadDoc()]);
+  syncBackend();
   modelLabel();
   sortDrafts();
   for (const d of doc.drafts) adoptChecked(d);

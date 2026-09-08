@@ -110,3 +110,37 @@ func TestChatCompleteErrors(t *testing.T) {
 		t.Fatalf("unconfigured: %d %q", code, msg)
 	}
 }
+
+// The ChatGPT provider needs a sign-in on file before anything streams,
+// and a provider nobody knows is a bad request; the default stays Ollama.
+func TestChatCompleteProvider(t *testing.T) {
+	s := New(&config.Config{Ollama: config.OllamaConfig{BaseURL: "http://127.0.0.1:1", Model: "m"},
+		OpenAI: config.OpenAIConfig{Model: "gpt-5.6-sol"}}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	post := func(body string) (int, string) {
+		resp, err := http.Post(ts.URL+"/v1/chat/complete", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var out struct{ Error string }
+		json.NewDecoder(resp.Body).Decode(&out)
+		return resp.StatusCode, out.Error
+	}
+	if code, msg := post(`{"prompt":"hi","provider":"openai"}`); code != http.StatusServiceUnavailable || !strings.Contains(msg, "ChatGPT") {
+		t.Fatalf("openai without a sign-in: %d %q", code, msg)
+	}
+	if code, msg := post(`{"prompt":"hi","provider":"bogus"}`); code != http.StatusBadRequest || !strings.Contains(msg, "bogus") {
+		t.Fatalf("unknown provider: %d %q", code, msg)
+	}
+	// "" and "ollama" both reach the Ollama endpoint (unreachable here: 502, not 503)
+	for _, p := range []string{"", "ollama"} {
+		if code, _ := post(`{"prompt":"hi","provider":"` + p + `"}`); code != http.StatusBadGateway {
+			t.Fatalf("provider %q: %d, want 502 from the dead Ollama endpoint", p, code)
+		}
+	}
+	if k := completeCacheKey("fix it"); !strings.HasPrefix(k, "complete-") || len(k) != len("complete-")+16 {
+		t.Fatalf("cache key = %q", k)
+	}
+}
