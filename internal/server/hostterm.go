@@ -167,7 +167,8 @@ func shQuote(s string) string {
 // hook, {"usage":…} with the ChatGPT subscription's usage windows for
 // Codex; and for its session column (agentsessions.go)
 // {"sessions":[…],"current":…}, the agent's tmux sessions and the one the
-// window shows. The window sends {"switch":"exe-claude-2"} to move to
+// window shows — the session it showed last, whichever browser that was
+// (lastAgentSession). The window sends {"switch":"exe-claude-2"} to move to
 // another, {"new":true} to start one and {"archive":"exe-claude-2"} to
 // end one; what goes wrong comes back as {"error":…}.
 // ?cmd=<command line> runs that one command in a login shell — the desktop
@@ -178,13 +179,14 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var agent *hostAgent
 	var ash agentShell
+	var session string // the agent session the window opens on
 	if app := r.URL.Query().Get("app"); app != "" {
 		a, ok := hostAgents[app]
 		if !ok {
 			writeErr(w, http.StatusBadRequest, fmt.Errorf("unknown app %q", app))
 			return
 		}
-		if ash, err = s.startAgent(a, 80, 24); err == nil {
+		if ash, session, err = s.startAgent(a, 80, 24); err == nil {
 			sh = ash
 		}
 		agent = &a
@@ -216,7 +218,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	}()
 	var col *agentColumn
 	if agent != nil {
-		col = newAgentColumn(s, *agent, ash, out)
+		col = newAgentColumn(s, *agent, ash, session, out)
 		go col.follow(ctx)
 		if agent.statusLine {
 			go pushAgentStatus(ctx, out, col.statusFile)

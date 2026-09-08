@@ -75,8 +75,9 @@ through its `notify` command, which the desktop points at the session
 and through the terminal bell, which the desktop has Codex ring at the
 end of a turn and for an approval so tmux notes it while no window is
 looking. Hover a row for which. The status line's
-figures follow the session on screen. A window comes back to the session it was on last,
-and dragging the line between the list and the terminal sets the list's
+figures follow the session on screen. A window opens on the session it
+showed last — from any browser, and after the daemon restarts: tmux
+itself remembers where the window was — and dragging the line between the list and the terminal sets the list's
 width, kept with the window's layout. A row's contextual menu opens
 with when the session started, in grey, then starts a new session,
 copies the row's title, or archives the session, after a dialog: the session and its process end, and the conversation stays on

@@ -55,20 +55,24 @@ func (s *unixShell) Close() error {
 }
 
 // startAgent runs an agent's CLI (Claude Code, Codex) on a pty in the
-// project dir. With tmux on the host the CLI lives inside a persistent
-// session of its own ("exe-claude", "exe-codex"): closing the window only
-// detaches, and the desktop icon returns to the running conversation. -A
-// attaches when the session already exists, -D kicks any stale client so
-// the pty size follows the newest window. Without tmux each window is a
-// fresh CLI run. The CLI is launched with the arguments that point its
-// hooks at the session's status file (agentCommand) — the session's
-// first launch decides, as -A attaching ignores the command line — and
-// that file is cleared for a fresh conversation, so the window never
-// opens on the last one's figures.
-func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
+// project dir, and names the session the window opens on. With tmux on
+// the host the CLI lives inside a persistent session of its own
+// ("exe-claude", "exe-codex"): closing the window only detaches, and the
+// desktop icon returns to the running conversation — to the session the
+// window showed last when the column has moved it (lastAgentSession),
+// attached directly so nothing is shown first and then switched away
+// from, whichever browser reopens it; -d, like -D below, kicks any stale
+// client so the pty size follows the newest window. Without a session
+// shown yet the icon's own is attached, created when it does not exist
+// (-A). Without tmux each window is a fresh CLI run. The CLI is launched
+// with the arguments that point its hooks at the session's status file
+// (agentCommand) — the session's first launch decides, as -A attaching
+// ignores the command line — and that file is cleared for a fresh
+// conversation, so the window never opens on the last one's figures.
+func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, string, error) {
 	bin := agentPath(a)
 	if bin == "" {
-		return nil, fmt.Errorf("%s is not installed on this host", a.title)
+		return nil, "", fmt.Errorf("%s is not installed on this host", a.title)
 	}
 	dir := s.agentProjectDir()
 	file := s.agentStatusFile(a, a.session)
@@ -76,13 +80,19 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 	if args != nil {
 		os.MkdirAll(filepath.Dir(file), 0o755)
 	}
+	session := a.session
 	cmd := exec.Command(bin, args...)
 	if has := tmuxCmd("has-session", "-t", "="+a.session); has != nil {
-		if has.Run() != nil {
-			os.Remove(file)
-			os.Remove(stateFileOf(file))
+		if last := s.lastAgentSession(a); last != "" {
+			session = last
+			cmd = tmuxCmd("attach-session", "-d", "-t", "="+last)
+		} else {
+			if has.Run() != nil {
+				os.Remove(file)
+				os.Remove(stateFileOf(file))
+			}
+			cmd = tmuxCmd("new-session", "-A", "-D", "-s", a.session, "-c", dir, line)
 		}
-		cmd = tmuxCmd("new-session", "-A", "-D", "-s", a.session, "-c", dir, line)
 	} else {
 		os.Remove(file)
 		os.Remove(stateFileOf(file))
@@ -91,9 +101,9 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 	cmd.Env = cliEnv(bin)
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return &unixShell{f: f, cmd: cmd}, nil
+	return &unixShell{f: f, cmd: cmd}, session, nil
 }
 
 // agentCommand is the CLI's launch inside a tmux session: the arguments

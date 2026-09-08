@@ -59,6 +59,12 @@ type Server struct {
 	cfg        atomic.Pointer[config.Config]
 	activeRuns sync.Map // transcript id -> struct{}
 
+	// agentLast is the tmux session each agent's window showed last,
+	// by app — the tiebreak when tmux's own stamps cannot tell where a
+	// reopened window belongs (lastAgentSession, agentsessions.go).
+	agentLastMu sync.Mutex
+	agentLast   map[string]string
+
 	// Cached Cloudflare heartbeat so UI polling doesn't hammer the CF API.
 	cfHealthMu  sync.Mutex
 	cfHealthAt  time.Time

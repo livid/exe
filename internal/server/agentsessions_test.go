@@ -29,23 +29,23 @@ func TestAgentSessionNames(t *testing.T) {
 
 func TestParseAgentSessions(t *testing.T) {
 	a := hostAgents["claude"]
-	out := "exe-claude-3:1788692008:1788718715:0:1:spark\n" +
-		"exe-codex:1788562035:1788717673:1:0:exe\n" +
-		"exe-claude:1788692000:1788718700:1:0:✳ Daily routine not running\n" +
-		"exe-claude:1788692000:1788718700:1:0:second pane\n" +
-		"exe-claude-4:1788692009:1788718716:0:0:a title: with colons\n" +
+	out := "exe-claude-3:1788692008:1788718715:0:1::spark\n" +
+		"exe-codex:1788562035:1788717673:1:0:1788717673:exe\n" +
+		"exe-claude:1788692000:1788718700:1:0:1788718700:✳ Daily routine not running\n" +
+		"exe-claude:1788692000:1788718700:1:0:1788718700:second pane\n" +
+		"exe-claude-4:1788692009:1788718716:0:0:1788718600:a title: with colons\n" +
 		"other:x\n"
 	list := parseAgentSessions(a, out, []string{"spark", "exe"}, 1788718718)
 	if len(list) != 3 {
 		t.Fatalf("got %d sessions: %+v", len(list), list)
 	}
-	if list[2].Name != "exe-claude-4" || list[2].Title != "a title: with colons" || !list[2].Working {
+	if list[2].Name != "exe-claude-4" || list[2].Title != "a title: with colons" || !list[2].Working || list[2].lastAttached != 1788718600 {
 		t.Errorf("session 4 = %+v", list[2])
 	}
-	if list[0].Name != "exe-claude" || list[0].Number != 1 || list[0].Title != "✳ Daily routine not running" || !list[0].Attached || list[0].Bell || list[0].Working {
+	if list[0].Name != "exe-claude" || list[0].Number != 1 || list[0].Title != "✳ Daily routine not running" || !list[0].Attached || list[0].Bell || list[0].Working || list[0].lastAttached != 1788718700 {
 		t.Errorf("session 1 = %+v", list[0])
 	}
-	if list[1].Name != "exe-claude-3" || list[1].Number != 3 || list[1].Title != "" || list[1].Attached || !list[1].Bell || list[1].Created != 1788692008 || !list[1].Working {
+	if list[1].Name != "exe-claude-3" || list[1].Number != 3 || list[1].Title != "" || list[1].Attached || !list[1].Bell || list[1].Created != 1788692008 || !list[1].Working || list[1].lastAttached != 0 {
 		t.Errorf("session 3 = %+v", list[1])
 	}
 	if got := parseAgentSessions(a, "", []string{"spark"}, 1788718718); got == nil || len(got) != 0 {
@@ -57,10 +57,10 @@ func TestParseAgentSessions(t *testing.T) {
 	// thread id before the first prompt is no title, nor is the project
 	// folder's name a session started without the override shows
 	c := hostAgents["codex"]
-	out = "exe-codex:1788562035:1788700000:0:0:⠹ List numbers through 40\n" +
-		"exe-codex-2:1788562036:1788700000:0:1:01a0783c-153f-7ab3-b9da-5d7302aed8c7\n" +
-		"exe-codex-3:1788562037:1788718716:1:0:exe\n" +
-		"exe-codex-4:1788562038:1788700000:0:0:Inspect exe-city unstaged changes\n"
+	out = "exe-codex:1788562035:1788700000:0:0:1788700000:⠹ List numbers through 40\n" +
+		"exe-codex-2:1788562036:1788700000:0:1::01a0783c-153f-7ab3-b9da-5d7302aed8c7\n" +
+		"exe-codex-3:1788562037:1788718716:1:0:1788718716:exe\n" +
+		"exe-codex-4:1788562038:1788700000:0:0::Inspect exe-city unstaged changes\n"
 	list = parseAgentSessions(c, out, []string{"spark", "exe"}, 1788718718)
 	if len(list) != 4 {
 		t.Fatalf("got %d codex sessions: %+v", len(list), list)
@@ -79,8 +79,37 @@ func TestParseAgentSessions(t *testing.T) {
 	}
 }
 
+// Where a reopened window lands: the session a client was on most
+// recently by tmux's stamp; the daemon's memory settles a same-second
+// tie, the list's order a tie it has no memory of; a session never
+// shown does not count, so an untouched agent has none.
+func TestPickLastSession(t *testing.T) {
+	list := []agentSession{
+		{Name: "exe-claude", lastAttached: 100},
+		{Name: "exe-claude-2", lastAttached: 300},
+		{Name: "exe-claude-3", lastAttached: 300},
+		{Name: "exe-claude-4", lastAttached: 200},
+		{Name: "exe-claude-5"},
+	}
+	for remembered, want := range map[string]string{
+		"": "exe-claude-2", "exe-claude-3": "exe-claude-3", "exe-claude-2": "exe-claude-2",
+		"exe-claude-4": "exe-claude-2", "exe-claude-5": "exe-claude-2", "exe-claude-9": "exe-claude-2",
+	} {
+		if got := pickLastSession(list, remembered); got != want {
+			t.Errorf("remembered %q: picked %q, want %q", remembered, got, want)
+		}
+	}
+	if got := pickLastSession([]agentSession{{Name: "exe-claude"}, {Name: "exe-claude-2"}}, "exe-claude-2"); got != "" {
+		t.Errorf("no session shown yet: picked %q, want none", got)
+	}
+	if got := pickLastSession(nil, "exe-claude"); got != "" {
+		t.Errorf("no sessions: picked %q, want none", got)
+	}
+}
+
 // The real thing on a tmux server of the test's own: a client on a pty,
-// a second session, the client moved between them, the column's open.
+// a second session, the client moved between them, the column's open,
+// and the window closed and reopened, landing where it was.
 func TestAgentSessionsLive(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("no tmux on this host")
@@ -94,14 +123,20 @@ func TestAgentSessionsLive(t *testing.T) {
 	}()
 	s := &Server{StateDir: t.TempDir()}
 	a := hostAgent{app: "sh", bin: "sh", title: "Shell", session: "exe-test-sh"}
-	sh, err := s.startAgent(a, 80, 24)
+	if got := s.lastAgentSession(a); got != "" {
+		t.Fatalf("last session before any = %q", got)
+	}
+	sh, session, err := s.startAgent(a, 80, 24)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sh.Close()
+	if session != a.session {
+		t.Fatalf("first window opens on %q, want the icon's own session", session)
+	}
 	var seen []byte // what the pty printed, for a failure's diagnosis
 	var seenMu sync.Mutex
-	go func() { // drain the pty so the client never blocks on output
+	drain := func(sh agentShell) { // drain the pty so the client never blocks on output
 		buf := make([]byte, 4096)
 		for {
 			n, err := sh.Read(buf)
@@ -112,7 +147,8 @@ func TestAgentSessionsLive(t *testing.T) {
 			seen = append(seen, buf[:n]...)
 			seenMu.Unlock()
 		}
-	}()
+	}
+	go drain(sh)
 	waitFor := func(what string, ok func() bool) {
 		t.Helper()
 		for i := 0; i < 100; i++ {
@@ -131,7 +167,7 @@ func TestAgentSessionsLive(t *testing.T) {
 	if len(list) != 1 || list[0].Number != 1 || !list[0].Attached {
 		t.Fatalf("after start: %+v", list)
 	}
-	col := newAgentColumn(s, a, sh, nil)
+	col := newAgentColumn(s, a, sh, session, nil)
 	if col.current() != a.session {
 		t.Fatalf("column current = %q", col.current())
 	}
@@ -170,6 +206,37 @@ func TestAgentSessionsLive(t *testing.T) {
 	waitFor("the client on session 2 after the archive", func() bool { return sh.Current() == "exe-test-sh-2" })
 	if list = s.agentSessions(a); len(list) != 2 || list[1].Name != "exe-test-sh-2" {
 		t.Fatalf("after killing 3: %+v", list)
+	}
+	// close the window and open it again: it lands on session 2, where it
+	// was, without touching session 1 — and so does a daemon that has
+	// forgotten (a restart), by tmux's stamp alone, when the two differ
+	sh.Close()
+	waitFor("the client to detach with the window", func() bool { return sh.Current() == "" })
+	if got := s.lastAgentSession(a); got != "exe-test-sh-2" {
+		t.Fatalf("last session after closing = %q", got)
+	}
+	s.agentLast = nil
+	if list = s.agentSessions(a); list[0].lastAttached != list[1].lastAttached {
+		if got := s.lastAgentSession(a); got != "exe-test-sh-2" {
+			t.Fatalf("last session by the stamp alone = %q (%+v)", got, list)
+		}
+	}
+	s.rememberAgentSession(a, "exe-test-sh-2")
+	if sh, session, err = s.startAgent(a, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	defer sh.Close()
+	go drain(sh)
+	if session != "exe-test-sh-2" {
+		t.Fatalf("reopened window opens on %q, want session 2", session)
+	}
+	waitFor("the reopened client on session 2", func() bool { return sh.Current() == "exe-test-sh-2" })
+	if list = s.agentSessions(a); len(list) != 2 || list[0].Attached || !list[1].Attached {
+		t.Fatalf("after reopening: %+v", list)
+	}
+	col = newAgentColumn(s, a, sh, session, nil)
+	if col.current() != "exe-test-sh-2" {
+		t.Fatalf("reopened column current = %q", col.current())
 	}
 	// archive one off screen: the window stays where it is
 	if err := col.archive(a.session); err != nil {

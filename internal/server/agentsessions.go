@@ -46,6 +46,10 @@ type agentSession struct {
 	Attached bool   `json:"attached"`
 	Bell     bool   `json:"bell"`
 	Working  bool   `json:"working"`
+	// when a client last landed on the session — tmux stamps it on every
+	// attach and switch-client, whole seconds, 0 for a session no window
+	// has shown yet: how lastAgentSession finds where the window was
+	lastAttached int64
 	// from the session's hooks (agentStateHooks), Claude Code only: State
 	// is the word they wrote, Wants that the session waits for the person
 	// — its turn finished, or a permission or question is pending
@@ -97,7 +101,7 @@ func agentSessionNumber(a hostAgent, name string) int {
 // survive the trip. The activity stamp is the window's, which pane
 // output moves; the session's moves on keys from a client alone, so it
 // would never see a CLI at work in a session no window shows.
-const tmuxSessionFormat = "#{session_name}:#{session_created}:#{window_activity}:#{session_attached}:#{window_bell_flag}:#{pane_title}"
+const tmuxSessionFormat = "#{session_name}:#{session_created}:#{window_activity}:#{session_attached}:#{window_bell_flag}:#{session_last_attached}:#{pane_title}"
 
 // uuidTitle matches the title Codex puts on the terminal before the
 // thread has a name: the thread's id.
@@ -115,8 +119,8 @@ func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) [
 	list := []agentSession{}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.SplitN(line, ":", 6)
-		if len(f) < 6 || seen[f[0]] {
+		f := strings.SplitN(line, ":", 7)
+		if len(f) < 7 || seen[f[0]] {
 			continue
 		}
 		n := agentSessionNumber(a, f[0])
@@ -124,7 +128,7 @@ func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) [
 			continue
 		}
 		seen[f[0]] = true
-		title, spinner := strings.TrimSpace(f[5]), false
+		title, spinner := strings.TrimSpace(f[6]), false
 		if r, size := utf8.DecodeRuneInString(title); r >= 0x2800 && r <= 0x28ff { // braille: a spinner frame
 			title, spinner = strings.TrimSpace(title[size:]), true
 		}
@@ -133,9 +137,11 @@ func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) [
 		}
 		created, _ := strconv.ParseInt(f[1], 10, 64)
 		activity, _ := strconv.ParseInt(f[2], 10, 64)
+		lastAttached, _ := strconv.ParseInt(f[5], 10, 64)
 		list = append(list, agentSession{Name: f[0], Number: n, Title: title, Created: created,
 			Activity: activity, Attached: f[3] != "0" && f[3] != "", Bell: f[4] == "1",
-			Working: spinner || activity > 0 && now-activity <= agentWorkingSeconds, spinner: spinner})
+			Working: spinner || activity > 0 && now-activity <= agentWorkingSeconds, spinner: spinner,
+			lastAttached: lastAttached})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Number < list[j].Number })
 	return list
@@ -154,6 +160,43 @@ func (s *Server) agentSessions(a hostAgent) []agentSession {
 	}
 	host, _ := os.Hostname()
 	return parseAgentSessions(a, string(out), []string{host, filepath.Base(s.agentProjectDir())}, time.Now().Unix())
+}
+
+// lastAgentSession is the session an agent's window showed last, where
+// a reopened window lands (startAgent) — from any browser, and after
+// the daemon restarts, so it is tmux's own record that decides: the
+// session a client landed on most recently. That stamp is whole
+// seconds, so two rows clicked within one tie, and the daemon's memory
+// of the last window's session (agentLast) settles that while it has
+// one; "" when no session of the agent's has been shown yet.
+func (s *Server) lastAgentSession(a hostAgent) string {
+	s.agentLastMu.Lock()
+	remembered := s.agentLast[a.app]
+	s.agentLastMu.Unlock()
+	return pickLastSession(s.agentSessions(a), remembered)
+}
+
+// pickLastSession is lastAgentSession's choice over a list in number
+// order: the latest stamp, ties to remembered, else the first.
+func pickLastSession(list []agentSession, remembered string) string {
+	var best agentSession
+	for _, l := range list {
+		if l.lastAttached > best.lastAttached || l.lastAttached == best.lastAttached && l.lastAttached > 0 && l.Name == remembered {
+			best = l
+		}
+	}
+	return best.Name
+}
+
+// rememberAgentSession notes the session an agent's window is on, for
+// lastAgentSession's tiebreak.
+func (s *Server) rememberAgentSession(a hostAgent, name string) {
+	s.agentLastMu.Lock()
+	if s.agentLast == nil {
+		s.agentLast = map[string]string{}
+	}
+	s.agentLast[a.app] = name
+	s.agentLastMu.Unlock()
 }
 
 // markAgentStates reads each session's state file into the list. A
@@ -190,12 +233,17 @@ type agentColumn struct {
 	kick chan struct{}
 }
 
-func newAgentColumn(s *Server, a hostAgent, sh agentShell, out *wsWriter) *agentColumn {
+// newAgentColumn starts a window's column on the session its client
+// was attached to (startAgent) — the client may not have registered
+// with tmux yet, so that is what the first frame says until follow
+// re-reads it.
+func newAgentColumn(s *Server, a hostAgent, sh agentShell, session string, out *wsWriter) *agentColumn {
 	c := &agentColumn{s: s, a: a, sh: sh, out: out, kick: make(chan struct{}, 1)}
-	c.cur = a.session
+	c.cur = session
 	if cur := sh.Current(); cur != "" {
 		c.cur = cur
 	}
+	s.rememberAgentSession(a, c.cur)
 	return c
 }
 
@@ -209,6 +257,7 @@ func (c *agentColumn) setCurrent(name string) {
 	c.mu.Lock()
 	c.cur = name
 	c.mu.Unlock()
+	c.s.rememberAgentSession(c.a, name)
 }
 
 // statusFile is the current session's status file: the window's status

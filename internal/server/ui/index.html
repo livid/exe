@@ -5234,12 +5234,12 @@ function openHostTermWin(app, cmd) {
   // the session column: rows follow the daemon's {"sessions":…} frames, a
   // click moves the window's tmux client, New starts a conversation in a
   // session of its own. Until the first frame the column holds the one
-  // row the window opens on, so nothing jumps when the list arrives. A
-  // browser goes back to the session it was on last (localStorage): a
-  // reconnect lands the client on the icon's own session
+  // row the window opens on, so nothing jumps when the list arrives. The
+  // window comes back to the session it showed last, from any browser:
+  // the daemon attaches the client there (startAgent) and its first
+  // frame says so — the browser keeps no note of its own
   const list = w.querySelector(".sess-list"), newBtn = w.querySelector(".sess-new");
-  const sessKey = "exe_" + app + "_session";
-  let sessions = [{ name: "", number: 1, title: "" }], current = "", restored = false;
+  let sessions = [{ name: "", number: 1, title: "" }], current = "";
   const sessTitle = s => s.title ? s.title.replace(/^✳\s*/, "") : agent.title + " " + s.number;
   // when a session started, short enough for a menu line: the time alone
   // today, weekday and date before that, the year once it differs
@@ -5359,7 +5359,6 @@ function openHostTermWin(app, cmd) {
     ws.binaryType = "arraybuffer";
     ws.onopen = () => {
       retry = 0;
-      restored = false;
       status.textContent = "connected";
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
       if (initial) term.focus(); // never steal focus on a background reconnect
@@ -5380,14 +5379,7 @@ function openHostTermWin(app, cmd) {
       if (Array.isArray(msg.sessions)) {
         if (msg.sessions.length) sessions = msg.sessions;
         current = msg.current || current;
-        if (!restored) {
-          restored = true;
-          let want = null;
-          try { want = localStorage.getItem(sessKey); } catch (err) {}
-          if (want && want !== current && sessions.some(s => s.name === want)) switchSession(want);
-        }
         renderSessions();
-        try { localStorage.setItem(sessKey, current); } catch (err) {}
       }
       if (msg.error) toast(msg.error);
     };

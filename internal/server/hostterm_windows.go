@@ -58,10 +58,10 @@ func startHostShell(command string, cols, rows int) (hostShell, error) {
 // startAgent runs an agent's CLI (Claude Code, Codex) on a ConPTY in the
 // project dir. No tmux on Windows — each window is a fresh CLI run — and
 // no status-line hook: its bridge is a sh one-liner (agentStatusArgs).
-func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
+func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, string, error) {
 	bin := agentPath(a)
 	if bin == "" {
-		return nil, fmt.Errorf("%s is not installed on this host", a.title)
+		return nil, "", fmt.Errorf("%s is not installed on this host", a.title)
 	}
 	opts := []conpty.ConPtyOption{
 		conpty.ConPtyDimensions(cols, rows),
@@ -70,7 +70,7 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, error) {
 	}
 	pty, err := conpty.Start(fmt.Sprintf(`"%s"`, bin), opts...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return &windowsShell{pty: pty}, nil
+	return &windowsShell{pty: pty}, a.session, nil
 }
