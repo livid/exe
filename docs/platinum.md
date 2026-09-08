@@ -78,6 +78,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   at the lower right, default rightmost, Cancel to its left; 4 to 6px between
   items in a group, 16px between groups; a checkbox is a 12px box with 5px to
   its label; pop-ups are 20px high with 6px between stacked ones.
+- Static dialog text: the [HIG control layout guidelines](https://dev.os9.ca/techpubs/mac/HIGOS8Guide/thig-52.html)
+  specify 16px fields for 12-point Chicago. Use a 16px line height for compact
+  dialog copy; keep the standard button dimensions and margins.
 - Text field: white, 1px `#262626`, no radius, 20px, padding `2px 5px`, the
   sunken frame as shadows `-1px -1px 0 #999` (top and left) and `1px 1px 0
   #fff` (bottom and right); focus is `outline: 2px solid #9999fe` at offset 0.

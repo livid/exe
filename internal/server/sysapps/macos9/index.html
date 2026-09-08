@@ -136,8 +136,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #bar-help { margin-left: auto; color: #555; font-size: 11px; }
 main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; border-top: 1px solid var(--black); background: #fff; }
 #veil { z-index: 1; padding: 12px; }
-#dlg { width: 520px; max-width: 100%; height: 500px; max-height: 100%; padding: 12px;
-  display: flex; flex-direction: column; }
+/* HIG control layout: 16px static text fields; keep the 12px button margins.
+   Compact read-only rows fit the 800×600 guest window at 150% display scaling. */
+#dlg { width: 520px; max-width: 100%; height: 440px; max-height: 100%; padding: 12px;
+  display: flex; flex-direction: column; line-height: 16px; }
 #dlg h2, #dlg .btns { flex: none; }
 #dlg .btns button { min-width: 58px; }
 #download-progress { flex: none; margin-bottom: 12px; }
@@ -147,7 +149,7 @@ main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: co
 h2 { font-size: 12px; margin: 0 0 12px; }
 #intro { margin: 0 0 12px; }
 #steps { list-style: none; padding: 0; margin: 0; }
-#steps li { padding: 8px 0; border-bottom: 1px solid var(--g400); display: flex; gap: 12px; align-items: flex-start; }
+#steps li { padding: 4px 0; border-bottom: 1px solid var(--g400); display: flex; gap: 12px; align-items: flex-start; }
 #steps .badge { width: 16px; flex: none; text-align: center; }
 #steps .done .badge { color: #336633; }
 #steps .working .badge { color: var(--hl); font-weight: bold; }
