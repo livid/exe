@@ -727,7 +727,10 @@ a.svc:hover { text-decoration: underline; }
    right, and New gets a row of its own under the list */
 .agent-wrap { display: flex; align-items: stretch; }
 .agent-wrap .hostterm-box { flex: 1; min-width: 0; }
-.sess-col { width: 160px; flex: none; display: flex; flex-direction: column; position: relative;
+/* contain: size — the column takes the terminal's height and its list
+   scrolls; without it, a long list is what the wrap stretches to, and the
+   window grows row by row */
+.sess-col { width: 160px; flex: none; display: flex; flex-direction: column; position: relative; contain: size;
   border-right: 1px solid var(--black); background: var(--g300); }
 /* the seam drags the column's width: a 6px grip astride the 1px line */
 .sess-grip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 2; }
@@ -1026,7 +1029,7 @@ body.mobile .term-window .hostterm-box { height: 100%; }
 /* an agent window's session column becomes a strip of tabs above the terminal */
 body.mobile .term-window .agent-wrap { height: 100%; flex-direction: column; }
 body.mobile .term-window .agent-wrap .hostterm-box { flex: 1; min-height: 0; height: auto; }
-body.mobile .sess-col { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--black); }
+body.mobile .sess-col { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--black); contain: none; }
 body.mobile .sess-list { display: flex; overflow-x: auto; overflow-y: hidden; }
 body.mobile .sess-row { flex: none; max-width: 150px; height: auto; padding: 0 8px; border-bottom: 0; border-right: 1px solid #efefef; }
 body.mobile .sess-btns { border-top: 0; border-left: 1px solid var(--black); padding: 6px 8px; }
@@ -5239,7 +5242,7 @@ function openHostTermWin(app, cmd) {
   // the daemon attaches the client there (startAgent) and its first
   // frame says so — the browser keeps no note of its own
   const list = w.querySelector(".sess-list"), newBtn = w.querySelector(".sess-new");
-  let sessions = [{ name: "", number: 1, title: "" }], current = "";
+  let sessions = [{ name: "", number: 1, title: "" }], current = "", shown = "";
   const sessTitle = s => s.title ? s.title.replace(/^✳\s*/, "") : agent.title + " " + s.number;
   // when a session started, short enough for a menu line: the time alone
   // today, weekday and date before that, the year once it differs
@@ -5275,6 +5278,14 @@ function openHostTermWin(app, cmd) {
       row.addEventListener("contextmenu", e => sessMenu(e, s));
       return row;
     }));
+    // the current row comes into view when the current session changes
+    // — the phone's strip slides sideways to the one the window opened
+    // on, a tall desktop list down to it — and the list stays put
+    // otherwise, so a frame never drags it from where it was scrolled to
+    if (current && current !== shown) {
+      const sel = list.querySelector(".sess-row.sel");
+      if (sel) { revealRow(list, sel); shown = current; }
+    }
   }
   function switchSession(name) {
     current = name;
@@ -5417,6 +5428,17 @@ function openHostTermWin(app, cmd) {
     try { ws.close(); } catch (e) {}
     term.dispose();
   };
+}
+
+// revealRow scrolls a list the least distance that brings a row of it
+// into view — sideways in the phone's strip, down in a tall list — and
+// nothing else: scrollIntoView would move the list's ancestors too
+function revealRow(list, row) {
+  const l = list.getBoundingClientRect(), r = row.getBoundingClientRect();
+  if (r.left < l.left) list.scrollLeft += r.left - l.left;
+  else if (r.right > l.right) list.scrollLeft += r.right - l.right;
+  if (r.top < l.top) list.scrollTop += r.top - l.top;
+  else if (r.bottom > l.bottom) list.scrollTop += r.bottom - l.bottom;
 }
 
 // the session column's bell: a 7px crispEdges dot in the row's own colour
