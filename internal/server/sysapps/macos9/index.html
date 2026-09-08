@@ -37,6 +37,8 @@ button.ghost.on { background: #888; color: #fff;
   box-shadow: inset 1px 1px 0 #666, inset -1px -1px 0 #aaa,
     inset 2px 2px 0 #777, inset -2px -2px 0 #999; }
 button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
+/* A dialog's Return default uses the shared Platinum ring (Hub's). */
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
 /* pop-up menu button, from the HIG's Figure 2-7 (Mac OS 8 HIG, "Pop-Up
    Menu Buttons"): a rounded black outline; on the body a white top and
    left highlight and a #aaa bottom shadow; on the right the raised arrow
@@ -114,6 +116,15 @@ button.ghost:disabled { color: #777; border-color: #888; background: var(--g300)
 ::-webkit-scrollbar-button:horizontal:start:increment { display: none; }
 ::-webkit-scrollbar-corner { background: var(--g300); }
 
+/* Setup details uses the shared in-app Platinum dialog (Hub / Blue Pencil). */
+#veil { position: fixed; inset: 0; background: rgba(0,0,0,.12); display: none;
+  align-items: center; justify-content: center; }
+#veil.on { display: flex; }
+#dlg { width: 330px; background: var(--g300); border: 1px solid var(--black); padding: 14px;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #999, 2px 2px 0 rgba(0,0,0,.25); }
+#dlg h2 { font-size: 12px; margin: 0 0 10px; }
+#dlg .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
+
 /* App layout. The shared component blocks above remain unchanged. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 [hidden] { display: none !important; }
@@ -124,7 +135,15 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .popup select:disabled { color: #777; }
 #bar-help { margin-left: auto; color: #555; font-size: 11px; }
 main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; border-top: 1px solid var(--black); background: #fff; }
-#setup { padding: 12px; max-width: 760px; width: 100%; margin: 0 auto; flex: none; }
+#veil { z-index: 1; padding: 12px; }
+#dlg { width: 520px; max-width: 100%; height: 500px; max-height: 100%; padding: 12px;
+  display: flex; flex-direction: column; }
+#dlg h2, #dlg .btns { flex: none; }
+#dlg .btns button { min-width: 58px; }
+#download-progress { flex: none; margin-bottom: 12px; }
+#download-progress progress { display: block; width: 100%; margin-top: 0; }
+#setup { min-height: 0; overflow: auto; flex: 1; }
+#setup:focus-visible { outline: 1px solid #9999fe; outline-offset: -1px; }
 h2 { font-size: 12px; margin: 0 0 12px; }
 #intro { margin: 0 0 12px; }
 #steps { list-style: none; padding: 0; margin: 0; }
@@ -178,7 +197,7 @@ a { color: var(--hl); }
 <header id="bar">
   <button class="ghost" id="start" hidden>Start Mac</button>
   <button class="ghost" id="cancel" hidden>Pause setup</button>
-  <button class="ghost" id="details" aria-pressed="false">Setup details</button>
+  <button class="ghost" id="details" aria-haspopup="dialog" aria-controls="dlg" aria-expanded="false">Setup details</button>
   <span class="popup" id="mac-keys-popup" hidden>
     <select id="mac-keys" aria-label="Send keys to Mac"><option value="">Mac keys…</option><option value="wake">Wake display</option><option value="q">⌘ Q — Quit</option><option value="w">⌘ W — Close</option><option value="o">⌘ O — Open</option><option value="l">⌘ L — Open Location</option></select>
     <span class="well" aria-hidden="true"><i><b></b></i></span>
@@ -188,7 +207,6 @@ a { color: var(--hl); }
 </header>
 <div id="error" role="alert" hidden></div>
 <main>
-<section id="setup" hidden><h2>Setting up your Mac</h2><p id="intro">Setup runs on this computer and continues if you close this window. Your Mac’s hard disk is kept for your next visit. <a href="https://archive.org/details/mac-os-9.2.2-universal-inst" target="_blank" rel="noreferrer">Installer source</a>.</p><ol id="steps"></ol><progress id="progress" hidden></progress><div id="transfer"></div></section>
 <details id="guide" open hidden><summary>Install Mac OS 9 — follow these steps in the Mac screen</summary><ol>
 <li>Wait for the installer desktop. Close the Read Me with <b>File → Quit</b>. In <b>Drive Setup</b> (or open it from the CD’s Applications folder), select the <b>&lt;not initialized&gt;</b> hard disk, click <b>Initialize…</b>, then <b>Initialize</b>. Quit Drive Setup when it finishes.</li>
 <li>Open the <b>MacOS9Lives</b> CD, then <b>Apple Software Restore</b>. Keep the supplied image and the new hard disk selected. Click <b>Restore</b>, then confirm <b>OK</b>.</li>
@@ -199,6 +217,19 @@ a { color: var(--hl); }
 <div id="empty" hidden><img src="icon.svg" alt=""><p id="empty-text">Your Mac is shut down. Its files are saved. Click Start Mac to return to the desktop.</p></div>
 </main>
 <footer id="status" role="status" aria-live="polite"><span id="lamp" aria-hidden="true"></span><span id="message">Checking your Mac…</span><span id="hardware">PowerPC G4 · 512 MB</span><span id="connection"></span></footer>
+
+<div id="veil">
+  <section id="dlg" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+    <h2 id="setup-title">Setup details</h2>
+    <div id="download-progress" hidden><progress id="progress" aria-label="Installer download"></progress><div id="transfer"></div></div>
+    <div id="setup" tabindex="0">
+      <p id="intro">Setup runs on this computer and continues if you close this dialog. Your Mac’s hard disk is kept for your next visit. <a href="https://archive.org/details/mac-os-9.2.2-universal-inst" target="_blank" rel="noreferrer">Installer source</a>.</p>
+      <p id="setup-loading">Checking setup progress…</p>
+      <ol id="steps"></ol>
+    </div>
+    <div class="btns"><button class="ghost default" id="setup-close">OK</button></div>
+  </section>
+</div>
 
 <script type="module" src="app.js"></script>
 </body></html>

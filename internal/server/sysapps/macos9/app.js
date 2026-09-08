@@ -1,7 +1,7 @@
 import RFB from './core/rfb.js';
 const $ = s => document.querySelector(s);
 const token = new URLSearchParams(location.search).get('token') || '';
-let status, rfb, pending = false, showDetails = null, connected = false, nextConnect = 0;
+let status, rfb, pending = false, connected = false, nextConnect = 0;
 let errorSource = '', apiOffline = false, connectTimer;
 async function api(path = '', method = 'GET') {
   const controller = new AbortController();
@@ -50,7 +50,7 @@ let lastWindowSize = '';
 function fitWindow(canvas) {
   if (parent === window || expandedDisplay || fullscreenElement()) return;
   // Keep the toolbar, setup guide and status bar at their normal UI size.
-  const chromeHeight = 1 + ['#bar', '#status', '#setup', '#guide', '#error'].reduce((sum, selector) => {
+  const chromeHeight = 1 + ['#bar', '#status', '#guide', '#error'].reduce((sum, selector) => {
     const el = $(selector), css = getComputedStyle(el);
     return sum + (el.hidden ? 0 : el.offsetHeight + parseFloat(css.marginTop || 0) + parseFloat(css.marginBottom || 0));
   }, 0);
@@ -125,6 +125,7 @@ function connect() {
   });
 }
 function render(s) {
+  const initialSetup = !status && !s.installed && !s.running && s.phase !== 'installing';
   status = s;
   if (!s.running && expandedDisplay) expandDisplay(false);
   $('#message').textContent = s.message;
@@ -134,11 +135,7 @@ function render(s) {
   $('#start').textContent = s.installed ? 'Start Mac' : s.phase === 'installing' ? 'Resume installer' : 'Continue setup';
   $('#start').disabled = pending;
   $('#cancel').hidden = !s.active; $('#cancel').disabled = pending;
-  const setupVisible = showDetails ?? (!s.installed && !s.running && s.phase !== 'installing');
-  $('#setup').hidden = !setupVisible;
-  $('#details').textContent = setupVisible ? 'Hide details' : 'Setup details';
-  $('#details').classList.toggle('on', setupVisible);
-  $('#details').setAttribute('aria-pressed', String(setupVisible));
+  $('#setup-loading').hidden = true;
   $('#steps').replaceChildren(...s.steps.map((step, i) => {
     const li = document.createElement('li'); li.className = step.state;
     const badge = document.createElement('span'); badge.className = 'badge';
@@ -148,7 +145,7 @@ function render(s) {
     text.append(title, detail); li.append(badge, text); return li;
   }));
   const downloading = s.active && s.total > 0 && s.steps[1].state === 'working';
-  $('#progress').hidden = !downloading; $('#progress').max = s.total || 1; $('#progress').value = s.bytes;
+  $('#download-progress').hidden = !downloading; $('#progress').max = s.total || 1; $('#progress').value = s.bytes;
   $('#transfer').textContent = downloading ? `${(s.bytes / 1048576).toFixed(1)} / ${(s.total / 1048576).toFixed(1)} MiB` : '';
   $('#guide').hidden = s.installed || (!s.running && s.phase !== 'installing');
   $('#finish').disabled = s.running || s.active || pending;
@@ -156,13 +153,17 @@ function render(s) {
   $('#bar-help').hidden = !s.running;
   $('#mac-keys-popup').hidden = !s.running; $('#full').hidden = !s.running;
   $('#mac-keys').disabled = !connected || shortcutBusy;
-  $('#empty').hidden = s.running || s.active || (!s.installed && s.phase !== 'installing');
-  $('#empty-text').textContent = s.phase === 'installing' ? 'The Mac has stopped. If Apple Software Restore finished successfully, use the button above to start from your hard disk.' : 'Your Mac is shut down. Its files are saved. Click Start Mac to return to the desktop.';
+  $('#empty').hidden = s.running;
+  $('#empty-text').textContent = s.active ? 'Your Mac is being set up. Open Setup details to follow its progress.' :
+    s.phase === 'installing' ? 'The Mac has stopped. If Apple Software Restore finished successfully, use the button above to start from your hard disk.' :
+    s.installed ? 'Your Mac is shut down. Its files are saved. Click Start Mac to return to the desktop.' :
+    'Open Setup details to review progress, or choose Continue setup to resume.';
   if (s.phase === 'error' || s.phase === 'interrupted') error(new Error(s.message), 'setup');
   else clearError('setup');
   if (s.running) connect();
   else if (rfb) { rfb.disconnect(); }
   else $('#connection').textContent = '';
+  if (initialSetup) setupDetails(true);
 }
 async function action(path) {
   if (pending) return;
@@ -178,7 +179,33 @@ $('#finish').onclick = async () => {
   try { await api('/finish', 'POST'); render(await api('/start', 'POST')); } catch (e) { error(e); }
   finally { pending = false; if (status) render(status); }
 };
-$('#details').onclick = () => { showDetails = $('#setup').hidden; if (status) render(status); };
+function setupDetails(open, restoreFocus = true) {
+  const veil = $('#veil');
+  if (veil.classList.contains('on') === open) return;
+  veil.classList.toggle('on', open);
+  $('#details').setAttribute('aria-expanded', String(open));
+  for (const el of [$('#bar'), $('main'), $('#error'), $('#status')]) el.inert = open;
+  if (open) {
+    rfb?.blur();
+    $('#setup-close').focus({preventScroll: true});
+  } else if (restoreFocus) $('#details').focus({preventScroll: true});
+}
+$('#details').onclick = () => setupDetails(true);
+$('#setup-close').onclick = () => setupDetails(false);
+document.addEventListener('keydown', e => {
+  if (!$('#veil').classList.contains('on')) return;
+  // Keep keyboard navigation inside the panel, including browsers without inert.
+  e.stopImmediatePropagation();
+  if (e.key === 'Escape' || (e.key === 'Enter' && !e.target.closest('a, button'))) {
+    e.preventDefault(); setupDetails(false);
+  } else if (e.key === 'Tab') {
+    const items = [...$('#dlg').querySelectorAll('a[href], button:not(:disabled), [tabindex="0"]')];
+    const first = items[0], last = items[items.length - 1];
+    if (!$('#dlg').contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+}, true);
 let shortcutBusy = false;
 $('#mac-keys').onchange = async e => {
   const key = e.target.value; e.target.value = '';
@@ -268,11 +295,12 @@ window.addEventListener('online', () => {
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || e.source !== parent || !e.data) return;
   if (e.data.exe === 'hide') {
+    setupDetails(false, false);
     expandDisplay(false);
     viewActive = false; clearTimeout(pollTimer); rfb?.disconnect();
   } else if (e.data.exe === 'show') {
     viewActive = true; nextConnect = 0; lastWindowSize = ''; clearTimeout(pollTimer); poll();
   }
 });
-window.addEventListener('pagehide', () => { expandDisplay(false); viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
+window.addEventListener('pagehide', () => { setupDetails(false, false); expandDisplay(false); viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
 poll();

@@ -118,6 +118,9 @@ an interactive Power Mac G4 running Mac OS 9.2.2. Its Monitors control panel
 offers only 640×480, 800×600, and 1024×768, with 800×600 as the default. The first launch shows each
 setup step: preparing QEMU, downloading the 497 MiB Universal installer,
 checking its checksum, creating a 2 GB persistent disk, and starting the Mac.
+**Setup details** opens these steps and live download progress in an in-app
+dialog over the Mac. Close it with **OK** or Escape; setup continues, and the
+guest display keeps its size and connection.
 Automatic emulator installation supports Ubuntu 24.04; other hosts need
 `qemu-system-ppc` and `qemu-img` installed first (on macOS, `brew install qemu`).
 
