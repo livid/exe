@@ -27,6 +27,12 @@ func TestMacOS9APIAuthAndOrigin(t *testing.T) {
 		{"GET", "/v1/macos9/console", "", "", 401},
 		{"POST", "/v1/macos9/start", "", "", 401},
 		{"GET", "/v1/macos9", "test-secret", "", 200},
+		{"GET", "/v1/macos9/cd", "", "", 401},
+		{"POST", "/v1/macos9/cd", "", "", 401},
+		{"POST", "/v1/macos9/cd/upload", "", "", 401},
+		{"GET", "/v1/macos9/cd", "test-secret", "", 200},
+		{"POST", "/v1/macos9/cd", "test-secret", "https://unrelated.example", 403},
+		{"POST", "/v1/macos9/cd/upload", "test-secret", "https://unrelated.example", 403},
 		{"POST", "/v1/macos9/start", "test-secret", "https://unrelated.example", 403},
 		{"POST", "/v1/macos9/cancel", "test-secret", "https://unrelated.example", 403},
 		{"POST", "/v1/macos9/finish", "test-secret", "", 409},
@@ -143,5 +149,31 @@ func TestMacOS9StartFailureRemainsInStatus(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMacOS9CDUploadAPI(t *testing.T) {
+	root := t.TempDir()
+	s := New(&config.Config{APIToken: "test-secret"}, nil, nil, "", root)
+	for i := 0; i < 2; i++ {
+		r := httptest.NewRequest("POST", "http://exe.test/v1/macos9/cd/upload?filename=Game.iso", strings.NewReader("test disc"))
+		r.Header.Set("Authorization", "Bearer test-secret")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		var result struct{ Filename string }
+		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Filename == "" {
+			t.Fatalf("upload: %d %s", w.Code, w.Body.String())
+		}
+	}
+	r := httptest.NewRequest("POST", "http://exe.test/v1/macos9/cd/upload?filename=..%2Fescape.iso", strings.NewReader("bad"))
+	r.Header.Set("Authorization", "Bearer test-secret")
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if w.Code != 400 {
+		t.Fatalf("accepted traversal: %d", w.Code)
+	}
+	files, _ := os.ReadDir(filepath.Join(root, "mac-os9", "media"))
+	if len(files) != 2 {
+		t.Fatalf("saved incorrect images: %v", files)
 	}
 }

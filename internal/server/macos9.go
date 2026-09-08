@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -85,4 +86,59 @@ func (s *Server) handleMacOS9Console(w http.ResponseWriter, r *http.Request) {
 	_ = tcp.Close()
 	_ = ws.CloseNow()
 	<-done
+}
+
+func (s *Server) handleMacOS9CD(w http.ResponseWriter, r *http.Request) {
+	cd, err := s.macOS9Manager().CD(r.Context())
+	macOS9CDResponse(w, cd, err)
+}
+func macOS9CDResponse(w http.ResponseWriter, cd macos9.CDStatus, err error) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": err.Error(), "locked": errors.Is(err, macos9.ErrCDLocked)})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(cd)
+}
+func (s *Server) handleMacOS9ChangeCD(w http.ResponseWriter, r *http.Request) {
+	if !macOS9SameOrigin(w, r) {
+		return
+	}
+	var body struct {
+		Filename string `json:"filename"`
+		Force    bool   `json:"force"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		http.Error(w, "Invalid CD request.", http.StatusBadRequest)
+		return
+	}
+	cd, err := s.macOS9Manager().ChangeCD(r.Context(), body.Filename, body.Force)
+	macOS9CDResponse(w, cd, err)
+}
+func (s *Server) handleMacOS9UploadCD(w http.ResponseWriter, r *http.Request) {
+	if !macOS9SameOrigin(w, r) {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, macos9.MaxCDSize)
+	// A raw request body streams directly to disk; the browser supplies the
+	// filename separately, never a host filesystem path.
+	image, err := s.macOS9Manager().ImportCD(r.URL.Query().Get("filename"), r.Body)
+	if err != nil {
+		var large *http.MaxBytesError
+		code := http.StatusBadRequest
+		if errors.As(err, &large) {
+			code = http.StatusRequestEntityTooLarge
+		}
+		http.Error(w, err.Error(), code)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(image)
 }

@@ -117,13 +117,13 @@ button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; bor
 ::-webkit-scrollbar-corner { background: var(--g300); }
 
 /* Setup details uses the shared in-app Platinum dialog (Hub / Blue Pencil). */
-#veil { position: fixed; inset: 0; background: rgba(0,0,0,.12); display: none;
+#veil, #cd-veil { position: fixed; inset: 0; background: rgba(0,0,0,.12); display: none;
   align-items: center; justify-content: center; }
-#veil.on { display: flex; }
-#dlg { width: 330px; background: var(--g300); border: 1px solid var(--black); padding: 14px;
+#veil.on, #cd-veil.on { display: flex; }
+#dlg, #cd-dlg { width: 330px; background: var(--g300); border: 1px solid var(--black); padding: 14px;
   box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #999, 2px 2px 0 rgba(0,0,0,.25); }
-#dlg h2 { font-size: 12px; margin: 0 0 10px; }
-#dlg .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
+#dlg h2, #cd-dlg h2 { font-size: 12px; margin: 0 0 10px; }
+#dlg .btns, #cd-dlg .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
 
 /* App layout. The shared component blocks above remain unchanged. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -132,12 +132,30 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #bar button { min-width: 96px; }
 #sound { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 #sound svg { width: 12px; height: 12px; flex: none; }
+#cd-group { display: flex; gap: 6px; align-items: center; min-width: 130px; flex: 1; }
+#bar #cd { min-width: 58px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+#cd svg { width: 12px; height: 12px; flex: none; }
+#cd-name { min-width: 0; flex: 1; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+#cd-dlg { width: 460px; max-width: 100%; max-height: 100%; padding: 12px; overflow: auto; line-height: 16px; }
+#cd-current { margin: 6px 0 16px; height: 58px; overflow: auto; padding: 4px 5px; background: #fff;
+  border: 1px solid var(--black); box-shadow: -1px -1px 0 var(--g600), 1px 1px 0 #fff; overflow-wrap: anywhere; user-select: text; }
+#cd-dlg .popup { margin-top: 6px; height: 20px; }
+#cd-dlg .btns { flex-wrap: wrap; }
+#cd-dlg .btns button { min-width: 58px; }
+#cd-upload { margin-right: auto; }
+#cd-note { margin: 16px 0 0; color: #555; }
+#cd-feedback { min-height: 96px; margin-top: 6px; }
+#cd-error { margin: 0; overflow-wrap: anywhere; }
+#cd-force { margin-top: 6px; }
+#cd-progress progress { margin: 0; }
+#cd-upload-status { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1100px) { #bar-help { display: none; } }
 #mac-keys-popup { width: 184px; height: 20px; }
 .popup:focus-within, button:focus-visible, a:focus-visible { outline: 2px solid #9999fe; outline-offset: 1px; }
 .popup select:disabled { color: #777; }
 #bar-help { margin-left: auto; color: #555; font-size: 11px; }
 main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; border-top: 1px solid var(--black); background: #fff; }
-#veil { z-index: 1; padding: 12px; }
+#veil, #cd-veil { z-index: 1; padding: 12px; }
 /* HIG control layout: 16px static text fields; keep the 12px button margins.
    Compact read-only rows fit the 800×600 guest window at 150% display scaling. */
 #dlg { width: 520px; max-width: 100%; height: 440px; max-height: 100%; padding: 12px;
@@ -192,7 +210,9 @@ progress::-moz-progress-bar { background: var(--hl); }
 a { color: var(--hl); }
 @media (max-width: 650px) {
   #bar-help, #hardware { display: none; }
-  #sound-label { display: none; }
+  #sound-label, #cd-label, #cd-name { display: none; }
+  #cd-group { min-width: 28px; flex: none; }
+  #bar #cd { min-width: 28px; padding: 0; }
   #bar #sound { min-width: 28px; padding: 0; }
   #bar { gap: 12px; }
   #screen { min-height: 220px; }
@@ -210,6 +230,7 @@ a { color: var(--hl); }
   </span>
   <button class="ghost" id="full" hidden>Full screen</button>
   <button class="ghost" id="sound" aria-label="Enable sound" aria-pressed="false" disabled hidden><svg viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 4h3V3h1V2h1V1h1v10H5v-1H4V9H3V8H0zM8 3h1v1h1v4H9v1H8V8h1V4H8zM10 1h1v1h1v8h-1v1h-1v-1h1V2h-1z"/></svg><span id="sound-label">Sound off</span></button>
+  <span id="cd-group" hidden><button class="ghost" id="cd" aria-label="CD images" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M4 0h4v1h2v1h1v2h1v4h-1v2h-1v1H8v1H4v-1H2v-1H1V8H0V4h1V2h1V1h2zM4 1v1H2v2H1v4h1v2h2v1h4v-1h2V8h1V4h-1V2H8V1zM5 4h2v1h1v2H7v1H5V7H4V5h1zM5 5v2h2V5z"/></svg><span id="cd-label">CD…</span></button><span id="cd-name">Checking CD…</span></span>
   <span id="bar-help">Click the Mac screen to type</span>
 </header>
 <div id="error" role="alert" hidden></div>
@@ -238,5 +259,18 @@ a { color: var(--hl); }
   </section>
 </div>
 
+<div id="cd-veil">
+  <section id="cd-dlg" role="dialog" aria-modal="true" aria-labelledby="cd-title">
+    <h2 id="cd-title">CD image</h2>
+    <div>Mounted CD</div><p id="cd-current">Checking the CD drive…</p>
+    <label for="cd-images">Available images</label>
+    <span class="popup"><select id="cd-images" disabled><option value="">Loading images…</option></select><span class="well" aria-hidden="true"><i><b></b></i></span></span>
+    <div class="btns"><button class="ghost" id="cd-upload">Upload image…</button><button class="ghost" id="cd-eject" disabled>Eject</button><button class="ghost" id="cd-mount" disabled>Mount</button></div>
+    <input type="file" id="cd-file" accept=".iso,.cdr,.img,.toast" hidden>
+    <p id="cd-note">Images stay on this computer for your next visit.</p>
+    <div id="cd-feedback" aria-live="polite"><div id="cd-progress" hidden><progress id="cd-upload-progress" max="1" value="0" aria-label="CD image upload"></progress><div id="cd-upload-status"></div></div><p id="cd-error"></p><button class="ghost" id="cd-force" hidden>Force eject</button></div>
+    <div class="btns"><button class="ghost default" id="cd-close">OK</button></div>
+  </section>
+</div>
 <script type="module" src="app.js"></script>
 </body></html>

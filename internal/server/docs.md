@@ -141,6 +141,17 @@ re-enter the window. A bundled open-source USB tablet driver loads at boot;
 no guest installation is needed. Mouse-wheel scrolling is not supported by
 that driver; use the Mac’s scrollbar controls.
 
+Click **CD…** in the toolbar to see the full mounted CD filename, mount an
+available disc image, or **Eject** it. The toolbar also shows the filename when
+space permits. **Upload image…** adds an ISO, CDR, IMG, or Toast raw disc image
+(up to 2 GiB) from your browser; select it and click **Mount**. Images stay on
+this node and existing files are kept when filenames match. Changes take effect
+without restarting the Mac. The displayed filename follows ejects inside Mac
+OS 9 too. If the Mac locks the disc, eject it in Finder first, or close programs
+using it before choosing **Force eject**. Force eject can leave the old volume
+visible in Finder; restart the Mac if that happens. After a Mac restart, mount the desired
+CD again. On a phone, tap the CD glyph to see its full filename and controls.
+
 If this node has the optional Mac audio runtime installed, click **Sound off**
 to enable sound in your browser; the button changes to **Sound on**. Click it
 again to mute. Browser playback needs this first click. Sound stops when the

@@ -51,6 +51,7 @@ type Status struct {
 type Manager struct {
 	root   string
 	mu     sync.Mutex
+	cdMu   sync.Mutex
 	state  Status
 	cancel context.CancelFunc
 }

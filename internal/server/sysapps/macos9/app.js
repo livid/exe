@@ -1,10 +1,12 @@
 import RFB from './core/rfb.js';
 import MacAudio from './audio.js';
+import initCD from './cd.js';
 const $ = s => document.querySelector(s);
 const token = new URLSearchParams(location.search).get('token') || '';
 let status, rfb, pending = false, connected = false, nextConnect = 0;
 let errorSource = '', apiOffline = false, connectTimer;
 const audio = new MacAudio();
+const cd = initCD({token, modal:(open, restore) => dialog(open, '#cd-veil', '#cd', '#cd-close', restore)});
 let soundWanted = false, soundError = '', soundAttempt = 0;
 function updateSound() {
   const available = connected && !!rfb?.capabilities.audio;
@@ -201,6 +203,8 @@ function render(s) {
   $('#mac-keys-popup').hidden = !s.running; $('#full').hidden = !s.running;
   $('#mac-keys').disabled = !connected || shortcutBusy;
   updateSound();
+  cd.update(s.running);
+  $('#cd-group').hidden = !s.running;
   $('#empty').hidden = s.running;
   $('#empty-text').textContent = s.active ? 'Your Mac is being set up. Open Setup details to follow its progress.' :
     s.phase === 'installing' ? 'The Mac has stopped. If Apple Software Restore finished successfully, use the button above to start from your hard disk.' :
@@ -227,29 +231,28 @@ $('#finish').onclick = async () => {
   try { await api('/finish', 'POST'); render(await api('/start', 'POST')); } catch (e) { error(e); }
   finally { pending = false; if (status) render(status); }
 };
-function setupDetails(open, restoreFocus = true) {
-  const veil = $('#veil');
+function dialog(open, veilID, triggerID, defaultID, restoreFocus = true) {
+  const veil = $(veilID);
   if (veil.classList.contains('on') === open) return;
   veil.classList.toggle('on', open);
-  $('#details').setAttribute('aria-expanded', String(open));
+  $(triggerID).setAttribute('aria-expanded', String(open));
   for (const el of [$('#bar'), $('main'), $('#error'), $('#status')]) el.inert = open;
-  if (open) {
-    rfb?.blur();
-    $('#setup-close').focus({preventScroll: true});
-  } else if (restoreFocus) $('#details').focus({preventScroll: true});
+  if (open) { rfb?.blur(); $(defaultID).focus({preventScroll: true}); }
+  else if (restoreFocus) $(triggerID).focus({preventScroll: true});
 }
+function setupDetails(open, restoreFocus = true) { dialog(open, '#veil', '#details', '#setup-close', restoreFocus); }
 $('#details').onclick = () => setupDetails(true);
 $('#setup-close').onclick = () => setupDetails(false);
 document.addEventListener('keydown', e => {
-  if (!$('#veil').classList.contains('on')) return;
-  // Keep keyboard navigation inside the panel, including browsers without inert.
+  const panel = $('#cd-veil').classList.contains('on') ? $('#cd-dlg') : $('#veil').classList.contains('on') ? $('#dlg') : null;
+  if (!panel) return;
   e.stopImmediatePropagation();
-  if (e.key === 'Escape' || (e.key === 'Enter' && !e.target.closest('a, button'))) {
-    e.preventDefault(); setupDetails(false);
+  if (e.key === 'Escape' || (e.key === 'Enter' && !e.target.closest('a, button, select, input'))) {
+    e.preventDefault(); panel.id === 'cd-dlg' ? cd.close(true) : setupDetails(false);
   } else if (e.key === 'Tab') {
-    const items = [...$('#dlg').querySelectorAll('a[href], button:not(:disabled), [tabindex="0"]')];
+    const items = [...panel.querySelectorAll('a[href], button:not(:disabled), select:not(:disabled), [tabindex="0"]')].filter(el => el.getClientRects().length);
     const first = items[0], last = items[items.length - 1];
-    if (!$('#dlg').contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    if (!panel.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
     else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
@@ -327,6 +330,7 @@ async function poll() {
     apiOffline = false; clearError('request');
     if (connected) { $('#connection').textContent = 'Connected'; $('#lamp').classList.add('on'); }
     render(s);
+    cd.refresh();
     if (initial && !s.running && (s.phase === 'new' || s.phase === 'stopped')) { initial = false; await action('/start'); }
     initial = false;
   } catch (e) { error(e, 'request'); }
@@ -344,7 +348,7 @@ window.addEventListener('message', e => {
   if (e.origin !== location.origin || e.source !== parent || !e.data) return;
   if (e.data.exe === 'hide') {
     stopSound();
-    setupDetails(false, false);
+    setupDetails(false, false); cd.close(false);
     expandDisplay(false);
     viewActive = false; clearTimeout(pollTimer); rfb?.disconnect();
   } else if (e.data.exe === 'show') {
@@ -355,5 +359,5 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopSound();
   else if (soundWanted) startSound();
 });
-window.addEventListener('pagehide', () => { stopSound(); setupDetails(false, false); expandDisplay(false); viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
+window.addEventListener('pagehide', () => { stopSound(); setupDetails(false, false); cd.close(false); expandDisplay(false); viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
 poll();
