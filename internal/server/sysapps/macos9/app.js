@@ -42,9 +42,13 @@ function error(e, source = 'action') {
 // Give noVNC an integer-sized viewport so its own scaling and input mapping
 // stay in sync. Below native size, let it shrink proportionally to fit.
 const screen = $('#screen'), display = $('#display');
+// iPad Safari before 16.4 exposes only the prefixed fullscreen API.
+const requestFullscreen = screen.requestFullscreen || screen.webkitRequestFullscreen;
+const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+let expandedDisplay = false;
 let lastWindowSize = '';
 function fitWindow(canvas) {
-  if (parent === window || document.fullscreenElement) return;
+  if (parent === window || expandedDisplay || fullscreenElement()) return;
   // Keep the toolbar, setup guide and status bar at their normal UI size.
   const chromeHeight = 1 + ['#bar', '#status', '#setup', '#guide', '#error'].reduce((sum, selector) => {
     const el = $(selector), css = getComputedStyle(el);
@@ -106,6 +110,7 @@ function connect() {
 }
 function render(s) {
   status = s;
+  if (!s.running && expandedDisplay) expandDisplay(false);
   $('#message').textContent = s.message;
   $('#message').title = s.message;
   $('#hardware').textContent = 'PowerPC G4 · 512 MB · ' + (s.installed ? 'Ethernet NAT' : 'Ethernet after installation');
@@ -173,8 +178,39 @@ $('#mac-keys').onchange = async e => {
   client.focus();
   shortcutBusy = false; e.target.disabled = !connected;
 };
-document.addEventListener('fullscreenchange', () => { lastWindowSize = ''; fitDisplay(); });
-$('#full').onclick = async () => { try { await $('#screen').requestFullscreen(); rfb?.focus(); } catch(e) {error(e);} };
+function fullscreenChanged() {
+  lastWindowSize = ''; fitDisplay();
+  if (fullscreenElement()) { clearError('fullscreen'); rfb?.focus(); }
+}
+// Home Screen web apps can have no fullscreen API. Expand the existing iframe
+// within exe instead, keeping a visible exit control and the same VNC session.
+function expandDisplay(active) {
+  if (expandedDisplay === active) return;
+  expandedDisplay = active;
+  document.body.classList.toggle('expanded-display', active);
+  $('#full').textContent = active ? 'Exit full screen' : 'Full screen';
+  $('#full').setAttribute('aria-pressed', String(active));
+  parent.postMessage({exe: 'display-fullscreen', active}, location.origin);
+  clearError('fullscreen'); lastWindowSize = ''; fitDisplay();
+  if (active) rfb?.focus();
+  else $('#full').focus();
+}
+function fullscreenError() {
+  if (viewActive && status?.running) expandDisplay(true);
+}
+for (const event of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(event, fullscreenChanged);
+for (const event of ['fullscreenerror', 'webkitfullscreenerror']) document.addEventListener(event, fullscreenError);
+$('#full').onclick = async () => {
+  if (expandedDisplay) { expandDisplay(false); return; }
+  if (typeof requestFullscreen !== 'function') { expandDisplay(true); return; }
+  clearError('fullscreen');
+  // Invoke during the click: both APIs require user activation. Older Safari
+  // returns void and reports completion or refusal through prefixed events.
+  try { await requestFullscreen.call(screen); } catch (e) { fullscreenError(); }
+};
+document.addEventListener('keydown', e => {
+  if (expandedDisplay && e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); expandDisplay(false); }
+}, true);
 document.addEventListener('pointerdown', () => parent.postMessage({exe:'focus'}, location.origin));
 // OS 9 scrollbar end-merges need the same scrolled/at-end flags as the desktop
 document.addEventListener("scroll", e => {
@@ -209,10 +245,11 @@ window.addEventListener('online', () => {
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || e.source !== parent || !e.data) return;
   if (e.data.exe === 'hide') {
+    expandDisplay(false);
     viewActive = false; clearTimeout(pollTimer); rfb?.disconnect();
   } else if (e.data.exe === 'show') {
     viewActive = true; nextConnect = 0; lastWindowSize = ''; clearTimeout(pollTimer); poll();
   }
 });
-window.addEventListener('pagehide', () => { viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
+window.addEventListener('pagehide', () => { expandDisplay(false); viewActive = false; clearTimeout(pollTimer); rfb?.disconnect(); });
 poll();

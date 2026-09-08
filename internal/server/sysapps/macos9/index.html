@@ -148,7 +148,13 @@ progress::-moz-progress-bar { background: var(--hl); }
 #guide p { font-size: 11px; margin: 12px 0 0; }
 #finish-row { display: flex; justify-content: flex-end; gap: 12px; margin: 12px 0; }
 #screen { background: #333; flex: 1; min-height: 280px; overflow: hidden; position: relative; }
-#screen:fullscreen { height: 100vh; }
+#screen:fullscreen { width: 100vw; height: 100vh; }
+/* Keep separate: older Safari rejects a selector list containing :fullscreen. */
+#screen:-webkit-full-screen { width: 100vw; height: 100vh; }
+.expanded-display #bar { justify-content: flex-end; }
+.expanded-display #bar > :not(#full),
+.expanded-display #setup, .expanded-display #guide,
+.expanded-display #error, .expanded-display #status { display: none; }
 #display { position: absolute; inset: 0 auto auto 0; width: 100%; height: 100%; }
 #screen canvas { outline: none; }
 #screen.integer-scale canvas { image-rendering: pixelated; }

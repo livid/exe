@@ -288,6 +288,21 @@ body.mobile #cstrip { z-index: 5; }
 /* desktop app windows (~/.exe/apps) host their UI in an iframe set into the
    sunken frame; the app page brings its own Platinum styling */
 .app-frame { display: block; border: 0; width: 100%; height: 400px; background: var(--g200); }
+/* Full screen inside a Home Screen web app: preserve inline window geometry
+   so leaving this view returns to the same desktop window. */
+#desktop.mac-fullscreen { z-index: 6000; }
+#desktop #win-app-macos9.display-fullscreen {
+  position: fixed; inset: 0 !important; width: auto !important; height: auto !important;
+  min-width: 0; margin: 0; padding: var(--sat) var(--sar) var(--sab) var(--sal) !important;
+  border: 0; box-shadow: none; background: #333; z-index: 6000 !important;
+  display: flex; flex-direction: column;
+}
+#desktop #win-app-macos9.display-fullscreen::before { display: none; }
+#desktop #win-app-macos9.display-fullscreen > .titlebar { display: none; }
+#desktop #win-app-macos9.display-fullscreen > .win-frame {
+  display: flex; flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none;
+}
+#desktop #win-app-macos9.display-fullscreen .app-frame { flex: 1; min-height: 0; height: 100% !important; }
 /* ---- OS 9 grow box corner, a small framework any window can reuse ----
    Add class "grow" to a .window and put a 15×15 grow tile at the frame's
    bottom-right: desktop windows drop in a class="grow-box" SVG (see the
@@ -3218,7 +3233,8 @@ function openAppWin(name) {
 // instead of giving it a second, independent resize control.
 function fitMacOS9Window(w) {
   const size = w._macDisplay, fr = w.querySelector(".app-frame");
-  if (!size || !fr || IS_MOBILE || w.hidden || w.classList.contains("shaded") || fr.contentDocument?.fullscreenElement) return;
+  if (!size || !fr || IS_MOBILE || w.hidden || w.classList.contains("shaded") || w.classList.contains("display-fullscreen") ||
+      fr.contentDocument?.fullscreenElement || fr.contentDocument?.webkitFullscreenElement) return;
   const desktop = $("#desktop");
   const borderW = w.offsetWidth - fr.offsetWidth, borderH = w.offsetHeight - fr.offsetHeight;
   const availableW = Math.max(1, desktop.clientWidth - 8 - borderW);
@@ -3256,6 +3272,11 @@ window.addEventListener("message", e => {
     // apps have no window chrome of their own, so a clicked picture (a hub
     // embed, say) opens in a desktop PictureViewer window via the bridge
     openImageWin(e.data.url, w, typeof e.data.name === "string" ? e.data.name : "");
+  } else if (e.data.exe === "display-fullscreen" && w.id === "win-app-macos9" && typeof e.data.active === "boolean") {
+    const active = e.data.active && !w.hidden;
+    w.classList.toggle("display-fullscreen", active);
+    $("#desktop").classList.toggle("mac-fullscreen", active);
+    if (!e.data.active) fitMacOS9Window(w);
   } else if (e.data.exe === "display-size" && w.id === "win-app-macos9") {
     const {width, height, chromeHeight} = e.data;
     if (![[640, 480], [800, 600], [1024, 768]].some(([x, y]) => x === width && y === height) ||

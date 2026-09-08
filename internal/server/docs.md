@@ -143,7 +143,11 @@ largest whole-number scale that fits the browser (1×, 2×, 3×, and so on).
 There is no separate grow tile. Smaller viewports shrink the display
 proportionally to keep the whole Mac visible. Full screen also uses integer scaling.
 
-Use **Full screen** for more room and **Mac keys…** for common Command-key
+Use **Full screen** for more room. When browser fullscreen is unavailable,
+including in iPad Home Screen apps, the Mac expands within exe; tap
+**Exit full screen** to return. Browser fullscreen also supports older iPad
+Safari; use the browser’s exit control or Escape to return.
+Use **Mac keys…** for common Command-key
 shortcuts. Shut down from **Special → Shut Down inside the Mac** to save its
 files cleanly. The installed guest has a `sungem` Ethernet adapter with outbound NAT and
 DHCP; networking is disabled while booting the installer. Classic HTTP browsers work; modern HTTPS compatibility depends on the
