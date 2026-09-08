@@ -138,6 +138,13 @@ re-enter the window. A bundled open-source USB tablet driver loads at boot;
 no guest installation is needed. Mouse-wheel scrolling is not supported by
 that driver; use the Mac’s scrollbar controls.
 
+If the connected display turns black after being idle, choose **Mac keys… →
+Wake display**, or press Shift with the Mac focused. This wakes Energy Saver
+without typing or restarting the guest; mouse movement alone may not wake it.
+To keep the Mac awake, open **Apple menu → Control Panels → Energy Saver**
+inside the guest and set system sleep to **Never**. Under **Show Details**,
+also disable a separate display-sleep timer if one is enabled.
+
 The app window fits the selected guest resolution automatically. Each guest
 pixel occupies a whole number of physical screen pixels (1×, 2×, 3×, and so on),
 including at Windows’ 125% or 150% display scaling. The largest crisp size that

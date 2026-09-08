@@ -184,13 +184,16 @@ $('#mac-keys').onchange = async e => {
   const key = e.target.value; e.target.value = '';
   const client = rfb; if (!connected || !key || shortcutBusy) return;
   shortcutBusy = true; e.target.disabled = true;
-  client.sendKey(0xffeb, 'MetaLeft', true);
+  // A Shift tap wakes Energy Saver without typing or running a command.
+  // USB tablet movement alone does not wake this guest.
+  const keys = key === 'wake' ? [[0xffe1, 'ShiftLeft']] :
+    [[0xffeb, 'MetaLeft'], [key.charCodeAt(0), 'Key' + key.toUpperCase()]];
   // Classic Mac OS polls keyboard state; keep each key down long enough.
-  await new Promise(resolve => setTimeout(resolve, 300));
-  client.sendKey(key.charCodeAt(0), 'Key' + key.toUpperCase(), true);
-  await new Promise(resolve => setTimeout(resolve, 300));
-  client.sendKey(key.charCodeAt(0), 'Key' + key.toUpperCase(), false);
-  client.sendKey(0xffeb, 'MetaLeft', false);
+  for (const [symbol, code] of keys) {
+    client.sendKey(symbol, code, true);
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  for (const [symbol, code] of [...keys].reverse()) client.sendKey(symbol, code, false);
   client.focus();
   shortcutBusy = false; e.target.disabled = !connected;
 };
