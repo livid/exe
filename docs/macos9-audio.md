@@ -85,31 +85,52 @@ exe selects the sound executable only when **both** `audio/qemu-system-ppc` and
 
 ## 2. Fast route: reuse the prepared ARM64 archive
 
-The following artifact is saved on Spark, outside Git:
+The prepared runtime is pinned in Kubo/IPFS. Download
+[macos9-audio-ubuntu24.04-aarch64-qemu9.1.0.tar.gz](https://ipfs.io/ipfs/bafybeich3pv53zqr5r4e5kw3ianduwfoywkyh3oiv42y23ijvodne4yqsi)
+through the public IPFS gateway, use the
+[hub download](http://100.116.32.57:7788/v1/embed/bafybeich3pv53zqr5r4e5kw3ianduwfoywkyh3oiv42y23ijvodne4yqsi),
+or retrieve it by CID with an IPFS client:
 
 ```text
-/www/exe/output/mac-os9/releases/macos9-audio-ubuntu24.04-aarch64-qemu9.1.0.tar.gz
-/www/exe/output/mac-os9/releases/macos9-audio-ubuntu24.04-aarch64-qemu9.1.0.tar.gz.sha256
+bafybeich3pv53zqr5r4e5kw3ianduwfoywkyh3oiv42y23ijvodne4yqsi
 ```
 
-The archive is 4,995,810 bytes (about 4.8 MiB). Its SHA-256 is:
+Both download URLs were verified against the original archive on **2026-09-08**.
+Only the hub URL requires access to Spark's Tailscale network. The CID identifies
+the same archive independently of either URL. The archive is **4,995,810 bytes**
+(about 4.8 MiB). Its SHA-256 is:
 
 ```text
 35e5e778fb59117593a304e119c1dcedb43a1059875cdebdcb37b2317f44154d
 ```
 
-Transfer both files using your existing SSH/file-transfer connection. They
-contain the sound runtime, its checksums, dependency license notices and build
-metadata. They contain no Mac OS installer, VM disk, credentials or saved games.
+It contains the sound runtime, its checksums, dependency license notices and
+build metadata. It contains no Mac OS installer, VM disk, credentials or saved
+games. The original local copy remains under `output/mac-os9/releases/`, outside
+Git; installation on another machine does not require access to that directory.
 
-On the destination, verify and extract into a staging directory:
+On the destination, after setting the variables in section 1, download it:
 
 ```bash
-# Run in the directory containing the transferred archive and checksum file.
-sha256sum -c macos9-audio-ubuntu24.04-aarch64-qemu9.1.0.tar.gz.sha256
+export MAC9_CID=bafybeich3pv53zqr5r4e5kw3ianduwfoywkyh3oiv42y23ijvodne4yqsi
+export MAC9_ARCHIVE=macos9-audio-ubuntu24.04-aarch64-qemu9.1.0.tar.gz
+curl --fail --location --show-error \
+  "https://ipfs.io/ipfs/$MAC9_CID" \
+  --output "$MAC9_WORK/$MAC9_ARCHIVE"
+```
+
+If the public gateway is unavailable and you can reach the hub, change the URL
+to `http://100.116.32.57:7788/v1/embed/$MAC9_CID`.
+Alternatively, with a running Kubo node, replace the `curl` command with
+`ipfs cat "$MAC9_CID" > "$MAC9_WORK/$MAC9_ARCHIVE"`. Then verify the archive
+against the checksum recorded here **before extracting**, and check its contents:
+
+```bash
+(cd "$MAC9_WORK" && printf '%s  %s\n' \
+  35e5e778fb59117593a304e119c1dcedb43a1059875cdebdcb37b2317f44154d \
+  "$MAC9_ARCHIVE" | sha256sum -c -)
 mkdir -p "$MAC9_WORK/reuse"
-tar -xzf macos9-audio-ubuntu24.04-aarch64-qemu9.1.0.tar.gz \
-  -C "$MAC9_WORK/reuse"
+tar -xzf "$MAC9_WORK/$MAC9_ARCHIVE" -C "$MAC9_WORK/reuse"
 export MAC9_CANDIDATE="$MAC9_WORK/reuse/audio"
 (cd "$MAC9_CANDIDATE" && sha256sum -c SHA256SUMS)
 file "$MAC9_CANDIDATE/qemu-system-ppc"
@@ -490,7 +511,33 @@ tar -czf "$MAC9_WORK/$MAC9_ARCHIVE" -C "$MAC9_BUNDLE" audio
 Cache the **runtime archive** for each host OS/architecture you verify. Save its
 SHA-256, the exact source revision, compiler/dependency versions and successful
 playback result. Keep corresponding source and license files available alongside
-shared binaries. The source and build trees on Spark are:
+shared binaries.
+
+For publicly shareable artifacts **under 20 MB**, pin the archive in Kubo and
+record its CID, a working download URL, size, host OS/architecture and SHA-256 in
+this guide. Verify both the recursive pin and the checksum of a fresh download.
+Keep binaries outside Git. With a local Kubo CLI, publishing a new archive is:
+
+```bash
+MAC9_PUBLISHED_CID="$(ipfs add --cid-version=1 --pin=true -Q "$MAC9_WORK/$MAC9_ARCHIVE")"
+ipfs pin ls --type=recursive "$MAC9_PUBLISHED_CID"
+ipfs cat "$MAC9_PUBLISHED_CID" | sha256sum
+```
+
+See the [Kubo CLI reference](https://docs.ipfs.tech/reference/kubo/cli/) and
+[pinning guide](https://docs.ipfs.tech/how-to/pin-files/). A pin retains content
+on that node; keep a provider online, or pin another copy on a second node, for
+future downloads.
+
+This prepared archive was uploaded through the hub's signed `/v1/upload` API,
+which adds and recursively pins it in the hub's Kubo store. Its CID is attached
+to [this hub reply](http://100.116.32.57:7788/p/d60af99950b27eb3dfedb335964943e89196942cc10b031fbd118c5dd9d76276)
+so it is retained beyond the hub's 24-hour unreferenced-upload cleanup.
+Hub uploads currently have an **8 MiB** limit; larger artifacts under
+20 MB need the direct Kubo route above and a reachable IPFS gateway. A direct
+Kubo upload alone does not register a hub `/v1/embed/` download URL.
+
+The source and build trees on Spark are:
 
 ```text
 output/mac-os9/qemu-screamer-src

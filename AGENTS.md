@@ -14,6 +14,9 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 - Commit on `main`. No branches, no PRs. First line `Area: what changed`
   (Desktop:, Daemon:, Hub:, Docs:), body says why. Never commit `output/`
   or other scratch.
+- For publicly shareable build artifacts under 20 MB, pin them in Kubo and
+  record the CID, a working download URL and SHA-256 in the relevant doc.
+  Verify the pin and a fresh download; keep the binaries out of Git.
 - Build: `export PATH=$PATH:/usr/local/go/bin && make build` (Go is not on
   the tool shell's PATH). Restart: `XDG_RUNTIME_DIR=/run/user/1000
   systemctl --user restart exe` — no sudo; VMs return through
