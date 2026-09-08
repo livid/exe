@@ -32,6 +32,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   pseudo-element). Borders paint as exactly one device pixel at any scale;
   background gradients and sprite rows come out 1 or 2 pixels tall by
   turns, and small triangles grow tails at the apex.
+- Guest framebuffers are bitmap art: choose whole **device-pixel** scales,
+  dividing by devicePixelRatio for their CSS size. A whole CSS scale becomes
+  uneven pixels at Windows' 150% setting. Keep the viewer's input scale in
+  sync, refit on density changes, and compare rendered pixels with the raw
+  framebuffer, not just the window chrome. Shrink only if 1× cannot fit.
 - Where two bevels of different colours meet at a corner, the browser
   splits the corner pixel; when the original leaves that pixel as face
   colour, give each L its own box (the Control Strip's wells and tiles).

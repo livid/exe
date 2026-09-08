@@ -39,8 +39,8 @@ function error(e, source = 'action') {
   if (e.retryable) { reconnecting(); return; }
   errorSource = source; $('#error').textContent = e.message; $('#error').hidden = false;
 }
-// Give noVNC an integer-sized viewport so its own scaling and input mapping
-// stay in sync. Below native size, let it shrink proportionally to fit.
+// Whole device pixels keep the guest's bitmap text even at fractional OS
+// scaling. Give noVNC the matching CSS viewport so input uses the same scale.
 const screen = $('#screen'), display = $('#display');
 // iPad Safari before 16.4 exposes only the prefixed fullscreen API.
 const requestFullscreen = screen.requestFullscreen || screen.webkitRequestFullscreen;
@@ -54,7 +54,7 @@ function fitWindow(canvas) {
     const el = $(selector), css = getComputedStyle(el);
     return sum + (el.hidden ? 0 : el.offsetHeight + parseFloat(css.marginTop || 0) + parseFloat(css.marginBottom || 0));
   }, 0);
-  const key = [canvas.width, canvas.height, chromeHeight, screen.clientWidth, screen.clientHeight].join(':');
+  const key = [canvas.width, canvas.height, chromeHeight, screen.clientWidth, screen.clientHeight, devicePixelRatio].join(':');
   if (key === lastWindowSize) return;
   lastWindowSize = key;
   parent.postMessage({exe: 'display-size', width: canvas.width, height: canvas.height, chromeHeight}, location.origin);
@@ -62,19 +62,35 @@ function fitWindow(canvas) {
 function fitDisplay() {
   const canvas = display.querySelector('canvas');
   if (!canvas?.width || !canvas.height) return;
-  const width = screen.clientWidth, height = screen.clientHeight;
+  const bounds = screen.getBoundingClientRect();
+  const {width, height} = bounds;
   if (!width || !height) return;
+  const density = window.devicePixelRatio || 1;
   const fit = Math.min(width / canvas.width, height / canvas.height);
-  const scale = Math.floor(fit);
-  const w = scale >= 1 ? canvas.width * scale : width;
-  const h = scale >= 1 ? canvas.height * scale : height;
+  const pixels = Math.floor(fit * density + 1e-6);
+  const scale = pixels >= 1 ? pixels / density : fit;
+  const w = canvas.width * scale, h = canvas.height * scale;
+  // Include the iframe's position when centering on the physical pixel grid.
+  const frame = window.frameElement?.getBoundingClientRect();
+  const x = bounds.left + (frame?.left || 0), y = bounds.top + (frame?.top || 0);
   display.style.width = w + 'px';
   display.style.height = h + 'px';
-  display.style.left = Math.floor((width - w) / 2) + 'px';
-  display.style.top = Math.floor((height - h) / 2) + 'px';
-  screen.classList.toggle('integer-scale', scale >= 1);
+  display.style.left = (Math.round((x + (width - w) / 2) * density) / density - x) + 'px';
+  display.style.top = (Math.round((y + (height - h) / 2) * density) / density - y) + 'px';
+  screen.classList.toggle('integer-scale', pixels >= 1);
   fitWindow(canvas);
 }
+// A move between monitors or browser zoom can change density without changing
+// this iframe's CSS dimensions. Rearm the query for each new density.
+let densityQuery, displayDensity;
+function densityChanged() {
+  densityQuery?.removeEventListener('change', densityChanged);
+  displayDensity = window.devicePixelRatio || 1;
+  densityQuery = matchMedia(`(resolution: ${displayDensity}dppx)`);
+  densityQuery.addEventListener('change', densityChanged);
+  lastWindowSize = ''; fitDisplay();
+}
+densityChanged();
 const displayResize = new ResizeObserver(fitDisplay);
 displayResize.observe(screen);
 // Refit on connection and when the guest changes its framebuffer resolution.
@@ -211,7 +227,8 @@ $('#full').onclick = async () => {
 document.addEventListener('keydown', e => {
   if (expandedDisplay && e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); expandDisplay(false); }
 }, true);
-document.addEventListener('pointerdown', () => parent.postMessage({exe:'focus'}, location.origin));
+// Raise the app before noVNC consumes the pointer event on its canvas.
+document.addEventListener('pointerdown', () => parent.postMessage({exe:'focus'}, location.origin), true);
 // OS 9 scrollbar end-merges need the same scrolled/at-end flags as the desktop
 document.addEventListener("scroll", e => {
   const el = e.target;
@@ -223,6 +240,9 @@ document.addEventListener("scroll", e => {
 let initial = true, viewActive = true, polling = false, pollTimer;
 async function poll() {
   if (!viewActive || polling) return;
+  // Some embedded browsers change density without a media-query event.
+  // Reuse the status heartbeat as a fallback; no extra polling timer.
+  if (displayDensity !== (window.devicePixelRatio || 1)) densityChanged();
   polling = true;
   try {
     const s = await api();

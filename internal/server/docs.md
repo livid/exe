@@ -138,10 +138,13 @@ re-enter the window. A bundled open-source USB tablet driver loads at boot;
 no guest installation is needed. Mouse-wheel scrolling is not supported by
 that driver; use the Mac’s scrollbar controls.
 
-The app window fits the selected guest resolution automatically, using the
-largest whole-number scale that fits the browser (1×, 2×, 3×, and so on).
-There is no separate grow tile. Smaller viewports shrink the display
-proportionally to keep the whole Mac visible. Full screen also uses integer scaling.
+The app window fits the selected guest resolution automatically. Each guest
+pixel occupies a whole number of physical screen pixels (1×, 2×, 3×, and so on),
+including at Windows’ 125% or 150% display scaling. The largest crisp size that
+fits is used; this can be smaller than a fractionally enlarged display.
+There is no separate grow tile. If even 1× will not fit, the display shrinks
+proportionally to keep the whole Mac visible. Full screen uses the same scaling
+and adjusts when you move between monitors or change browser zoom.
 
 Use **Full screen** for more room. When browser fullscreen is unavailable,
 including in iPad Home Screen apps, the Mac expands within exe; tap

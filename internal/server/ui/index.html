@@ -3229,8 +3229,8 @@ function openAppWin(name) {
   }
   openWin(w);
 }
-// The emulated Mac chooses a guest resolution; fit its window to whole pixels
-// instead of giving it a second, independent resize control.
+// The emulated Mac chooses a guest resolution; fit its window to whole device
+// pixels, including fractional OS scaling, without a separate resize control.
 function fitMacOS9Window(w) {
   const size = w._macDisplay, fr = w.querySelector(".app-frame");
   if (!size || !fr || IS_MOBILE || w.hidden || w.classList.contains("shaded") || w.classList.contains("display-fullscreen") ||
@@ -3239,10 +3239,14 @@ function fitMacOS9Window(w) {
   const borderW = w.offsetWidth - fr.offsetWidth, borderH = w.offsetHeight - fr.offsetHeight;
   const availableW = Math.max(1, desktop.clientWidth - 8 - borderW);
   const availableH = Math.max(1, desktop.clientHeight - 8 - borderH - size.chromeHeight);
+  const density = window.devicePixelRatio || 1;
   const fit = Math.min(availableW / size.width, availableH / size.height);
-  const scale = fit >= 1 ? Math.floor(fit) : fit;
-  w.style.width = Math.floor(size.width * scale) + borderW + "px";
-  fr.style.height = Math.floor(size.height * scale) + size.chromeHeight + "px";
+  const pixels = Math.floor(fit * density + 1e-6);
+  const scale = pixels >= 1 ? pixels / density : fit;
+  // Round the containing window up so its integer client size never shaves a
+  // fraction off the exact guest viewport and costs a whole device-pixel step.
+  w.style.width = Math.ceil(size.width * scale) + borderW + "px";
+  fr.style.height = Math.ceil(size.height * scale) + size.chromeHeight + "px";
   w.style.left = Math.max(4, Math.min(w.offsetLeft, desktop.clientWidth - w.offsetWidth - 4)) + "px";
   w.style.top = Math.max(4, Math.min(w.offsetTop, desktop.clientHeight - w.offsetHeight - 4)) + "px";
   w._zoom = null;

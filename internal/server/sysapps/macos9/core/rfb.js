@@ -186,6 +186,11 @@ export default class RFB extends EventTargetMixin {
         };
 
         // Mouse state
+        // PointerEvent retains fractional CSS coordinates; MouseEvent rounds
+        // them and skips guest pixels when a high-DPI display uses CSS scale < 1.
+        this._mouseEvents = window.PointerEvent ?
+            ['pointerdown', 'pointerup', 'pointermove', 'pointercancel', 'lostpointercapture'] :
+            ['mousedown', 'mouseup', 'mousemove'];
         this._mousePos = {};
         this._mouseButtonMask = 0;
         this._mouseLastMoveTime = 0;
@@ -585,13 +590,13 @@ export default class RFB extends EventTargetMixin {
         this._resizeObserver.observe(this._screen);
 
         // Always grab focus on some kind of click event
-        this._canvas.addEventListener("mousedown", this._eventHandlers.focusCanvas);
+        this._canvas.addEventListener(this._mouseEvents[0], this._eventHandlers.focusCanvas);
         this._canvas.addEventListener("touchstart", this._eventHandlers.focusCanvas);
 
         // Mouse events
-        this._canvas.addEventListener('mousedown', this._eventHandlers.handleMouse);
-        this._canvas.addEventListener('mouseup', this._eventHandlers.handleMouse);
-        this._canvas.addEventListener('mousemove', this._eventHandlers.handleMouse);
+        for (const type of this._mouseEvents) {
+            this._canvas.addEventListener(type, this._eventHandlers.handleMouse);
+        }
         // Prevent middle-click pasting (see handler for why we bind to document)
         this._canvas.addEventListener('click', this._eventHandlers.handleMouse);
         // preventDefault() on mousedown doesn't stop this event for some
@@ -616,12 +621,12 @@ export default class RFB extends EventTargetMixin {
         this._canvas.removeEventListener("gesturemove", this._eventHandlers.handleGesture);
         this._canvas.removeEventListener("gestureend", this._eventHandlers.handleGesture);
         this._canvas.removeEventListener("wheel", this._eventHandlers.handleWheel);
-        this._canvas.removeEventListener('mousedown', this._eventHandlers.handleMouse);
-        this._canvas.removeEventListener('mouseup', this._eventHandlers.handleMouse);
-        this._canvas.removeEventListener('mousemove', this._eventHandlers.handleMouse);
+        for (const type of this._mouseEvents) {
+            this._canvas.removeEventListener(type, this._eventHandlers.handleMouse);
+        }
         this._canvas.removeEventListener('click', this._eventHandlers.handleMouse);
         this._canvas.removeEventListener('contextmenu', this._eventHandlers.handleMouse);
-        this._canvas.removeEventListener("mousedown", this._eventHandlers.focusCanvas);
+        this._canvas.removeEventListener(this._mouseEvents[0], this._eventHandlers.focusCanvas);
         this._canvas.removeEventListener("touchstart", this._eventHandlers.focusCanvas);
         this._resizeObserver.disconnect();
         this._keyboard.ungrab();
@@ -1090,6 +1095,18 @@ export default class RFB extends EventTargetMixin {
          * mouse events might be used to control the viewport
          */
 
+        // Touch continues through the existing gesture handler.
+        if (ev.pointerType && ev.pointerType !== 'mouse') {
+            return;
+        }
+        if (ev.type === 'pointercancel' || ev.type === 'lostpointercapture') {
+            this._viewportDragging = false;
+            if (this._mouseButtonMask) {
+                this._handleMouseButton(this._mousePos.x, this._mousePos.y, 0);
+            }
+            return;
+        }
+
         if (ev.type === 'click') {
             /*
              * Note: This is only needed for the 'click' event as it fails
@@ -1114,9 +1131,18 @@ export default class RFB extends EventTargetMixin {
                                   this._canvas);
 
         let bmask = RFB._convertButtonMask(ev.buttons);
+        this._mousePos = pos;
 
-        let down = ev.type == 'mousedown';
-        switch (ev.type) {
+        let type = ev.type.replace('pointer', 'mouse');
+        // Chorded mouse buttons generate pointermove, not another pointerdown.
+        if (type === 'mousemove' && ev.pointerType && bmask !== this._mouseButtonMask) {
+            type = bmask ? 'mousedown' : 'mouseup';
+        }
+        let down = type === 'mousedown';
+        if (ev.type === 'pointerdown') {
+            this._canvas.setPointerCapture(ev.pointerId);
+        }
+        switch (type) {
             case 'mousedown':
             case 'mouseup':
                 if (this.dragViewport) {
@@ -1147,7 +1173,7 @@ export default class RFB extends EventTargetMixin {
                         this._sendMouse(pos.x, pos.y,  this._mouseButtonMask);
                     }
                 }
-                if (down) {
+                if (down && !ev.pointerType) {
                     setCapture(this._canvas);
                 }
                 this._handleMouseButton(pos.x, pos.y, bmask);
