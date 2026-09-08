@@ -103,11 +103,14 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-text code { font: 11px/1 var(--mono); background: #e4e4e4; border: 1px solid #ccc;
   border-radius: 2px; padding: 0 3px; }
 /* a heading line (#, ##, ###) in a post: bold Charcoal a step or two up,
-   no margins of its own — the author's blank lines space the text */
-.p-text h1, .p-text h2, .p-text h3 { margin: 0; font-weight: bold; line-height: 1.25; }
-.p-text h1 { font-size: 16px; }
-.p-text h2 { font-size: 14px; }
-.p-text h3 { font-size: 12px; }
+   spaced by margins of its own — formatText absorbs a blank line beside
+   it — with air above and a little below; .first opens the post, so no
+   room above it. The hub's public pages carry the same numbers. */
+.p-text h1, .p-text h2, .p-text h3 { font-weight: bold; line-height: 1.25; }
+.p-text h1 { font-size: 16px; margin: 16px 0 6px; }
+.p-text h2 { font-size: 14px; margin: 14px 0 3px; }
+.p-text h3 { font-size: 12px; margin: 12px 0 2px; }
+.p-text .first { margin-top: 0; }
 /* flex-start, not the default stretch: a stretched flex line would pull every
    picture in it to the tallest sibling's height and distort its shape */
 .p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
@@ -380,8 +383,11 @@ function viewImage(em) {
 // is one to three #, a space and words is a heading (Markdown's ATX form,
 // three levels — the one piece of Markdown a post takes, nothing else of
 // it), set as an h1–h3 block whose words still take code spans and
-// links; the line break that ends it goes with it, the block breaks the
-// line itself, and the author's blank lines stay blank lines. `inline
+// links; the block breaks the line itself, so the line break before it
+// and the one that ends it go with it, and so does one blank line on
+// either side — the heading's own margins space it, as in Markdown, and
+// "## Title" reads the same with or without a blank line beside it; the
+// heading that opens a post is marked .first, for no room above. `inline
 // code` spans (one or two backticks, matched within a line, with
 // CommonMark's one-space trim) become <code> and their contents stay
 // literal: a URL inside backticks is not a link. URLs elsewhere become
@@ -401,11 +407,15 @@ function formatText(text) {
   let plain = "";
   const flush = () => { if (plain) out.push(...formatInline(plain)); plain = ""; };
   const lines = text.split("\n");
-  lines.forEach((line, i) => {
-    const m = HEADING_RE.exec(line);
-    if (m) { flush(); out.push(el("h" + m[1].length, {}, ...formatInline(m[2]))); }
-    else plain += line + (i < lines.length - 1 ? "\n" : "");
-  });
+  for (let i = 0; i < lines.length; i++) {
+    const m = HEADING_RE.exec(lines[i]);
+    if (!m) { plain += lines[i] + (i < lines.length - 1 ? "\n" : ""); continue; }
+    if (plain.endsWith("\n")) plain = plain.slice(0, -1);  // the break before the heading
+    if (plain.endsWith("\n")) plain = plain.slice(0, -1);  // one blank line above it
+    flush();
+    out.push(el("h" + m[1].length, out.length ? {} : { class: "first" }, ...formatInline(m[2])));
+    if (lines[i + 1] === "") i++;                           // one blank line below it
+  }
   flush();
   return out;
 }
