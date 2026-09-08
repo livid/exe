@@ -1,5 +1,9 @@
 # Optional Mac OS 9 audio
 
+For the complete, pinned build and installation procedure, dependency versions,
+compatible-host archive reuse, playback checks and rollback, see
+[Build and reuse the Mac OS 9 sound runtime](../../../docs/macos9-audio.md).
+
 The upstream QEMU runtime remains the default. Mac audio needs the experimental
 Screamer device and its matching OpenBIOS. The manager selects a local audio
 runtime only when both files exist under its node-local Mac OS 9 state directory:

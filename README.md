@@ -156,6 +156,12 @@ UI**, **Restart Daemon** (running VMs are brought back automatically), and
 **Quit exe** (asks for confirmation, then shuts down running VMs and the
 daemon). In headless sessions (ssh) the daemon runs without the icon.
 
+## Mac OS 9 sound
+
+The optional Mac OS 9 sound runtime has a
+[detailed build and reuse guide](docs/macos9-audio.md), including the pinned
+QEMU/OpenBIOS pair, Linux dependencies, installation, playback checks and rollback.
+
 ## Configuration (~/.exe/config.json)
 
 | key | meaning |
