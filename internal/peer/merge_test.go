@@ -236,3 +236,48 @@ func TestMergeClocksUnionTombstoneAndKey(t *testing.T) {
 		t.Fatal("canonical form is not a fixed point")
 	}
 }
+
+func TestMergeDraftsUnionTombstoneAndKey(t *testing.T) {
+	now := time.Now().UnixMilli() // a tombstone inside its 30-day life
+	a := []byte(fmt.Sprintf(`{"version":2,"drafts":[
+		{"id":"d1","text":"from a","checked":{"from a":"From A."},"created":1,"updated":10},
+		{"id":"d2","created":2,"updated":%d,"deleted":%d}]}`, now, now))
+	b := []byte(fmt.Sprintf(`{"version":2,"drafts":[
+		{"id":"d1","text":"from a, edited","checked":{"from a, edited":"From A, edited."},"created":1,"updated":20},
+		{"id":"d2","text":"resurrected?","created":2,"updated":%d},
+		{"id":"d3","text":"from b","checked":{},"created":3,"updated":30}]}`, now))
+	if Mergeable("Notes/drafts.json") {
+		t.Fatal("drafts.json is Blue Pencil's alone")
+	}
+	if _, ok := MergeFile("Notes/drafts.json", a, b); ok {
+		t.Fatal("a drafts.json elsewhere must fall back to LWW")
+	}
+	merged, ok := MergeFile("BluePencil/drafts.json", a, b)
+	if !ok {
+		t.Fatal("merge not ok")
+	}
+	var d draftDoc
+	if err := json.Unmarshal(merged, &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.Version != 2 || len(d.Drafts) != 3 {
+		t.Fatalf("want version 2 and 3 drafts: %s", merged)
+	}
+	// newest-started first: d3, d2, d1
+	if d.Drafts[0].ID != "d3" || d.Drafts[1].ID != "d2" || d.Drafts[2].ID != "d1" {
+		t.Fatalf("order should be created-desc: %s", merged)
+	}
+	// the later edit wins and brings its checked paragraph along
+	if d1 := d.Drafts[2]; d1.Text != "from a, edited" || d1.Checked["from a, edited"] != "From A, edited." || d1.Updated != 20 {
+		t.Fatalf("d1 should be b's newer record with its checked map: %s", merged)
+	}
+	// a same-stamp tombstone beats the live record, and carries no text
+	if d2 := d.Drafts[1]; d2.Deleted == 0 || d2.Text != "" || d2.Checked != nil {
+		t.Fatalf("d2 should stay a bare tombstone: %s", merged)
+	}
+	// merging the result with itself is a fixed point
+	again, ok := MergeFile("BluePencil/drafts.json", merged, merged)
+	if !ok || !bytes.Equal(again, merged) {
+		t.Fatalf("not canonical:\n%s\n%s", merged, again)
+	}
+}

@@ -8,7 +8,7 @@
 :root {
   --black: #262626;
   --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
-  --hl: #333399; --red: #cc3333;
+  --hl: #333399; --red: #cc3333; --green: #1f9e33;
   --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
   --mono: "Berkeley Mono", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -69,11 +69,43 @@ textarea:focus { outline: none; }
   color: #000; font: 12px/17px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .popup select:focus { outline: none; }
 
+/* the drafts column beside the fields — the agent windows' session
+   column (the desktop's .sess-col), copied: 160px of the window's grey
+   down the left, a white list of 18px rows, the open row inverted, its
+   one seam with the fields the 1px line on its right, New in a row of
+   its own under the list. The column is as tall as the window and the
+   list scrolls inside it, so a long list never grows anything: min-height
+   0 down the chain does here what contain: size does beside a terminal
+   whose height is its own. */
+#main { flex: 1; min-height: 0; display: flex; align-items: stretch; }
+.sess-col { width: 160px; flex: none; display: flex; flex-direction: column; min-height: 0; position: relative;
+  border-right: 1px solid var(--black); background: var(--g300); }
+/* the seam drags the column's width: a 6px grip astride the 1px line */
+.sess-grip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 2; }
+.sess-list { flex: 1; min-height: 0; overflow-y: auto; background: #fff; }
+.sess-row { display: flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 8px;
+  white-space: nowrap; border-bottom: 1px solid #efefef; }
+.sess-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sess-row.untitled .t { color: #777; }
+.sess-row.sel { background: var(--hl); color: #fff; }
+.sess-row.sel.untitled .t { color: #ddd; }
+/* the black dot: the pencil finished a draft while the window showed
+   another — checked, waiting for you */
+.sess-bell { flex: none; width: 7px; height: 7px; display: block; }
+.sess-bell svg { display: block; }
+/* the green dot: the pencil is still on that draft while the window
+   shows another — the Chat list's streaming dot, so green means the same
+   thing everywhere */
+.sess-live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: cs-pulse 1.2s ease-in-out infinite; }
+@keyframes cs-pulse { 50% { opacity: 0.25; } }
+.sess-btns { flex: none; border-top: 1px solid var(--black); padding: 12px; display: flex; justify-content: center; }
+.sess-btns button { min-width: 58px; }
+
 /* two document fields of equal height: what you wrote, and what the
    pencil made of it. Both keep the bar on so the layout never shifts.
    12px margins all round: the HIG's distance between a push button and
    any edge of its window, kept consistent for the fields. */
-#wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+#wrap { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
 /* the button row, laid out per the HIG (Dialog Box Guidelines, push
    button layout): in the lower right, a set of one width (58px, the
    OK/Cancel standard), 12px between buttons, 12px below the field and
@@ -122,7 +154,35 @@ textarea:focus { outline: none; }
 #dlg input[type=checkbox]:checked { background: #fff url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" shape-rendering="crispEdges"><path fill="black" d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>') center no-repeat; }
 #dlg input[type=checkbox]:focus { outline: none; }
 #dlg .hint { font-size: 10px; color: #666; }
-#dlg .btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+#dlg .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
+/* a confirm on the same panel: the desktop's alert layout — the caution
+   sign, a bold question, the detail under it, Cancel and the action
+   button at the lower right, the default ringed, Return presses it */
+#dlg.confirm { width: 380px; max-width: calc(100vw - 24px); }
+#dlg .caution { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 24px; }
+#dlg .caution .sign { flex: none; display: block; width: 32px; height: 32px; }
+#dlg .caution .sign svg { display: block; }
+#dlg .caution .body { flex: 1; min-width: 0; user-select: text; }
+#dlg .caution .msg { font-weight: bold; line-height: 1.35; }
+#dlg .caution .detail { font-size: 11px; line-height: 1.45; margin-top: 7px; }
+#dlg button:focus:not(.default) { outline: none; }
+button.ghost.danger { color: #7a1010; }
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+
+/* a contextual menu, the desktop's Finder one (index.html .dropdown and
+   #ctx-menu) in the app: #ddd face, 1px black outline, white and #bbb
+   inset bevel, the hard 2px shadow; rows 3px 22px 3px 18px on 18px
+   lines, inverted under the pointer, grey when disabled; a groove for a
+   separator. Whole-pixel rows keep each separator on the same
+   device-pixel phase. */
+.dropdown { position: fixed; z-index: 30; min-width: 170px; background: var(--g300);
+  border: 1px solid var(--black); padding: 2px 1px;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 var(--g500), 2px 2px 0 rgba(38,38,38,.85); }
+.dd-item { padding: 3px 22px 3px 18px; line-height: 18px; white-space: nowrap; }
+.dd-item:hover { background: var(--hl); color: #fff; }
+.dd-item.dis { color: #888; }
+.dd-item.dis:hover { background: none; color: #888; }
+.dd-sep { height: 2px; margin: 3px 2px; border-top: 1px solid var(--g600); border-bottom: 1px solid #fff; }
 
 /* toast — the desktop's #status-bar pattern */
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -145,6 +205,14 @@ textarea:focus { outline: none; }
    keeps its plain 8px edge instead of the room left for the tile */
 body.mobile #grow { display: none; }
 body.mobile #status { padding-right: 8px; }
+/* a phone's column becomes a strip of tabs above the fields, New at its
+   right end, the same as the agent windows' */
+body.mobile #main { flex-direction: column; }
+body.mobile .sess-col { width: auto; flex: none; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--black); }
+body.mobile .sess-list { display: flex; overflow-x: auto; overflow-y: hidden; }
+body.mobile .sess-row { flex: none; max-width: 150px; height: auto; padding: 0 8px; border-bottom: 0; border-right: 1px solid #efefef; }
+body.mobile .sess-btns { border-top: 0; border-left: 1px solid var(--black); padding: 6px 8px; }
+body.mobile .sess-grip { display: none; }
 
 /* Mac OS 9 scrollbars — the desktop's pixel-sampled spec (same as Notes) */
 ::-webkit-scrollbar { width: 15px; height: 15px; }
@@ -196,13 +264,20 @@ body.mobile #status { padding-right: 8px; }
 </head>
 <body>
 
-<div id="wrap">
-  <textarea id="src" placeholder="Type or paste your text here." spellcheck="false"></textarea>
-  <div id="out"></div>
-  <div id="actions">
-    <button class="ghost" id="clear" disabled>Clear</button>
-    <button class="ghost" id="copy" disabled>Copy</button>
-    <button class="ghost" id="accept" disabled>Accept</button>
+<div id="main">
+  <div class="sess-col">
+    <div class="sess-list" id="list"></div>
+    <div class="sess-btns"><button class="ghost" id="new">New</button></div>
+    <div class="sess-grip" id="grip"></div>
+  </div>
+  <div id="wrap">
+    <textarea id="src" placeholder="Type or paste your text here." spellcheck="false"></textarea>
+    <div id="out"></div>
+    <div id="actions">
+      <button class="ghost" id="clear" disabled>Clear</button>
+      <button class="ghost" id="copy" disabled>Copy</button>
+      <button class="ghost" id="accept" disabled>Accept</button>
+    </div>
   </div>
 </div>
 
@@ -212,6 +287,7 @@ body.mobile #status { padding-right: 8px; }
 </div>
 
 <div id="toast"></div>
+<div id="ctx" class="dropdown" hidden></div>
 <div id="veil">
   <div id="dlg"></div>
 </div>
@@ -232,7 +308,10 @@ const $ = s => document.querySelector(s);
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
 const APP = decodeURIComponent(location.pathname.split("/")[2] || "bluepencil");
 const CONFIG_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/config.json";
-const DRAFT_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/draft.json";
+const DRAFTS_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/drafts.json";
+const LEGACY_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/draft.json"; // the one draft before the column
+const SEL_KEY = "exe-bluepencil-sel:" + APP; // which draft is open: this browser's own
+const COL_KEY = "exe-bluepencil-col:" + APP; // the column's dragged width, likewise
 const CLIENT = Math.random().toString(36).slice(2, 10); // tags our writes in change events
 // A phone shows no grow tile. The desktop passes its own verdict as
 // ?mobile=1 (it also honours ?mobile=0); opened bare, the app runs the
@@ -244,7 +323,8 @@ const IS_MOBILE = new URLSearchParams(location.search).has("mobile")
 if (IS_MOBILE) document.body.classList.add("mobile");
 const DEBOUNCE = 700;     // ms of quiet before a changed paragraph goes to the model
 const MAX_CHARS = 20000;  // per document
-const CACHE_MAX = 500;    // checked paragraphs remembered
+const CACHE_MAX = 2000;   // checked paragraphs remembered, across every draft
+const TOMBSTONE_TTL = 30 * 864e5; // a deleted draft's stub outlives the sync that carries it
 
 // The whole editorial policy lives here, in the app: change only what is
 // wrong, keep everything else, and treat the passage as a document, never
@@ -308,9 +388,14 @@ const EFFORTS = [["max", "Max"], ["high", "High"], ["medium", "Medium"], ["low",
 const effortOf = c => EFFORTS.some(([v]) => v === c.effort) ? c.effort : "max";
 let blocked = "";        // why no check can run right now (unconfigured), or ""
 const cache = new Map(); // paragraph text → {fixed, ops}
-let current = null;      // the paragraph in flight: {text, ctrl, partial, el}
+let current = null;      // the paragraph in flight: {id (its draft), text, ctrl, partial, el}
 let running = false, wanted = false;
 let lastInput = 0, timer = 0, lastErr = "";
+const doc = { version: 2, drafts: [] }; // every draft on this node (synced app data), newest first
+let sel = null;           // the open draft's id — per-viewer state, never in the doc
+const unseen = new Set(); // drafts the pencil finished while the window showed another
+const live = () => doc.drafts.filter(d => !d.deleted);
+const cur = () => doc.drafts.find(d => d.id === sel && !d.deleted) || null;
 
 // ---- paragraphs ----
 // A document is checked a paragraph at a time: blank lines split it, and
@@ -322,12 +407,16 @@ function splitParas(text) {
 }
 const checkable = p => !p.sep && p.text.trim() !== "";
 
+// remember files a corrected paragraph; the diff that marks it is worked
+// out when the paragraph is first drawn, so a column of stored drafts
+// loads without computing one for every paragraph of every draft
 function remember(text, fixed) {
-  let ops = null;
-  if (text === fixed) ops = [{ k: 0, t: text }];
-  else ops = diff(tokens(text), tokens(fixed));
-  cache.set(text, { fixed, ops });
+  cache.set(text, { fixed, ops: undefined });
   while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+}
+function opsOf(c, text) {
+  if (c.ops === undefined) c.ops = text === c.fixed ? [{ k: 0, t: text }] : diff(tokens(text), tokens(c.fixed));
+  return c.ops;
 }
 
 // The model's reply, made safe to put back where the paragraph was: fences
@@ -400,6 +489,8 @@ function renderOps(ops, marks) {
 }
 
 // ---- the checked pane ----
+// The open draft, paragraph by paragraph: what the cache holds corrected
+// and marked, the paragraph in flight streaming, the rest dimmed.
 function render() {
   const text = src.value;
   out.replaceChildren();
@@ -414,15 +505,16 @@ function render() {
       const c = cache.get(p.text);
       if (c) {
         done++;
-        if (c.ops) {
-          const r = renderOps(c.ops, marks);
+        const ops = opsOf(c, p.text);
+        if (ops) {
+          const r = renderOps(ops, marks);
           changes += r.changes;
           out.append(r.frag);
         } else {
           plain = true;
           out.append(c.fixed);
         }
-      } else if (current && current.text === p.text) {
+      } else if (current && current.id === sel && current.text === p.text) {
         // streaming: the model's words so far, then a caret
         const span = el("span", { class: "stream" }, current.partial);
         current.el = span;
@@ -445,21 +537,28 @@ function render() {
   else if (done) state = plain ? "Checked" : changes === 0 ? "No changes" : changes + (changes === 1 ? " change" : " changes");
   stState.textContent = state;
   stState.classList.toggle("err", err);
+  renderList();
 }
 
 // The corrected document: checked paragraphs corrected, the rest as typed.
-function correctedText() {
-  return splitParas(src.value).map(p => {
+function correctedTextOf(d) {
+  return splitParas(d.text).map(p => {
     const c = checkable(p) && cache.get(p.text);
     return c ? c.fixed : p.text;
   }).join("");
 }
+// how many paragraphs of a draft the pencil has reached, and has not
+const checkedCount = d => splitParas(d.text).filter(p => checkable(p) && cache.has(p.text)).length;
+const pendingCount = d => splitParas(d.text).filter(p => checkable(p) && !cache.has(p.text)).length;
 
 // ---- the check loop ----
-// One paragraph at a time, in document order, re-reading the text before
-// each so edits made meanwhile are honored; a paragraph edited while in
-// flight is abandoned (the input handler aborts it) and picked up again
-// once typing pauses.
+// One paragraph at a time: the open draft's first, in document order,
+// then the other drafts', newest first — a draft pasted and left keeps
+// being checked while you write in another, the way an agent session
+// keeps working while the window shows a different one. The drafts are
+// re-read before each pick so edits made meanwhile are honored; a
+// paragraph edited while in flight is abandoned (the input handler
+// aborts it) and picked up again once typing pauses.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function kick() { wanted = true; if (!running) run(); }
 async function run() {
@@ -467,26 +566,35 @@ async function run() {
   try { while (wanted) { wanted = false; await pass(); } }
   finally { running = false; }
 }
+function nextPara() {
+  const c = cur();
+  for (const d of [c, ...live().filter(d => d !== c)]) {
+    if (!d || d.text.length > MAX_CHARS) continue;
+    const p = splitParas(d.text).find(p => checkable(p) && !cache.has(p.text));
+    if (p) return { d, p };
+  }
+  return null;
+}
 async function pass() {
   for (;;) {
     const wait = DEBOUNCE - (Date.now() - lastInput);
     if (wait > 0) { await sleep(wait); continue; }
-    const text = src.value;
-    if (blocked || text.length > MAX_CHARS) return;
-    const next = splitParas(text).find(p => checkable(p) && !cache.has(p.text));
+    if (blocked) return;
+    const next = nextPara();
     if (!next) return;
     const ctrl = new AbortController();
-    current = { text: next.text, ctrl, partial: "", el: null };
+    const me = current = { id: next.d.id, text: next.p.text, ctrl, partial: "", el: null };
     lastErr = "";
     render();
     try {
-      const fixed = await complete(next.text, ctrl.signal, d => {
-        current.partial += d;
-        if (current.el) current.el.textContent = current.partial;
+      const fixed = await complete(next.p.text, ctrl.signal, d => {
+        me.partial += d;
+        if (me.el) me.el.textContent = me.partial;
       });
-      const clean = tidy(next.text, fixed);
+      const clean = tidy(next.p.text, fixed);
       if (clean === null) throw new Error("The model returned an empty answer");
-      remember(next.text, clean);
+      remember(next.p.text, clean);
+      landed(next.d.id, next.p.text);
     } catch (e) {
       current = null;
       if (ctrl.signal.aborted) continue;
@@ -496,8 +604,18 @@ async function pass() {
     }
     current = null;
     render();
-    scheduleDraft(); // the checked paragraph rides along with the draft
   }
+}
+// A paragraph came back for a draft: its record changed (the checked map
+// is rebuilt from the cache on save), and a draft checked to its end
+// while the window showed another gets the black dot — finished, waiting
+// for you.
+function landed(id, text) {
+  const d = doc.drafts.find(x => x.id === id);
+  if (!d || d.deleted || !d.text.includes(text)) return;
+  d.updated = Date.now();
+  scheduleSave();
+  if (id !== sel && !pendingCount(d)) unseen.add(id);
 }
 
 // One question to the configured Ollama model, answered as a stream of
@@ -541,11 +659,14 @@ async function complete(text, signal, onDelta) {
 }
 
 src.addEventListener("input", () => {
-  lastInput = Date.now();
+  const d = cur();
+  if (!d) return;
+  d.text = src.value;
+  d.updated = lastInput = Date.now();
   lastErr = "";
-  if (current && !src.value.includes(current.text)) current.ctrl.abort();
+  if (current && current.id === d.id && !d.text.includes(current.text)) current.ctrl.abort();
   render();
-  scheduleDraft();
+  scheduleSave();
   clearTimeout(timer);
   timer = setTimeout(kick, DEBOUNCE);
 });
@@ -558,115 +679,197 @@ src.addEventListener("keydown", e => {
   }
 });
 
-$("#copy").addEventListener("click", () => copyText(correctedText(), "the checked text"));
-$("#clear").addEventListener("click", () => {
+$("#copy").addEventListener("click", () => copyText(correctedTextOf(cur()), "the checked text"));
+// putText replaces the field's text through execCommand, so Clear and
+// Accept can be undone like typing; its input event does the rest (the
+// draft record, the check in flight, the save). The fallback raises the
+// same event by hand.
+function putText(v) {
   src.focus();
   src.select();
-  // execCommand keeps native undo, so a Clear can be undone like typing;
-  // its input event does the rest (abort the check in flight, save the
-  // empty draft). The fallback has to do that by hand.
-  if (!document.execCommand("delete")) {
-    src.value = "";
-    if (current) current.ctrl.abort();
-    scheduleDraft();
+  if (!document.execCommand(v ? "insertText" : "delete", false, v)) {
+    src.value = v;
+    src.dispatchEvent(new Event("input"));
   }
+}
+$("#clear").addEventListener("click", () => {
+  putText("");
   lastErr = "";
   clearTimeout(timer);
   render();
 });
 $("#accept").addEventListener("click", () => {
+  const d = cur();
+  if (!d) return;
   // corrected paragraphs are already checked: remember them as clean so
   // nothing goes back to the model
-  for (const p of splitParas(src.value)) {
+  for (const p of splitParas(d.text)) {
     const c = checkable(p) && cache.get(p.text);
     if (c && !cache.has(c.fixed)) remember(c.fixed, c.fixed);
   }
-  const fixed = correctedText();
-  src.focus();
-  src.select();
-  // execCommand keeps native undo, so Accept can be undone like typing
-  if (!document.execCommand("insertText", false, fixed)) { src.value = fixed; scheduleDraft(); }
+  const fixed = correctedTextOf(d);
+  putText(fixed);
   src.setSelectionRange(fixed.length, fixed.length);
   lastInput = 0;
   render();
   kick();
 });
 
-// ---- the draft: what you typed and what the pencil made of it ----
-// draft.json is synced app data, so a reload — or another desk sharing
-// this node — gets both fields back without a single model call. Same
-// contract as Notes: debounced whole-doc PUT, serialized so a slow write
-// is never overtaken by the next, keepalive flush when the page hides,
-// and no saving at all until the initial load settled — a failed GET must
-// never be overwritten by an empty draft.
-let draftLoaded = false, draftT = null, draftSaving = false, draftAgain = false;
-function draftDoc() {
-  const checked = {}; // only the paragraphs still in the text: the doc stays small
-  for (const p of splitParas(src.value)) {
-    const c = checkable(p) && cache.get(p.text);
-    if (c) checked[p.text] = c.fixed;
+// ---- the drafts: what you typed and what the pencil made of it ----
+// drafts.json holds every draft on this node — text, the checked
+// paragraphs still in it, created and updated stamps — as synced app
+// data, so a reload, or another desk sharing this node, gets the column
+// back without a single model call; the daemon merges it draft by draft
+// (internal/peer/merge.go). Same contract as Notes: debounced whole-doc
+// PUT, serialized so a slow write is never overtaken by the next,
+// keepalive flush when the page hides, no saving at all until the
+// initial load settled — a failed GET must never be overwritten — and a
+// deleted draft leaves a tombstone GC'd after 30 days. Which draft is
+// open is this browser's own, in localStorage and never in the doc, so
+// two desks cannot fight over it.
+const list = $("#list"), col = $(".sess-col");
+let docLoaded = false, docT = null, docSaving = false, docAgain = false, migrated = false, shown = "";
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function mkDraft(text, checked, at, id) {
+  const now = at || Date.now();
+  return { id: id || newId(), text: text || "", checked: checked || {}, created: now, updated: now };
+}
+// newest first, in the order they were started: a row keeps its place
+// while the pencil works, so nothing moves under the pointer
+function sortDrafts() {
+  doc.drafts.sort((a, b) => b.created - a.created || (a.id < b.id ? -1 : 1));
+}
+function normDraft(x) {
+  const d = { id: String(x.id), text: typeof x.text === "string" ? x.text : "",
+    checked: x.checked && typeof x.checked === "object" ? x.checked : {},
+    created: +x.created || Date.now(), updated: +x.updated || Date.now() };
+  if (+x.deleted) { d.deleted = +x.deleted; d.text = ""; d.checked = {}; }
+  return d;
+}
+// a stored draft's checked paragraphs go into the cache, so nothing is
+// asked of the model twice
+function adoptChecked(d) {
+  if (d.deleted) return;
+  for (const [t, f] of Object.entries(d.checked)) {
+    if (typeof f === "string" && f && !cache.has(t)) remember(t, f);
   }
-  return JSON.stringify({ version: 1, text: src.value, checked, updated: Date.now() });
 }
-function scheduleDraft() {
-  if (!draftLoaded) return;
-  clearTimeout(draftT);
-  draftT = setTimeout(saveDraft, 400);
+function docJSON() {
+  const now = Date.now();
+  doc.drafts = doc.drafts.filter(d => !d.deleted || now - d.deleted <= TOMBSTONE_TTL);
+  const drafts = doc.drafts.map(d => {
+    if (d.deleted) return { id: d.id, created: d.created, updated: d.updated, deleted: d.deleted };
+    const checked = {}; // only the paragraphs still in the text: the doc stays small
+    for (const p of splitParas(d.text)) {
+      const c = checkable(p) && cache.get(p.text);
+      if (c) checked[p.text] = c.fixed;
+    }
+    return { id: d.id, text: d.text, checked, created: d.created, updated: d.updated };
+  });
+  return JSON.stringify({ version: 2, drafts });
 }
-async function saveDraft(flush) {
-  clearTimeout(draftT);
-  draftT = null;
-  const body = draftDoc();
+function scheduleSave() {
+  if (!docLoaded) return;
+  clearTimeout(docT);
+  docT = setTimeout(saveDoc, 400);
+}
+async function saveDoc(flush) {
+  clearTimeout(docT);
+  docT = null;
+  const body = docJSON();
   // X-Exe-Seq is a content timestamp: the daemon drops a PUT older than one
   // it already stored, so an in-flight save can't land stale over the flush.
   const headers = { "Content-Type": "application/json",
     "X-Exe-Seq": String(Date.now()), "X-Exe-Client": CLIENT };
   if (flush) {
-    // unload: a keepalive PUT of the latest draft, bypassing the in-flight
+    // unload: a keepalive PUT of the latest doc, bypassing the in-flight
     // gate — the desktop may tear the iframe down before a normal one lands
-    try { api(DRAFT_URL, { method: "PUT", keepalive: true, headers, body }); } catch (e) {}
+    try { api(DRAFTS_URL, { method: "PUT", keepalive: true, headers, body }); } catch (e) {}
     return;
   }
-  if (draftSaving) { draftAgain = true; return; }
-  draftSaving = true;
+  if (docSaving) { docAgain = true; return; }
+  docSaving = true;
   try {
-    const r = await api(DRAFT_URL, { method: "PUT", headers, body });
+    const r = await api(DRAFTS_URL, { method: "PUT", headers, body });
     if (!r.ok) throw new Error("HTTP " + r.status);
-  } catch (e) { toast("Draft not saved: " + e.message); }
-  draftSaving = false;
-  if (draftAgain) { draftAgain = false; saveDraft(); }
+  } catch (e) { toast("Drafts not saved: " + e.message); }
+  docSaving = false;
+  if (docAgain) { docAgain = false; saveDoc(); }
 }
 addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && (draftT || draftSaving)) saveDraft(true);
+  if (document.visibilityState === "hidden" && (docT || docSaving)) saveDoc(true);
 });
-addEventListener("pagehide", () => { if (draftT || draftSaving) saveDraft(true); });
+addEventListener("pagehide", () => { if (docT || docSaving) saveDoc(true); });
 
-// adoptDraft takes a stored draft into the fields and the cache; true when
-// the text changed.
-function adoptDraft(d) {
-  if (!d || typeof d.text !== "string") return false;
-  if (d.checked && typeof d.checked === "object") {
-    for (const [t, f] of Object.entries(d.checked)) {
-      if (typeof f === "string" && f) remember(t, f);
-    }
-  }
-  if (d.text === src.value) return false;
-  src.value = d.text;
-  return true;
-}
-async function loadDraft() {
+// Before the column there was one draft, draft.json. It becomes the first
+// row, under an id derived from its text so two nodes migrating it apart
+// agree on the record; the old file is left as it was.
+const hash = s => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(16);
+};
+async function loadDoc() {
   try {
-    const r = await api(DRAFT_URL);
-    if (r.status !== 404) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      adoptDraft(await r.json());
-    }
-    draftLoaded = true;
-  } catch (e) { toast("Draft unavailable: " + e.message + " — reopen this window"); }
+    const r = await api(DRAFTS_URL);
+    if (r.ok) {
+      const d = await r.json();
+      if (d && Array.isArray(d.drafts)) doc.drafts = d.drafts.filter(x => x && x.id).map(normDraft);
+    } else if (r.status === 404) {
+      const l = await api(LEGACY_URL);
+      if (l.ok) {
+        const d = await l.json().catch(() => null);
+        if (d && typeof d.text === "string" && d.text.trim()) {
+          const checked = d.checked && typeof d.checked === "object" ? d.checked : {};
+          doc.drafts.push(mkDraft(d.text, checked, +d.updated || Date.now(), "v1-" + hash(d.text)));
+          migrated = true;
+        }
+      } else if (l.status !== 404) throw new Error("HTTP " + l.status);
+    } else throw new Error("HTTP " + r.status);
+    docLoaded = true;
+  } catch (e) { toast("Drafts unavailable: " + e.message + " — reopen this window"); }
 }
-// Another window, or a joined desk, wrote our files (the desktop forwards
-// the daemon's change events): take the draft unless typing here is still
-// unsaved — that save lands newer and wins — and follow settings changes.
+// Another window, or a joined desk, wrote drafts.json (the desktop
+// forwards the daemon's change events). Disk is the daemon's already-
+// merged result: adopt it as the base and keep a local draft only when it
+// is strictly newer — a genuine unsaved edit; on an updated tie disk
+// wins, matching the daemon's tiebreak, so app and daemon never disagree
+// into an endless save→merge→push loop.
+async function reloadFromDisk() {
+  try {
+    const r = await api(DRAFTS_URL);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d || !Array.isArray(d.drafts)) return;
+    const disk = new Map(d.drafts.filter(x => x && x.id).map(x => [String(x.id), normDraft(x)]));
+    const byId = new Map(disk);
+    let ahead = false; // we hold something disk lacks: push it back
+    for (const l of doc.drafts) {
+      const dv = byId.get(l.id);
+      if (!dv || l.updated > dv.updated) { byId.set(l.id, l); ahead = true; }
+    }
+    const before = cur() ? cur().text : null;
+    doc.drafts = [...byId.values()];
+    sortDrafts();
+    for (const x of doc.drafts) adoptChecked(x);
+    for (const id of [...unseen]) { // a draft edited elsewhere is no longer finished
+      const x = doc.drafts.find(y => y.id === id);
+      if (!x || x.deleted || pendingCount(x)) unseen.delete(id);
+    }
+    if (current && !doc.drafts.some(x => x.id === current.id && !x.deleted)) current.ctrl.abort();
+    const c = cur();
+    if (!c) { // the open draft went away: the window moves to the newest, or a fresh one
+      sel = null;
+      selectDraft(live().length ? live()[0].id : newDraft(), false);
+    } else {
+      if (c.text !== before) { src.value = c.text; src.setSelectionRange(c.text.length, c.text.length); }
+      lastInput = 0;
+      render();
+      kick();
+    }
+    if (ahead) scheduleSave();
+  } catch (e) {}
+}
 window.addEventListener("message", async e => {
   if (e.origin !== location.origin || !e.data || e.data.exe !== "data-changed") return;
   if (e.data.client && e.data.client === CLIENT) return; // our own write
@@ -674,21 +877,238 @@ window.addEventListener("message", async e => {
     if (!loaded) return;
     const was = (cfg.model || "") + "|" + effortOf(cfg);
     await loadCfg();
-    if ((cfg.model || "") + "|" + effortOf(cfg) !== was) { cache.clear(); lastInput = 0; render(); kick(); }
+    if ((cfg.model || "") + "|" + effortOf(cfg) !== was) { forget(); lastInput = 0; render(); kick(); }
     modelLabel();
     render();
     return;
   }
-  if (e.data.path !== "draft.json" || !draftLoaded || draftT || draftSaving) return;
-  try {
-    const r = await api(DRAFT_URL);
-    if (!r.ok) return;
-    const changed = adoptDraft(await r.json());
-    lastInput = 0;
-    render();
-    if (changed) kick();
-  } catch (e) {}
+  if (e.data.path === "drafts.json" && docLoaded) reloadFromDisk();
 });
+// another model, or another thinking budget, is another opinion: every
+// draft goes back to the pencil, the open one first
+function forget() {
+  cache.clear();
+  unseen.clear();
+  scheduleSave();
+}
+
+// ---- the drafts column ----
+// The agent windows' session column, for drafts: one row per draft,
+// newest first, titled by its first line; a click opens it, New starts
+// another. While the window shows one draft, a pulsing green dot marks
+// another the pencil is still on, a black dot one it finished — waiting
+// for you. A row's contextual menu opens with when the draft was
+// started, in grey, then starts a new draft, copies the row's text or its
+// checked text, or deletes it after a dialog. An empty draft is dropped
+// the moment you leave it, so the list never fills with blank rows — and
+// on a phone Clear, then any other row, is how a draft goes.
+function draftTitle(d) {
+  const line = (d.text || "").split("\n").find(l => l.trim());
+  return line ? line.trim().slice(0, 60) : "";
+}
+const titleOf = d => draftTitle(d) || "Untitled";
+// when a draft started, short enough for a menu line: the time alone
+// today, weekday and date before that, the year once it differs
+function when(ms) {
+  const d = new Date(ms), now = new Date();
+  const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return "today, " + t;
+  const date = d.getFullYear() === now.getFullYear()
+    ? d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
+    : d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  return date + ", " + t;
+}
+// the black dot: a 7px crispEdges disc in the row's own colour
+function sessBell() {
+  const b = el("span", { class: "sess-bell" });
+  b.innerHTML = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1z" fill="currentColor"/></svg>';
+  return b;
+}
+function renderList() {
+  list.replaceChildren(...live().map(d => {
+    // the open row carries no mark: the checked pane itself shows its state
+    const off = d.id !== sel;
+    const working = off && current && current.id === d.id, wants = off && !working && unseen.has(d.id);
+    const title = draftTitle(d);
+    const row = el("div", { class: "sess-row" + (off ? "" : " sel") + (title ? "" : " untitled"),
+      title: (title || "Untitled") + (working ? "\nstill checking" : wants ? "\nchecked — waiting for you" : "")
+        + "\nstarted " + new Date(d.created).toLocaleString() });
+    if (wants) row.append(sessBell());
+    else if (working) row.append(el("span", { class: "sess-live" }));
+    row.append(el("span", { class: "t" }, title || "Untitled"));
+    row.onclick = () => selectDraft(d.id, true);
+    row.addEventListener("contextmenu", e => rowMenu(e, d));
+    return row;
+  }));
+  // the open row comes into view when the open draft changes — the
+  // phone's strip slides sideways to it, a tall list down — and the list
+  // stays put otherwise, so a render never drags it from where it was
+  // scrolled to
+  if (sel && sel !== shown) {
+    const s = list.querySelector(".sess-row.sel");
+    if (s) { revealRow(list, s); shown = sel; }
+  }
+}
+// revealRow scrolls a list the least distance that brings a row of it
+// into view, and nothing else: scrollIntoView would move the ancestors too
+function revealRow(l, row) {
+  const a = l.getBoundingClientRect(), r = row.getBoundingClientRect();
+  if (r.left < a.left) l.scrollLeft += r.left - a.left;
+  else if (r.right > a.right) l.scrollLeft += r.right - a.right;
+  if (r.top < a.top) l.scrollTop += r.top - a.top;
+  else if (r.bottom > a.bottom) l.scrollTop += r.bottom - a.bottom;
+}
+function selectDraft(id, focus) {
+  const d = doc.drafts.find(x => x.id === id && !x.deleted);
+  if (!d) return;
+  if (id !== sel) {
+    const prev = cur();
+    if (prev && !prev.text.trim()) dropDraft(prev); // an empty draft is dropped on the way out
+    sel = id;
+    try { localStorage.setItem(SEL_KEY, id); } catch (e) {}
+    src.value = d.text;
+    src.setSelectionRange(d.text.length, d.text.length);
+  }
+  unseen.delete(id);
+  lastErr = "";
+  lastInput = 0;
+  render();
+  if (focus) src.focus();
+  kick();
+}
+function dropDraft(d) {
+  if (current && current.id === d.id) current.ctrl.abort();
+  d.deleted = d.updated = Date.now();
+  d.text = "";
+  d.checked = {};
+  unseen.delete(d.id);
+  scheduleSave();
+}
+// New starts a draft of its own and opens it — unless the open one is
+// still blank, which is the same thing
+function newDraft() {
+  const c = cur();
+  if (c && !c.text.trim()) { src.focus(); return c.id; }
+  const d = mkDraft();
+  doc.drafts.unshift(d);
+  sortDrafts();
+  selectDraft(d.id, true);
+  scheduleSave();
+  return d.id;
+}
+$("#new").addEventListener("click", newDraft);
+async function deleteDraft(d) {
+  const ok = await confirmDialog({
+    message: "Delete “" + titleOf(d) + "”?",
+    detail: "The draft and its checked text go from every desk sharing this node."
+      + (current && current.id === d.id ? " It is still being checked — the check in flight is lost." : "")
+      + (d.id === sel ? " The window moves to another draft, or starts a fresh one." : ""),
+    action: "Delete",
+  });
+  if (!ok || d.deleted) return;
+  const rows = live(), i = rows.indexOf(d);
+  dropDraft(d);
+  if (d.id === sel) {
+    // the row that took its place, else the one above, else a fresh draft
+    const rest = live();
+    sel = null;
+    if (rest.length) selectDraft(rest[Math.min(i, rest.length - 1)].id, true);
+    else newDraft();
+  } else render();
+}
+function rowMenu(e, d) {
+  e.preventDefault();
+  e.stopPropagation();
+  showMenu(e.clientX, e.clientY, [
+    { label: "Started " + when(d.created), dis: true }, "-",
+    { label: "New Draft", act: newDraft }, "-",
+    { label: "Copy Text", act: () => copyText(d.text, "the text"), dis: !d.text.trim() },
+    { label: "Copy Checked Text", act: () => copyText(correctedTextOf(d), "the checked text"), dis: !checkedCount(d) }, "-",
+    { label: "Delete…", act: () => deleteDraft(d) },
+  ]);
+}
+list.addEventListener("contextmenu", e => {
+  if (e.target !== list) return;
+  e.preventDefault();
+  showMenu(e.clientX, e.clientY, [{ label: "New Draft", act: newDraft }]);
+});
+// the contextual menu: the desktop's, in the app — items { label, act,
+// dis } and "-" separators, closed by a click anywhere, Escape, or a pick
+const ctx = $("#ctx");
+function showMenu(x, y, items) {
+  hideMenu();
+  ctx.replaceChildren(...items.map(it => {
+    if (it === "-") return el("div", { class: "dd-sep" });
+    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") }, it.label);
+    if (!it.dis) d.onclick = () => { hideMenu(); it.act(); };
+    return d;
+  }));
+  ctx.hidden = false;
+  const r = ctx.getBoundingClientRect();
+  ctx.style.left = Math.max(0, Math.min(x, innerWidth - r.width - 4)) + "px";
+  ctx.style.top = Math.max(0, Math.min(y, innerHeight - r.height - 4)) + "px";
+}
+function hideMenu() { ctx.hidden = true; }
+document.addEventListener("mousedown", e => { if (!e.target.closest("#ctx")) hideMenu(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") hideMenu(); });
+// the seam between the column and the fields drags the column's width,
+// kept per viewer like the open draft; the fields keep 280px whatever
+// the window's width. A phone's strip has no seam.
+const colWidth = w => Math.max(100, Math.min(innerWidth - 280, w));
+if (!IS_MOBILE) {
+  try { const w = +localStorage.getItem(COL_KEY); if (w) col.style.width = colWidth(w) + "px"; } catch (e) {}
+}
+$("#grip").addEventListener("pointerdown", e => {
+  if (IS_MOBILE) return;
+  const grip = e.currentTarget;
+  e.preventDefault();
+  grip.setPointerCapture(e.pointerId);
+  const sx = e.clientX, sw = col.offsetWidth;
+  const move = ev => { col.style.width = colWidth(sw + ev.clientX - sx) + "px"; };
+  const up = () => {
+    grip.removeEventListener("pointermove", move);
+    grip.removeEventListener("pointerup", up);
+    try { localStorage.setItem(COL_KEY, String(col.offsetWidth)); } catch (e) {}
+    src.focus();
+  };
+  grip.addEventListener("pointermove", move);
+  grip.addEventListener("pointerup", up);
+});
+// a confirm on the options panel: the desktop's alert layout — the
+// caution sign, a bold question, the detail under it, Cancel and the
+// ringed action button, which Return presses and Escape declines
+function confirmDialog({ message = "", detail = "", action = "OK" } = {}) {
+  return new Promise(res => {
+    const dlg = $("#dlg");
+    dlg.classList.add("confirm");
+    const cancel = el("button", { class: "ghost" }, "Cancel");
+    const go = el("button", { class: "ghost danger default" }, action);
+    const sign = el("span", { class: "sign" });
+    sign.innerHTML = '<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges"><path d="M16 2 L30.5 29.5 L1.5 29.5 Z" fill="#FFDD30" stroke="#000"/><path d="M16 6 L27 27 L5 27 Z" fill="#FFF3A0"/><rect x="14" y="11" width="4" height="10" fill="#000"/><rect x="14" y="23" width="4" height="3" fill="#000"/></svg>';
+    dlg.replaceChildren(
+      el("div", { class: "caution" }, sign,
+        el("div", { class: "body" }, el("div", { class: "msg" }, message), el("div", { class: "detail" }, detail))),
+      el("div", { class: "btns" }, cancel, go));
+    $("#veil").classList.add("on");
+    go.focus();
+    let done = false;
+    const close = ok => {
+      if (done) return;
+      done = true;
+      $("#veil").classList.remove("on");
+      document.removeEventListener("keydown", keys);
+      src.focus();
+      res(ok);
+    };
+    const keys = e => {
+      if (e.key === "Escape") close(false);
+      else if (e.key === "Enter") close(true);
+    };
+    document.addEventListener("keydown", keys);
+    cancel.addEventListener("click", () => close(false));
+    go.addEventListener("click", () => close(true));
+  });
+}
 
 // ---- settings ----
 async function loadCfg() {
@@ -728,6 +1148,7 @@ function modelLabel() {
 
 function options() {
   const dlg = $("#dlg");
+  dlg.classList.remove("confirm");
   const popup = s => el("span", { class: "popup" }, s, el("span", { class: "well" }, el("i", {}, el("b"))));
   const sel = el("select", { id: "o-model" });
   const own = cfg.model || "";
@@ -742,7 +1163,7 @@ function options() {
   const chk = el("input", { type: "checkbox", id: "o-marks" });
   chk.checked = cfg.marks !== false;
   const cancel = el("button", { class: "ghost" }, "Cancel");
-  const ok = el("button", { class: "ghost" }, "OK");
+  const ok = el("button", { class: "ghost default" }, "OK"); // Return's button wears the ring
   dlg.replaceChildren(
     el("h2", {}, "Blue Pencil Options"),
     el("div", { class: "row" }, el("label", { for: "o-model" }, "Model:"), popup(sel),
@@ -767,7 +1188,7 @@ function options() {
     cfg.model = sel.value;
     cfg.effort = eff.value;
     cfg.marks = chk.checked;
-    if (changed) { cache.clear(); scheduleDraft(); } // another model or budget, another opinion
+    if (changed) forget();
     saveCfg();
     modelLabel();
     close();
@@ -787,12 +1208,20 @@ stModel.addEventListener("click", options);
 
 (async () => {
   render();
-  await Promise.all([loadCfg(), loadDaemon(), loadDraft()]);
+  await Promise.all([loadCfg(), loadDaemon(), loadDoc()]);
   modelLabel();
-  render();
+  sortDrafts();
+  for (const d of doc.drafts) adoptChecked(d);
+  try { sel = localStorage.getItem(SEL_KEY); } catch (e) {}
+  if (!cur()) sel = live().length ? live()[0].id : null;
+  if (!sel) { const d = mkDraft(); doc.drafts.unshift(d); sel = d.id; } // a blank draft, ready to type into
+  const c = cur();
+  src.value = c.text;
   src.focus();
-  src.setSelectionRange(src.value.length, src.value.length);
+  src.setSelectionRange(c.text.length, c.text.length);
+  if (migrated) scheduleSave();
   lastInput = 0;
+  render();
   kick(); // a draft cut off mid-check picks up where it left off
 })();
 

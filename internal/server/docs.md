@@ -372,9 +372,25 @@ the text back). Click the model name in the status bar for the
 options: a different model just for this app, how hard it thinks (Max by
 default — the best reading of the passage is worth the wait; Off is
 fastest, but some models then think out loud in the answer), and whether
-changes are marked at all. The draft is kept: reload the window, or open it
-on another desk sharing this node, and both fields come back as they were,
-checked paragraphs included, without asking the model again.
+changes are marked at all.
+
+Drafts are listed down the window's left, the way a Claude Code or Codex
+window lists its sessions: one row per draft, newest first, titled by its
+first line. Click a row to open that draft; **New** starts another beside
+it. The pencil keeps working on the drafts you are not looking at — the
+open one first, then the rest — and while the window shows one draft, a
+pulsing green dot marks another still being checked and a black dot one
+it finished, waiting for you; hover a row for which. A row's contextual
+menu opens with when the draft was started, in grey, then starts a new
+draft, copies the row's text or its checked text, or deletes the draft
+after a dialog. An empty draft is dropped the moment you leave it, so the
+list never fills with blank rows — on a phone, where the column is a strip
+of tabs above the fields, Clear and then any other row is how a draft
+goes. Dragging the line between the list and the fields sets the list's
+width. Every draft is kept, checked paragraphs included: reload the
+window, or open it on another desk sharing this node, and the column
+comes back as it was without asking the model again; which draft is open
+is this browser's own.
 
 The check runs on the Ollama endpoint in **Configuration**
 (`ollama.base_url`, `ollama.model`), so with a local model nothing you

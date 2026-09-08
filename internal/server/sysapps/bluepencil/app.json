@@ -1,5 +1,5 @@
 {
   "title": "Blue Pencil",
   "icon": "icon.svg",
-  "window": { "width": 520, "height": 572, "grow": true }
+  "window": { "width": 700, "height": 572, "grow": true }
 }

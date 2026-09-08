@@ -18,6 +18,8 @@ import (
 //	notes.json   {"notes":[{id,text,created,updated,deleted?}]}
 //	clocks.json  {"version":1,"items":[{id,name,region,tz,created,updated,deleted?}]}
 //	             (World Clock only — the City app has a cities.json of its own shape)
+//	drafts.json  {"version":2,"drafts":[{id,text,checked,created,updated,deleted?}]}
+//	             (Blue Pencil only; checked maps a paragraph to its correction)
 //
 // deleted is a tombstone stamp (ms); merged output GCs tombstones older
 // than 30 days — the same TTL the apps use. Merge output is canonical
@@ -37,7 +39,7 @@ func Mergeable(key string) bool {
 	case "todos.json", "notes.json":
 		return true
 	}
-	return key == clocksKey
+	return key == clocksKey || key == draftsKey
 }
 
 // clocksKey is the World Clock's city list; matched by full key since the
@@ -56,6 +58,9 @@ func MergeFile(key string, local, remote []byte) (merged []byte, ok bool) {
 	}
 	if key == clocksKey {
 		return mergeClocks(local, remote)
+	}
+	if key == draftsKey {
+		return mergeDrafts(local, remote)
 	}
 	return nil, false
 }
@@ -291,6 +296,88 @@ func mergeClocks(local, remote []byte) ([]byte, bool) {
 		return items[i].ID < items[j].ID
 	})
 	out, err := json.MarshalIndent(clockDoc{Version: 1, Items: items}, "", "  ")
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// ---- Blue Pencil ----
+
+// draftsKey is Blue Pencil's drafts column; matched by full key since the
+// file name alone is too generic to claim.
+const draftsKey = "BluePencil/drafts.json"
+
+type draftItem struct {
+	ID      string            `json:"id"`
+	Text    string            `json:"text"`
+	Checked map[string]string `json:"checked,omitempty"` // paragraph → the pencil's correction; tombstones drop it with the text
+	Created int64             `json:"created"`
+	Updated int64             `json:"updated"`
+	Deleted int64             `json:"deleted,omitempty"`
+}
+
+type draftDoc struct {
+	Version int         `json:"version"`
+	Drafts  []draftItem `json:"drafts"`
+}
+
+func parseDrafts(b []byte) (*draftDoc, bool) {
+	var d draftDoc
+	if json.Unmarshal(b, &d) != nil || d.Drafts == nil {
+		return nil, false
+	}
+	for _, x := range d.Drafts {
+		if x.ID == "" {
+			return nil, false
+		}
+	}
+	return &d, true
+}
+
+func mergeDrafts(local, remote []byte) ([]byte, bool) {
+	a, ok := parseDrafts(local)
+	if !ok {
+		return nil, false
+	}
+	b, ok := parseDrafts(remote)
+	if !ok {
+		return nil, false
+	}
+	m := map[string]draftItem{}
+	for _, x := range a.Drafts {
+		m[x.ID] = x
+	}
+	for _, x := range b.Drafts {
+		old, seen := m[x.ID]
+		if !seen || wins(x.Updated, x.Deleted != 0, old.Updated, old.Deleted != 0, x, old) {
+			m[x.ID] = x
+		}
+	}
+	now := time.Now().UnixMilli()
+	drafts := make([]draftItem, 0, len(m))
+	for _, x := range m {
+		if x.Deleted != 0 {
+			if now-x.Deleted > tombstoneTTL.Milliseconds() {
+				continue
+			}
+			x.Text, x.Checked = "", nil // a tombstone keeps only id and stamps
+		}
+		drafts = append(drafts, x)
+	}
+	// newest-started first with id tiebreak: the column's order, and
+	// deterministic across nodes
+	sort.Slice(drafts, func(i, j int) bool {
+		if drafts[i].Created != drafts[j].Created {
+			return drafts[i].Created > drafts[j].Created
+		}
+		return drafts[i].ID < drafts[j].ID
+	})
+	version := a.Version
+	if b.Version > version {
+		version = b.Version
+	}
+	out, err := json.MarshalIndent(draftDoc{Version: version, Drafts: drafts}, "", "  ")
 	if err != nil {
 		return nil, false
 	}
