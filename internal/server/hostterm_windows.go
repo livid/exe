@@ -25,7 +25,7 @@ func (s *windowsShell) Switch(string) error {
 
 // newAgentSession is the session column's new conversation; without
 // tmux there is nothing to start one in.
-func (s *Server) newAgentSession(a hostAgent, name string) error {
+func (s *Server) newAgentSession(a hostAgent, name string, extra ...string) error {
 	return fmt.Errorf("a second session needs tmux, which Windows has not")
 }
 

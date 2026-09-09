@@ -86,6 +86,16 @@ this machine for `/resume` inside Claude Code or Codex — the desktop keeps no 
 of its own. Archive shows only once the conversation exists; when the
 window was showing that session it moves to the one before it.
 
+The column is also an API, for tools that want a conversation you can
+watch: `GET /v1/agents/claude/sessions` lists the rows with their states,
+`POST /v1/agents/claude/sessions` opens a numbered session with a first
+message (and, for Claude Code, a session to resume or fork and a permission
+mode), `POST …/sessions/<name>/prompt` types a message into one, `DELETE
+…/sessions/<name>` ends it. The hub watcher builds this way: an instruction
+you post in one of Claude's hub threads opens as a session in the Claude
+Code window's column, works there in view, reports in the thread when it
+is done and stays open in the window to be continued.
+
 Windows behave like OS 9 windows: drag the title bar to move, drag the
 left/right/bottom edges or the grow corner to resize, click the shade box to
 collapse a window to its title bar, the zoom box to toggle its size. The

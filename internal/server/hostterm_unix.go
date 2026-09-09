@@ -127,7 +127,9 @@ func agentCommand(a hostAgent, bin, file string) (args []string, line string) {
 // name — the window's session column adding a conversation — with the
 // CLI launched as startAgent launches the icon's own and a status file
 // of the session's own, cleared first. A window moves to it with Switch.
-func (s *Server) newAgentSession(a hostAgent, name string) error {
+// extra are further CLI arguments (agentLaunchArgs: a resume, a session
+// id, the first message), quoted onto the same command line.
+func (s *Server) newAgentSession(a hostAgent, name string, extra ...string) error {
 	bin := agentPath(a)
 	if bin == "" {
 		return fmt.Errorf("%s is not installed on this host", a.title)
@@ -137,6 +139,9 @@ func (s *Server) newAgentSession(a hostAgent, name string) error {
 	args, line := agentCommand(a, bin, file)
 	if args != nil {
 		os.MkdirAll(filepath.Dir(file), 0o755)
+	}
+	for _, e := range extra {
+		line += " " + shQuote(e)
 	}
 	os.Remove(file)
 	os.Remove(stateFileOf(file))
