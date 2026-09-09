@@ -239,7 +239,7 @@ func TestMergeClocksUnionTombstoneAndKey(t *testing.T) {
 
 func TestMergePlacesUnionTombstoneAndKey(t *testing.T) {
 	gone := fmt.Sprint(time.Now().UnixMilli()) // a tombstone inside its 30-day life
-	la := `{"id":"geo:5368361","name":"Los Angeles","region":"California","country":"United States","cc":"US","lat":34.05223,"lon":-118.24368,"elev":89,"tz":"America/Los_Angeles","pop":3820914,"feature":"PPLA2","created":1,"updated":1}`
+	la := `{"id":"geo:5368361","name":"Los Angeles","region":"California","country":"United States","cc":"US","lat":34.05223,"lon":-118.24368,"elev":89,"tz":"America/Los_Angeles","pop":3820914,"feature":"PPLA2","order":2.5,"created":1,"updated":1}`
 	a := []byte(`{"version":1,"items":[` + la + `,` +
 		`{"id":"geo:1850147","name":"Tokyo","country":"Japan","cc":"JP","lat":35.6895,"lon":139.69171,"elev":0,"tz":"Asia/Tokyo","feature":"PPLC","created":2,"updated":2}]}`)
 	// the other node removed Tokyo later and added a sea-level Amsterdam
@@ -271,7 +271,7 @@ func TestMergePlacesUnionTombstoneAndKey(t *testing.T) {
 	if ams.Elev == nil || *ams.Elev != 0 || ams.Pop == nil || *ams.Pop != 0 || ams.TZ != "Europe/Amsterdam" {
 		t.Fatalf("zero-valued fields stripped: %s", merged)
 	}
-	if l := byID["geo:5368361"]; l.Lat == nil || *l.Lat != 34.05223 || l.Pop == nil || *l.Pop != 3820914 || l.Region != "California" || l.CC != "US" {
+	if l := byID["geo:5368361"]; l.Lat == nil || *l.Lat != 34.05223 || l.Pop == nil || *l.Pop != 3820914 || l.Region != "California" || l.CC != "US" || l.Order == nil || *l.Order != 2.5 {
 		t.Fatalf("fields stripped: %s", merged)
 	}
 	rev, ok := MergeFile("Weather/places.json", b, a)

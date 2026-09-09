@@ -20,7 +20,7 @@ import (
 //	             (World Clock only — the City app has a cities.json of its own shape)
 //	drafts.json  {"version":2,"drafts":[{id,text,checked,created,updated,deleted?}]}
 //	             (Blue Pencil only; checked maps a paragraph to its correction)
-//	places.json  {"version":1,"items":[{id,name,region,country,cc,lat,lon,elev?,tz,pop?,feature,created,updated,deleted?}]}
+//	places.json  {"version":1,"items":[{id,name,region,country,cc,lat,lon,elev?,tz,pop?,feature,order?,created,updated,deleted?}]}
 //	             (Weather only — a city as Open-Meteo's geocoder describes it, keyed by its GeoNames id)
 //
 // deleted is a tombstone stamp (ms); merged output GCs tombstones older
@@ -328,6 +328,7 @@ type placeItem struct {
 	TZ      string   `json:"tz,omitempty"`
 	Pop     *int64   `json:"pop,omitempty"`
 	Feature string   `json:"feature,omitempty"`
+	Order   *float64 `json:"order,omitempty"` // fractional drag-reorder rank; the app falls back to created
 	Created int64    `json:"created"`
 	Updated int64    `json:"updated"`
 	Deleted int64    `json:"deleted,omitempty"`
