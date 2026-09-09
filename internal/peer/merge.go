@@ -20,6 +20,8 @@ import (
 //	             (World Clock only — the City app has a cities.json of its own shape)
 //	drafts.json  {"version":2,"drafts":[{id,text,checked,created,updated,deleted?}]}
 //	             (Blue Pencil only; checked maps a paragraph to its correction)
+//	places.json  {"version":1,"items":[{id,name,region,country,cc,lat,lon,elev?,tz,pop?,feature,created,updated,deleted?}]}
+//	             (Weather only — a city as Open-Meteo's geocoder describes it, keyed by its GeoNames id)
 //
 // deleted is a tombstone stamp (ms); merged output GCs tombstones older
 // than 30 days — the same TTL the apps use. Merge output is canonical
@@ -39,7 +41,7 @@ func Mergeable(key string) bool {
 	case "todos.json", "notes.json":
 		return true
 	}
-	return key == clocksKey || key == draftsKey
+	return key == clocksKey || key == draftsKey || key == placesKey
 }
 
 // clocksKey is the World Clock's city list; matched by full key since the
@@ -61,6 +63,9 @@ func MergeFile(key string, local, remote []byte) (merged []byte, ok bool) {
 	}
 	if key == draftsKey {
 		return mergeDrafts(local, remote)
+	}
+	if key == placesKey {
+		return mergePlaces(local, remote)
 	}
 	return nil, false
 }
@@ -296,6 +301,90 @@ func mergeClocks(local, remote []byte) ([]byte, bool) {
 		return items[i].ID < items[j].ID
 	})
 	out, err := json.MarshalIndent(clockDoc{Version: 1, Items: items}, "", "  ")
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// ---- Weather ----
+
+// placesKey is the Weather app's city list; matched by full key since the
+// file name alone is too generic to claim.
+const placesKey = "Weather/places.json"
+
+// placeItem carries every field the app writes (unknown keys are dropped
+// on merge). Numbers are pointers so a sea-level elevation or an empty
+// population survives as 0 rather than vanishing under omitempty.
+type placeItem struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name,omitempty"` // tombstones keep only id and stamps
+	Region  string   `json:"region,omitempty"`
+	Country string   `json:"country,omitempty"`
+	CC      string   `json:"cc,omitempty"`
+	Lat     *float64 `json:"lat,omitempty"`
+	Lon     *float64 `json:"lon,omitempty"`
+	Elev    *float64 `json:"elev,omitempty"`
+	TZ      string   `json:"tz,omitempty"`
+	Pop     *int64   `json:"pop,omitempty"`
+	Feature string   `json:"feature,omitempty"`
+	Created int64    `json:"created"`
+	Updated int64    `json:"updated"`
+	Deleted int64    `json:"deleted,omitempty"`
+}
+
+type placeDoc struct {
+	Version int         `json:"version"`
+	Items   []placeItem `json:"items"`
+}
+
+func parsePlaces(b []byte) (*placeDoc, bool) {
+	var d placeDoc
+	if json.Unmarshal(b, &d) != nil || d.Version != 1 || d.Items == nil {
+		return nil, false
+	}
+	for _, it := range d.Items {
+		if it.ID == "" {
+			return nil, false
+		}
+	}
+	return &d, true
+}
+
+func mergePlaces(local, remote []byte) ([]byte, bool) {
+	a, ok := parsePlaces(local)
+	if !ok {
+		return nil, false
+	}
+	b, ok := parsePlaces(remote)
+	if !ok {
+		return nil, false
+	}
+	m := map[string]placeItem{}
+	for _, it := range a.Items {
+		m[it.ID] = it
+	}
+	for _, it := range b.Items {
+		old, seen := m[it.ID]
+		if !seen || wins(it.Updated, it.Deleted != 0, old.Updated, old.Deleted != 0, it, old) {
+			m[it.ID] = it
+		}
+	}
+	now := time.Now().UnixMilli()
+	items := make([]placeItem, 0, len(m))
+	for _, it := range m {
+		if it.Deleted != 0 && now-it.Deleted > tombstoneTTL.Milliseconds() {
+			continue
+		}
+		items = append(items, it)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Created != items[j].Created {
+			return items[i].Created < items[j].Created
+		}
+		return items[i].ID < items[j].ID
+	})
+	out, err := json.MarshalIndent(placeDoc{Version: 1, Items: items}, "", "  ")
 	if err != nil {
 		return nil, false
 	}

@@ -237,6 +237,53 @@ func TestMergeClocksUnionTombstoneAndKey(t *testing.T) {
 	}
 }
 
+func TestMergePlacesUnionTombstoneAndKey(t *testing.T) {
+	gone := fmt.Sprint(time.Now().UnixMilli()) // a tombstone inside its 30-day life
+	la := `{"id":"geo:5368361","name":"Los Angeles","region":"California","country":"United States","cc":"US","lat":34.05223,"lon":-118.24368,"elev":89,"tz":"America/Los_Angeles","pop":3820914,"feature":"PPLA2","created":1,"updated":1}`
+	a := []byte(`{"version":1,"items":[` + la + `,` +
+		`{"id":"geo:1850147","name":"Tokyo","country":"Japan","cc":"JP","lat":35.6895,"lon":139.69171,"elev":0,"tz":"Asia/Tokyo","feature":"PPLC","created":2,"updated":2}]}`)
+	// the other node removed Tokyo later and added a sea-level Amsterdam
+	b := []byte(`{"version":1,"items":[` + la + `,` +
+		`{"id":"geo:1850147","created":2,"updated":` + gone + `,"deleted":` + gone + `},` +
+		`{"id":"geo:2759794","name":"Amsterdam","region":"North Holland","country":"Netherlands","cc":"NL","lat":52.37403,"lon":4.88969,"elev":0,"tz":"Europe/Amsterdam","pop":0,"feature":"PPLC","created":3,"updated":3}]}`)
+	if !Mergeable("Weather/places.json") {
+		t.Fatal("places.json should merge")
+	}
+	if Mergeable("City/places.json") || Mergeable("Workspace/places.json") {
+		t.Fatal("only the Weather app's file carries the schema")
+	}
+	merged, ok := MergeFile("Weather/places.json", a, b)
+	if !ok {
+		t.Fatal("merge not ok")
+	}
+	var d placeDoc
+	if err := json.Unmarshal(merged, &d); err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]placeItem{}
+	for _, it := range d.Items {
+		byID[it.ID] = it
+	}
+	if len(d.Items) != 3 || byID["geo:1850147"].Deleted == 0 || byID["geo:1850147"].Name != "" || byID["geo:1850147"].Lat != nil {
+		t.Fatalf("tombstone lost: %s", merged)
+	}
+	ams := byID["geo:2759794"]
+	if ams.Elev == nil || *ams.Elev != 0 || ams.Pop == nil || *ams.Pop != 0 || ams.TZ != "Europe/Amsterdam" {
+		t.Fatalf("zero-valued fields stripped: %s", merged)
+	}
+	if l := byID["geo:5368361"]; l.Lat == nil || *l.Lat != 34.05223 || l.Pop == nil || *l.Pop != 3820914 || l.Region != "California" || l.CC != "US" {
+		t.Fatalf("fields stripped: %s", merged)
+	}
+	rev, ok := MergeFile("Weather/places.json", b, a)
+	if !ok || !bytes.Equal(merged, rev) {
+		t.Fatalf("merge not commutative:\n%s\n%s", merged, rev)
+	}
+	again, ok := MergeFile("Weather/places.json", merged, merged)
+	if !ok || !bytes.Equal(merged, again) {
+		t.Fatal("canonical form is not a fixed point")
+	}
+}
+
 func TestMergeDraftsUnionTombstoneAndKey(t *testing.T) {
 	now := time.Now().UnixMilli() // a tombstone inside its 30-day life
 	a := []byte(fmt.Sprintf(`{"version":2,"drafts":[
