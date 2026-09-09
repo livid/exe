@@ -446,6 +446,11 @@ body.mobile #cstrip { z-index: 5; }
 .iv-box { background: #fff; height: 300px; overflow: hidden;
   display: flex; align-items: center; justify-content: center; }
 .iv-box img { display: block; max-width: 100%; max-height: 100%; }
+/* page windows: a Workspace web page (an artifact) rendered in a sandboxed
+   frame under the same info bar; the frame fills the box the grow box sizes */
+.pv-box { background: #fff; height: 420px; overflow: hidden; }
+.pv-frame { display: block; border: 0; width: 100%; height: 100%; background: #fff; }
+body.win-drag iframe { pointer-events: none; }
 
 /* ---------- Icon Editor ----------
    A system app over the UI's own pixel icons: a Finder-style gallery of
@@ -1036,7 +1041,8 @@ body.mobile .tbox.close::before { content: ""; position: absolute; inset: -9px; 
 body.mobile .win-frame > .app-frame,
 body.mobile .win-frame > .finder-icons,
 body.mobile .win-frame > .ed-text,
-body.mobile .win-frame > .iv-box { flex: 1; min-height: 0; height: auto !important; }
+body.mobile .win-frame > .iv-box,
+body.mobile .win-frame > .pv-box { flex: 1; min-height: 0; height: auto !important; }
 body.mobile #log-out { height: 100% !important; }
 body.mobile #news-list { height: 100% !important; }
 body.mobile #docs-body { height: 100% !important; }
@@ -1987,7 +1993,7 @@ function mobileSwapIn(w) {
 // name, carried alongside.
 const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps", "win-icons", "win-menu"]);
 const mobRestorable = id => MOB_RESTORE.has(id)
-  || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-ic-");
+  || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-pv-") || id.startsWith("win-ic-");
 function mobSave() {
   const vis = [...document.querySelectorAll("#desktop .window")].find(w => !w.hidden && !MOB_DIALOG.has(w.id));
   localStorage.setItem("exe_mobile_winstate", JSON.stringify({
@@ -2040,6 +2046,7 @@ function mobRestore() {
     else if (id.startsWith("win-ws-")) openFinderWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-ed-")) openEditorWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-iv-")) openImageWin(decodeURIComponent(id.slice(7)));
+    else if (id.startsWith("win-pv-")) openPageWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-ic-")) openIconEditor(id.slice(7));
     else (WIN_OPENERS[id] || (() => openWin("#" + id)))();
   }
@@ -2159,6 +2166,7 @@ function initWindow(w) {
     };
     const up = () => {
       winDragging = null;
+      document.body.classList.remove("win-drag");
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       winSave();
@@ -2192,6 +2200,7 @@ function wireEdges(w, body, minW, opts = {}) {
       const st = opts.stickEl;
       const stick = st && st.scrollHeight - st.scrollTop - st.clientHeight < 4;
       winDragging = w;
+      document.body.classList.add("win-drag");
       const move = ev => {
         if (dir === "b") {
           body.style.height = Math.max(opts.minH || 96, Math.min(window.innerHeight - (opts.hPad || 170), sh + ev.clientY - sy)) + "px";
@@ -2207,6 +2216,7 @@ function wireEdges(w, body, minW, opts = {}) {
       };
       const up = () => {
         winDragging = null;
+        document.body.classList.remove("win-drag");
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
         winSave();
@@ -2230,6 +2240,7 @@ function wireGrow(grip, w, body, minW, opts = {}) {
     const st = opts.stickEl;
     const stick = st && st.scrollHeight - st.scrollTop - st.clientHeight < 4;
     winDragging = w;
+    document.body.classList.add("win-drag"); // frames go inert, or one under the pointer would take the drag
     const move = ev => {
       w.style.width = Math.max(minW, Math.min(window.innerWidth - 40, sw + ev.clientX - sx)) + "px";
       body.style.height = Math.max(opts.minH || 96, Math.min(window.innerHeight - 170, sh + ev.clientY - sy)) + "px";
@@ -2239,6 +2250,7 @@ function wireGrow(grip, w, body, minW, opts = {}) {
     };
     const up = () => {
       winDragging = null;
+      document.body.classList.remove("win-drag");
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       winSave();
@@ -2373,11 +2385,11 @@ function applyWinState(st) {
         else if (w && !v.open && !w.hidden) closeWin(w);
         continue;
       }
-      if (id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-")) {
-        // Finder folder / editor / image windows: same on-demand pattern as
-        // app windows, with the path recovered from the id
+      if (id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-pv-")) {
+        // Finder folder / editor / image / page windows: same on-demand
+        // pattern as app windows, with the path recovered from the id
         const open = id.startsWith("win-ws-") ? openFinderWin
-          : id.startsWith("win-ed-") ? openEditorWin : openImageWin;
+          : id.startsWith("win-ed-") ? openEditorWin : id.startsWith("win-iv-") ? openImageWin : openPageWin;
         if (v.open && !w) open(decodeURIComponent(id.slice(7)));
         else if (w && v.open && w.hidden) openWin(w);
         else if (w && !v.open && !w.hidden) closeWin(w);
@@ -3392,6 +3404,7 @@ async function loadFinder(w) {
       const rel = path ? path + "/" + en.name : en.name;
       showCtxMenu(e.clientX, e.clientY, [
         { label: "Open", act: () => openEntry(en, rel, w) },
+        ...(isPageFile(en.name) && en.size < 1 << 20 ? [{ label: "Edit Source", act: () => openEditorWin(rel, w) }] : []),
         { label: "Move To Trash", act: () => wsTrash(rel, w) },
         "-",
         { label: "Get Info", act: () => showGetInfo(en, rel) },
@@ -3405,6 +3418,7 @@ async function loadFinder(w) {
 function openEntry(en, rel, w) {
   if (en.dir) openFinderWin(rel, w);
   else if (isImageFile(en.name)) openImageWin(rel, w);
+  else if (isPageFile(en.name)) openPageWin(rel, w);
   else if (isTextFile(en.name) && en.size < 1 << 20) openEditorWin(rel, w);
   else openWorkspaceFile(rel);
 }
@@ -4587,6 +4601,74 @@ wireEdges($("#win-menu"), menuText, 420, { minH: 160 });
 // http(s) path is a foreign picture (a hub embed via the app bridge):
 // fetched bare — the desktop token never leaves this origin.
 const IMG_EXT = new Set("png jpg jpeg gif webp bmp ico avif".split(" "));
+// web pages from the Workspace (the Artifacts folder holds the pages the
+// agents publish): rendered in a window of their own, inside a sandboxed
+// frame with no same-origin — so a page cannot reach the desktop's token
+// or its API — while its scripts, fonts, data: pictures and the CDNs still
+// work. The file arrives as a blob through an authed fetch, like a picture,
+// so no token lands in a URL; the text editor stays a context-menu away.
+function isPageFile(name) {
+  const n = name.toLowerCase();
+  return n.endsWith(".html") || n.endsWith(".htm");
+}
+function openPageWin(path, fromWin) {
+  const id = "win-pv-" + encodeURIComponent(path);
+  let w = document.getElementById(id);
+  if (!w) {
+    w = el("div", { class: "window grow page-window", id });
+    if (fromWin) {
+      w.style.left = (parseInt(fromWin.style.left) || 130) + 24 + "px";
+      w.style.top = (parseInt(fromWin.style.top) || 60) + 24 + "px";
+    } else {
+      const n = document.querySelectorAll("#desktop .page-window").length;
+      w.style.left = (150 + n * 26) + "px";
+      w.style.top = (80 + n * 22) + "px";
+    }
+    w.style.width = Math.min(860, Math.max(320, window.innerWidth - 120)) + "px";
+    w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title"></div>
+      <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
+      <div class="win-frame">
+        <div class="iv-info"><span class="iv-path"></span><span class="iv-dims">…</span></div>
+        <div class="pv-box"><iframe class="pv-frame" sandbox="allow-scripts allow-popups allow-forms allow-modals"></iframe></div>
+        ${GROW_TILE}
+      </div>`;
+    const name = path.split("/").pop();
+    w.querySelector(".title").textContent = name;
+    w.querySelector(".iv-path").textContent = "Workspace :" + path.split("/").join(" :");
+    w.querySelector(".pv-frame").title = name;
+    w.querySelector(".pv-box").style.height = Math.min(620, Math.max(200, window.innerHeight - 180)) + "px";
+    w.dataset.path = path;
+    wireGrow(w.querySelector(".grow-box"), w, w.querySelector(".pv-box"), 240, { minH: 120 });
+    $("#desktop").append(w);
+    initWindow(w);
+    w.dataset.fresh = "1";
+  }
+  openWin(w);
+  if (w.dataset.fresh) {
+    // opened from a Finder window low or far right on the screen, the page would hang off it;
+    // measured once shown, since a hidden window has no size yet
+    delete w.dataset.fresh;
+    if (!IS_MOBILE) requestAnimationFrame(() => {
+      const desktop = $("#desktop"); // the window's offsets are the desktop's, under the menu bar
+      w.style.left = Math.max(4, Math.min(w.offsetLeft, desktop.clientWidth - w.offsetWidth - 4)) + "px";
+      w.style.top = Math.max(4, Math.min(w.offsetTop, desktop.clientHeight - w.offsetHeight - 4)) + "px";
+      winSave();
+    });
+  }
+  loadPage(w);
+}
+async function loadPage(w) {
+  const path = w.dataset.path, fr = w.querySelector(".pv-frame"), dims = w.querySelector(".iv-dims");
+  try {
+    const r = await api(wsUrl(path));
+    const blob = await r.blob();
+    if (w._pageURL) URL.revokeObjectURL(w._pageURL); // reopen refetches — drop the old blob
+    w._pageURL = URL.createObjectURL(new Blob([blob], { type: "text/html" }));
+    fr.src = w._pageURL;
+    dims.textContent = fmtBytes(blob.size);
+  } catch (e) { dims.textContent = e.message; }
+}
 function isImageFile(name) {
   const dot = name.lastIndexOf(".");
   return dot > 0 && IMG_EXT.has(name.slice(dot + 1).toLowerCase());
@@ -5366,6 +5448,7 @@ function openHostTermWin(app, cmd) {
     const move = ev => { col.style.width = colWidth(sw + ev.clientX - sx) + "px"; resize(); winSaveLive(); };
     const up = () => {
       winDragging = null;
+      document.body.classList.remove("win-drag");
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       winSave();
