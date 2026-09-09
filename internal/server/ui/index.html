@@ -3112,6 +3112,21 @@ let IMAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-renderin
   <path fill="#77bb77" d="M14 18h1v1h-1zM13 19h3v1h-3zM12 20h5v1h-5zM11 21h7v1h-7zM10 22h9v1h-9zM10 23h10v1h-10z"/>
   <path fill="#336633" d="M18 17h1v1h-1zM17 18h3v1h-3zM16 19h5v1h-5zM15 20h7v1h-7zM14 21h8v1h-8zM13 22h9v1h-9zM12 23h10v1h-10z"/>
 </svg>`;
+// web page document (html/htm): the page with a small window rendered on
+// it — a platinum title strip over a heading, text, a picture and a link
+let PAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
+  <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
+  <rect x="9.5" y="11.5" width="13" height="14" fill="#fff" stroke="#000"/>
+  <path fill="#dad5ca" d="M10 12h13v2H10z"/>
+  <path fill="#8b867b" d="M10 14h13v1H10zM11 12h1v1h-1z"/>
+  <path fill="#000" d="M11 16h7v1H11z"/>
+  <path fill="#888" d="M11 18h11v1H11zM11 19h8v1H11zM17 24h5v1h-5z"/>
+  <path fill="#99ccff" d="M11 21h5v3H11z"/>
+  <path fill="#77bb77" d="M11 24h5v1H11z"/>
+  <path fill="#4c4c96" d="M17 21h5v1h-5z"/>
+  <path fill="#6666be" d="M17 22h5v1h-5z"/>
+</svg>`;
 // archive document (zip/dmg/rar/7z): the page with a zipper down the middle
 let ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
@@ -3122,6 +3137,7 @@ let ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-render
 </svg>`;
 const fileIcon = en => en.dir ? FOLDER_ICON
   : isImageFile(en.name) ? IMAGE_ICON
+  : isPageFile(en.name) ? PAGE_ICON
   : isArchiveFile(en.name) ? ARCHIVE_ICON : DOC_ICON;
 // host Terminal: the compact Mac with a dark screen showing a green prompt
 let TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
@@ -3533,6 +3549,7 @@ const ICON_DEFS = [
   { key: "folder", label: "Folder", size: 32, get: () => FOLDER_ICON, set: s => FOLDER_ICON = s },
   { key: "doc", label: "Document", size: 32, get: () => DOC_ICON, set: s => DOC_ICON = s },
   { key: "image", label: "Image File", size: 32, get: () => IMAGE_ICON, set: s => IMAGE_ICON = s },
+  { key: "page", label: "Web Page", size: 32, get: () => PAGE_ICON, set: s => PAGE_ICON = s },
   { key: "archive", label: "Archive", size: 32, get: () => ARCHIVE_ICON, set: s => ARCHIVE_ICON = s },
   { key: "log", label: "Daemon Log", size: 32, get: () => LOG_ICON, set: s => LOG_ICON = s },
   { key: "app", label: "App", size: 32, get: () => APP_FALLBACK_ICON, set: s => APP_FALLBACK_ICON = s },
@@ -4419,6 +4436,7 @@ function winIcon(w) {
   if (id.startsWith("win-ws-")) return at16(FOLDER_ICON);
   if (id.startsWith("win-ed-")) return at16(DOC_ICON);
   if (id.startsWith("win-iv-")) return at16(IMAGE_ICON);
+  if (id.startsWith("win-pv-")) return at16(PAGE_ICON);
   if (id.startsWith("win-term-")) return at16(TERMINAL_ICON);
   if (agentOfWin(id)) return at16(AGENT_APPS[agentOfWin(id)].icon());
   if (id === "win-chat") return at16($("#chat-icon svg").outerHTML);
