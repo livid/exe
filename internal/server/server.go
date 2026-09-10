@@ -281,6 +281,9 @@ func errCode(err error) int {
 	if errors.Is(err, vmm.ErrNotRunning) {
 		return http.StatusConflict
 	}
+	if errors.Is(err, vmm.ErrNoBackend) {
+		return http.StatusServiceUnavailable
+	}
 	return http.StatusInternalServerError
 }
 
@@ -770,7 +773,7 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	mem, disk, build := hostinfo.Mem(), hostinfo.DiskUsage(s.StateDir), hostinfo.BuildInfo()
-	writeJSON(w, http.StatusOK, map[string]any{
+	info := map[string]any{
 		"hostname": host, "machine": hostinfo.Model(), "lan_ip": lan, "tailscale_ip": ts,
 		"os": hostinfo.OS(), "arch": runtime.GOARCH, "cpus": runtime.NumCPU(),
 		"memory_total": mem.Total, "memory_available": mem.Available,
@@ -778,7 +781,13 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 		"exe_memory": hostinfo.ProcessMemory(),
 		"build":      map[string]any{"date": build.Date, "commit": build.Commit, "modified": build.Modified},
 		"agents":     agents,
-	})
+	}
+	// A node without a hypervisor says so, so the desktop can explain its
+	// empty VM list instead of inviting a New VM… that cannot happen.
+	if u, ok := s.VMs.(*vmm.Unavailable); ok {
+		info["vms_error"] = u.Reason()
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 func (s *Server) handleRoutes(w http.ResponseWriter, r *http.Request) {

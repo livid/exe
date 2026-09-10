@@ -106,7 +106,15 @@ type vmMeta struct {
 var (
 	ErrNotFound   = errors.New("vm not found")
 	ErrNotRunning = errors.New("vm is not running (VMs live inside the `exe serve` process)")
+	// ErrNoBackend marks a New failure that means this machine cannot run
+	// VMs at all — no hypervisor, Firecracker or QEMU not installed, an
+	// unsupported CPU — as opposed to a bad configuration or a busy state
+	// directory. The daemon then serves everything else behind Unavailable
+	// (a NAS, a container without /dev/kvm) instead of refusing to start.
+	ErrNoBackend = errors.New("no VM backend on this node")
 )
+
+func noBackend(err error) error { return fmt.Errorf("%w: %w", ErrNoBackend, err) }
 
 var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,30}$`)
 

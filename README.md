@@ -79,6 +79,28 @@ up to five minutes for `listen` (likewise `proxy_listen` and `ssh_listen`)
 to become bindable, and exits non-zero after that so systemd starts it
 again.
 
+### Running without VMs (a NAS, a container)
+
+The daemon only needs a hypervisor for the VMs. When the Linux backend
+cannot start because Firecracker, its network helper, `debugfs` or
+`resize2fs` is missing (or the CPU is one Firecracker does not support),
+`exe serve` logs why and runs without VMs: the desktop, Workspace, apps,
+the Terminal, Claude Code and Codex windows, the Hub, Chat and Mac OS 9 all
+work, the VM list is empty, About This Computer says why, and every VM call
+answers `503` with the reason. A bad configuration or a busy state
+directory still stops the daemon.
+
+`make cross` builds static `dist/exe-linux-amd64` and `dist/exe-linux-arm64`
+(plus the network helpers) with cgo off, so the binary runs on any Linux
+userland with no Go installed. Point `EXE_HOME` at a writable directory
+when the daemon user has no home. Synology DSM is one such target: the
+Intel Plus and xs models are amd64, the Realtek models are arm64, and
+Container Manager runs a plain Linux image on both; the x86 models that
+run Synology's own Virtual Machine Manager have `/dev/kvm`, which a
+container would need passed through (plus `/dev/net/tun` and
+`CAP_NET_ADMIN`) before Firecracker could work there. That last step is
+untested.
+
 ### Windows requirements
 
 - An x86-64 host. Enable **Windows Hypervisor Platform** and **Virtual

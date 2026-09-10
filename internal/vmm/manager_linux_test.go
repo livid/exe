@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -361,5 +362,21 @@ func TestReconcileNetworksCleansPersistedVMs(t *testing.T) {
 	}
 	if strings.Contains(text, "never-started") {
 		t.Fatalf("reconciled VM without persisted network setup: %s", text)
+	}
+}
+
+func TestNewWithoutFirecrackerIsNoBackend(t *testing.T) {
+	_, err := New(Options{
+		StateDir:    t.TempDir(),
+		Firecracker: FirecrackerOptions{Binary: "exe-test-no-such-firecracker", KernelURL: "http://example.invalid/vmlinux"},
+	})
+	if err == nil {
+		t.Fatal("New() succeeded without a Firecracker binary")
+	}
+	if !errors.Is(err, ErrNoBackend) {
+		t.Fatalf("New() error = %v, want ErrNoBackend", err)
+	}
+	if !strings.Contains(err.Error(), "exe-test-no-such-firecracker") {
+		t.Fatalf("New() error %q does not name the missing binary", err)
 	}
 }

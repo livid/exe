@@ -1,6 +1,7 @@
 /exe
 /exe.exe
 /exe-net-helper
+/dist/
 *.log
 
 # Local runtime data and verification artifacts.

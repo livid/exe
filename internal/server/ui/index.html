@@ -2646,7 +2646,8 @@ function renderAbout() {
   const running = lastVMs.filter(v => v.state === "running");
   const allotted = running.reduce((s, v) => s + (v.memory_mb || 0), 0) * 2 ** 20;
   add("Built-in Memory", fmtMem(h.memory_total));
-  add("VM Memory", running.length
+  add("VM Memory", h.vms_error ? el("span", { class: "muted" }, "unavailable on this node")
+    : running.length
     ? `${fmtMem(allotted)} allotted to ${running.length} running VM${running.length === 1 ? "" : "s"}`
     : "no VM running");
   add("Disk Space", h.disk_total ? `${fmtMem(h.disk_free)} free of ${fmtMem(h.disk_total)}` : "—");
@@ -4820,6 +4821,18 @@ document.addEventListener("scroll", e => {
 // ---- vm list ----
 let currentVM = null;
 let lastVMs = [];
+// null until /v1/hostinfo has answered, then "" on a node that runs VMs or
+// the reason it cannot (a NAS, a container without /dev/kvm). The empty
+// state waits for it so its text is right the first time it shows.
+let vmsError = null;
+function applyVMsError() {
+  const empty = $("#vm-empty");
+  if (vmsError) {
+    empty.textContent = "This node cannot run VMs — " + vmsError;
+    $("#vm-hint").textContent = "VMs are unavailable on this node";
+  }
+  empty.hidden = vmsError === null || lastVMs.length > 0;
+}
 function chip(state) { return el("span", { class: "chip " + state }, state); }
 
 // column sorting, OS 9 style: click a header to sort by it (again to flip),
@@ -4873,7 +4886,7 @@ function renderVMList(rawVMs) {
   renderVMList._last = sig;
   const tb = $("#vm-rows");
   tb.replaceChildren();
-  $("#vm-empty").hidden = vms.length > 0;
+  applyVMsError();
   $("#vm-count").textContent = vms.length + (vms.length === 1 ? " item" : " items");
   renderIcons(vms);
   for (const vm of vms) {
@@ -7674,7 +7687,9 @@ j("/v1/hostinfo").then(h => {
     if (a) { hostAgents[app] = { dir: a.dir || "the Workspace folder", sessions: !!a.sessions }; any = true; }
   }
   if (any) renderIcons(lastVMs);
-}).catch(() => {});
+  vmsError = h.vms_error || "";
+  applyVMsError();
+}).catch(() => { vmsError = ""; applyVMsError(); });
 loadConfig().catch(() => {});
 cfHeartbeat(false);
 chatDetect(false);

@@ -111,28 +111,28 @@ type fcLogger struct {
 // delegated to a small root-owned helper; the daemon and VMs stay unprivileged.
 func New(opts Options) (Manager, error) {
 	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
-		return nil, fmt.Errorf("firecracker is unsupported on linux/%s", runtime.GOARCH)
+		return nil, noBackend(fmt.Errorf("firecracker is unsupported on linux/%s", runtime.GOARCH))
 	}
 	if strings.TrimSpace(opts.Firecracker.Binary) == "" {
 		opts.Firecracker.Binary = "firecracker"
 	}
 	binary, err := exec.LookPath(opts.Firecracker.Binary)
 	if err != nil {
-		return nil, fmt.Errorf("find Firecracker binary %q: %w", opts.Firecracker.Binary, err)
+		return nil, noBackend(fmt.Errorf("find Firecracker binary %q: %w", opts.Firecracker.Binary, err))
 	}
 	if strings.TrimSpace(opts.Firecracker.NetworkHelper) == "" {
 		opts.Firecracker.NetworkHelper = "/usr/local/libexec/exe-net-helper"
 	}
 	helper, err := exec.LookPath(opts.Firecracker.NetworkHelper)
 	if err != nil {
-		return nil, fmt.Errorf("find Firecracker network helper %q: %w", opts.Firecracker.NetworkHelper, err)
+		return nil, noBackend(fmt.Errorf("find Firecracker network helper %q: %w", opts.Firecracker.NetworkHelper, err))
 	}
 	if err := validateNetworkHelper(helper); err != nil {
 		return nil, err
 	}
 	for _, command := range []string{"debugfs", "resize2fs"} {
 		if _, err := exec.LookPath(command); err != nil {
-			return nil, fmt.Errorf("the Linux Firecracker backend requires %s: %w", command, err)
+			return nil, noBackend(fmt.Errorf("the Linux Firecracker backend requires %s: %w", command, err))
 		}
 	}
 	if opts.Firecracker.KernelURL == "" {

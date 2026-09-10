@@ -2,9 +2,12 @@
 
 package vmm
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+)
 
-// New returns an error on platforms without a VM backend.
+// New returns ErrNoBackend on platforms without a VM backend.
 func New(opts Options) (Manager, error) {
-	return nil, fmt.Errorf("no vm backend for this platform")
+	return nil, noBackend(fmt.Errorf("no vm backend for %s/%s", runtime.GOOS, runtime.GOARCH))
 }

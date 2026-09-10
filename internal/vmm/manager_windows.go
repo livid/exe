@@ -71,18 +71,18 @@ type qemuRuntime struct {
 // New creates the Windows QEMU backend.
 func New(opts Options) (Manager, error) {
 	if runtime.GOARCH != "amd64" {
-		return nil, fmt.Errorf("the Windows backend needs QEMU's WHPX accelerator, which is x86-64 only (this is windows/%s)", runtime.GOARCH)
+		return nil, noBackend(fmt.Errorf("the Windows backend needs QEMU's WHPX accelerator, which is x86-64 only (this is windows/%s)", runtime.GOARCH))
 	}
 	if err := checkWHPX(); err != nil {
-		return nil, err
+		return nil, noBackend(err)
 	}
 	binary, err := findQEMU(opts.QEMU.Binary)
 	if err != nil {
-		return nil, err
+		return nil, noBackend(err)
 	}
 	code, vars, err := findFirmware(binary, opts.QEMU.FirmwareDir)
 	if err != nil {
-		return nil, err
+		return nil, noBackend(err)
 	}
 	if opts.QEMU.NetworkCIDR == "" {
 		opts.QEMU.NetworkCIDR = "192.168.127.0/24"

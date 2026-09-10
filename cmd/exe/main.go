@@ -146,7 +146,15 @@ func cmdServe() error {
 		},
 	})
 	if err != nil {
-		return err
+		// No hypervisor here (a NAS, a container without /dev/kvm, a CPU
+		// Firecracker does not know): the desktop, apps, agents, hub and
+		// the Mac do not need one, so serve them and let the VM list say
+		// why it is empty. Any other failure still stops the daemon.
+		if !errors.Is(err, vmm.ErrNoBackend) {
+			return err
+		}
+		log.Printf("%v — this node runs without VMs", err)
+		mgr = vmm.NewUnavailable(err)
 	}
 	px, err := proxy.New(filepath.Join(stateDir, "routes.json"))
 	if err != nil {

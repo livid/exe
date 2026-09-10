@@ -209,6 +209,10 @@ memory and a 20 GB disk. The very first VM downloads the Debian base image
 (~3 GB) once — later VMs clone it and boot in seconds. VMs persist: stopping
 one keeps its disk, starting boots it again, deleting destroys the disk too.
 
+A node without a hypervisor — a NAS, a container without `/dev/kvm` — runs
+the desktop without VMs: the list stays empty and says why, About This
+Computer shows the same reason, and everything else works as usual.
+
 Double-click a VM in the list to open its window. The tabs:
 
 - **Services** — TCP ports listening inside the VM, with one-click links,
