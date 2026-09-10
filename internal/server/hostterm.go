@@ -25,11 +25,15 @@ type hostShell interface {
 // agentShell is an agent window's pty: a tmux client the window's
 // session column moves between the agent's sessions (agentsessions.go).
 // Current names the session the client shows, "" when it is no tmux
-// client; Switch moves it to another session of the agent's.
+// client; Switch moves it to another session of the agent's. Scroll
+// moves the window's view through the pane's tmux history for the
+// browser's wheel: back that many lines for lines > 0, forward for < 0,
+// and back to the live screen for 0.
 type agentShell interface {
 	hostShell
 	Current() string
 	Switch(session string) error
+	Scroll(lines int) error
 }
 
 // tmuxSocket names the tmux server the agent sessions live on: "" for
@@ -170,7 +174,10 @@ func shQuote(s string) string {
 // window shows — the session it showed last, whichever browser that was
 // (lastAgentSession). The window sends {"switch":"exe-claude-2"} to move to
 // another, {"new":true} to start one and {"archive":"exe-claude-2"} to
-// end one; what goes wrong comes back as {"error":…}.
+// end one; what goes wrong comes back as {"error":…}. {"scroll":n} is
+// the window's wheel: the daemon scrolls the pane's tmux history
+// (unixShell.Scroll) — the browser terminal cannot, as tmux draws in
+// its alternate screen, which keeps no scrollback.
 // ?cmd=<command line> runs that one command in a login shell — the desktop
 // menu's "terminal <command>" shortcut to a CLI tool; the session ends
 // with the command.
@@ -244,12 +251,18 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				Switch  string `json:"switch"`
 				New     bool   `json:"new"`
 				Archive string `json:"archive"`
+				Scroll  *int   `json:"scroll"` // 0 means back to the live screen, so nil tells absent
 			}
 			if json.Unmarshal(data, &msg) != nil {
 				continue
 			}
 			if len(msg.Resize) == 2 {
 				sh.Resize(msg.Resize[0], msg.Resize[1])
+			}
+			if msg.Scroll != nil && ash != nil {
+				// a failed scroll is not worth a toast on every wheel
+				// notch; the window simply stays where it is
+				ash.Scroll(*msg.Scroll)
 			}
 			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "") {
 				continue

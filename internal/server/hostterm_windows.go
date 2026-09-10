@@ -19,6 +19,7 @@ func (s *windowsShell) Write(p []byte) (int, error) { return s.pty.Write(p) }
 func (s *windowsShell) Resize(cols, rows int)       { s.pty.Resize(cols, rows) }
 func (s *windowsShell) Close() error                { return s.pty.Close() }
 func (s *windowsShell) Current() string             { return "" }
+func (s *windowsShell) Scroll(int) error            { return nil } // no tmux: the browser terminal scrolls itself
 func (s *windowsShell) Switch(string) error {
 	return fmt.Errorf("a second session needs tmux, which Windows has not")
 }

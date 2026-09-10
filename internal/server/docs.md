@@ -59,6 +59,15 @@ window's shows the ChatGPT subscription's 5-hour and weekly usage windows
 (the sign-in under **Configuration → OpenAI**), re-read once a minute
 while the window is open; hover for the reset times.
 
+The mouse wheel scrolls back through the conversation in either window.
+Claude Code takes the wheel itself and scrolls its own transcript. Codex
+leaves its transcript to the terminal, and on a host with tmux that is
+the tmux session's history: the wheel scrolls it there (tmux's copy
+mode, with its `[123/980]` position at the top right), and typing
+returns to the live screen first, so the keys reach Codex as in any
+terminal. Text selection is unchanged: drag in a Codex window, Shift+drag
+(Option+drag on a Mac) in a Claude Code window, which tracks the mouse.
+
 On a host with tmux, a Claude Code or Codex window lists the agent's
 sessions down its left, one row per tmux session, titled the way the CLI
 titles its terminal — Claude Code keeps that on its current task, and

@@ -5578,7 +5578,45 @@ function openHostTermWin(app, cmd) {
     };
   }
   connect(true);
-  term.onData(d => { if (ws && ws.readyState === 1) ws.send(enc.encode(d)); });
+  // the wheel in a tmux window: tmux draws in its alternate screen, so
+  // the terminal keeps no scrollback of its own and would turn the wheel
+  // into arrow keys, which reach the CLI as typed (Codex's composer
+  // walked its prompt history on every notch). The history is the
+  // pane's, in tmux, so the wheel goes to the daemon as lines to scroll
+  // ({"scroll":n}, back for n > 0) and tmux's copy mode shows it; a key
+  // typed while scrolled back sends 0 first — back to the live screen —
+  // so it reaches the CLI as it would in any terminal. A CLI that tracks
+  // the mouse (Claude Code) takes the wheel itself, through xterm's own
+  // reports, so the handler steps aside for it. A notch goes out at
+  // once; what follows within 40 ms pools into one more frame, as a
+  // trackpad sends dozens of small deltas a second, each a tmux command
+  // otherwise. The window opens as if scrolled: the pane may have been
+  // left in copy mode by a window that never got to leave it
+  let scrolled = true, pend = 0, pendTimer = 0, lastScroll = 0;
+  const sendScroll = n => {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ scroll: n }));
+    scrolled = n !== 0; // forward too: the bottom may not be reached yet
+  };
+  const flushScroll = () => {
+    pendTimer = 0;
+    const n = Math.trunc(pend);
+    pend -= n;
+    if (n) { sendScroll(n); lastScroll = performance.now(); }
+  };
+  if (column) box.addEventListener("wheel", e => {
+    if (term.modes.mouseTrackingMode !== "none") return;
+    e.preventDefault(); e.stopPropagation();
+    const scr = box.querySelector(".xterm-screen");
+    const cell = (scr && term.rows && scr.getBoundingClientRect().height / term.rows) || 15;
+    pend -= e.deltaMode === 1 ? e.deltaY : e.deltaMode === 2 ? e.deltaY * term.rows : e.deltaY / cell;
+    if (performance.now() - lastScroll >= 40) flushScroll();
+    else if (!pendTimer) pendTimer = setTimeout(flushScroll, 40);
+  }, { capture: true, passive: false });
+  term.onData(d => {
+    if (!(ws && ws.readyState === 1)) return;
+    if (scrolled) sendScroll(0);
+    ws.send(enc.encode(d));
+  });
   window.addEventListener("resize", resize);
   wireGrow(w.querySelector(".grow-box"), w, box, column ? 760 : 400, { minH: 160, onMove: resize });
   w._fit = resize; // applyWinState: refit after a remote geometry change

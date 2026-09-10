@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,6 +20,8 @@ import (
 type unixShell struct {
 	f   *os.File
 	cmd *exec.Cmd
+	mu  sync.Mutex
+	tty string // the pty's tmux client tty once known (clientTTY)
 }
 
 func (s *unixShell) Read(p []byte) (int, error)  { return s.f.Read(p) }
@@ -41,6 +44,7 @@ func (s *unixShell) Resize(cols, rows int) {
 // window's `cmd` is a tmux client, and hanging it up simply detaches,
 // leaving the persistent session for the icon to return to.)
 func (s *unixShell) Close() error {
+	s.Scroll(0) // a view scrolled back does not outlive its window: the next opens live
 	s.cmd.Process.Signal(syscall.SIGHUP)
 	done := make(chan struct{})
 	go func() { s.cmd.Wait(); close(done) }()
@@ -184,10 +188,83 @@ func (s *unixShell) Current() string {
 	return session
 }
 
+// clientTTY is the pty's tmux client tty, looked up once: the client
+// keeps its tty for the life of the pty while the session it shows
+// changes, and every tmux command below names it as its target.
+func (s *unixShell) clientTTY() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tty == "" {
+		s.tty, _ = s.tmuxClient()
+	}
+	return s.tty
+}
+
+// Scroll moves the window's view through the pane's tmux history — the
+// browser's wheel while nothing in the pane takes the mouse. The browser
+// terminal cannot do it itself: tmux draws in its alternate screen, so
+// xterm.js keeps no scrollback there and turns the wheel into arrow
+// keys, which reach the CLI as typed (Codex's composer walked its prompt
+// history on every notch; Claude Code tracks the mouse and takes the
+// wheel itself, so it never comes here). lines > 0 scrolls back that
+// many lines, entering tmux's copy mode — with -e, scrolling down to
+// the bottom again leaves it; lines < 0 scrolls forward; 0 leaves copy
+// mode, which the browser sends ahead of any key typed while scrolled
+// back, so the key reaches the CLI as it would in any terminal. A pane
+// in its own alternate screen (vim, less) has no history: the wheel
+// becomes arrow keys there, as xterm.js does on its own. Every command
+// names the client's tty as its target: an if-shell's inner commands
+// without one land on tmux's idea of the current session — someone
+// else's window.
+func (s *unixShell) Scroll(lines int) error {
+	tty := s.clientTTY()
+	if tty == "" {
+		return nil // no tmux client: the browser terminal scrolls itself
+	}
+	out, err := tmuxCmd("display-message", "-p", "-t", tty, "#{alternate_on} #{pane_in_mode}").Output()
+	if err != nil {
+		return fmt.Errorf("tmux display-message: %w", err)
+	}
+	f := strings.Fields(string(out))
+	alt := len(f) == 2 && f[0] == "1"
+	mode := len(f) == 2 && f[1] == "1"
+	n := lines
+	if n < 0 {
+		n = -n
+	}
+	count := strconv.Itoa(n)
+	var cmd *exec.Cmd
+	switch {
+	case lines == 0:
+		if !mode {
+			return nil
+		}
+		cmd = tmuxCmd("send-keys", "-t", tty, "-X", "cancel")
+	case alt && !mode:
+		key := "Up"
+		if lines < 0 {
+			key = "Down"
+		}
+		cmd = tmuxCmd("send-keys", "-t", tty, "-N", count, key)
+	case lines > 0 && mode:
+		cmd = tmuxCmd("send-keys", "-t", tty, "-X", "-N", count, "scroll-up")
+	case lines > 0:
+		cmd = tmuxCmd("copy-mode", "-e", "-t", tty, ";", "send-keys", "-t", tty, "-X", "-N", count, "scroll-up")
+	case mode:
+		cmd = tmuxCmd("send-keys", "-t", tty, "-X", "-N", count, "scroll-down")
+	default:
+		return nil // forward with nothing scrolled back: already live
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // Switch moves the pty's tmux client to another session; the pty keeps
 // its size and tmux lays the session out for it.
 func (s *unixShell) Switch(session string) error {
-	tty, _ := s.tmuxClient()
+	tty := s.clientTTY()
 	if tty == "" {
 		return fmt.Errorf("this window is not a tmux client")
 	}
@@ -195,6 +272,7 @@ func (s *unixShell) Switch(session string) error {
 	if err != nil {
 		return fmt.Errorf("switch-client: %s", strings.TrimSpace(string(out)))
 	}
+	s.Scroll(0) // the session comes up live, not where a wheel once left it
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -163,6 +164,43 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatalf("timed out waiting for %s\nclients: %q\npty printed: %q", what, clients, seen)
 	}
 	waitFor("the client to attach", func() bool { return sh.Current() == a.session })
+	// the wheel: 100 lines of output give the pane a history, and Scroll
+	// walks it in tmux's copy mode — back, forward, out at the bottom
+	// (-e), and 0 leaves it at once for a key typed while scrolled back
+	sh.Write([]byte("seq 1 100\n"))
+	view := func() string {
+		out, _ := tmuxCmd("display-message", "-p", "-t", a.session, "#{history_size} #{pane_in_mode} #{scroll_position}").Output()
+		return strings.TrimSpace(string(out))
+	}
+	waitFor("the pane to fill its history", func() bool { return !strings.HasPrefix(view(), "0 ") })
+	for _, step := range []struct {
+		lines int
+		want  string // pane_in_mode scroll_position
+	}{
+		{10, "1 10"}, {5, "1 15"}, {-4, "1 11"}, {-30, "0"}, {-3, "0"}, {7, "1 7"}, {0, "0"}, {0, "0"},
+	} {
+		if err := sh.Scroll(step.lines); err != nil {
+			t.Fatalf("Scroll(%d): %v", step.lines, err)
+		}
+		var got string
+		for i := 0; i < 100; i++ {
+			if f := strings.Fields(view()); len(f) > 1 {
+				got = strings.Join(f[1:], " ")
+			}
+			if got == step.want {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if got != step.want {
+			t.Fatalf("after Scroll(%d): mode and position %q, want %q", step.lines, got, step.want)
+		}
+	}
+	// left scrolled back, the session comes up live when the window
+	// switches back to it (below, after New moved the window away)
+	if err := sh.Scroll(7); err != nil {
+		t.Fatal(err)
+	}
 	list := s.agentSessions(a)
 	if len(list) != 1 || list[0].Number != 1 || !list[0].Attached {
 		t.Fatalf("after start: %+v", list)
@@ -186,6 +224,9 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor("the client back on session 1", func() bool { return sh.Current() == a.session })
+	if f := strings.Fields(view()); len(f) < 2 || f[1] != "0" {
+		t.Fatalf("session 1 after the switch back: history/mode/position %q, want out of copy mode", f)
+	}
 	if err := col.switchTo("exe-test-sh-9"); err == nil {
 		t.Fatal("switching to a session that does not exist should fail")
 	}
