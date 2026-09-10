@@ -324,8 +324,9 @@ The **Workspace** is `~/.exe/workspace` on this machine: a shared folder
 where you, agents and apps exchange files. The desktop icon opens a Finder
 view — double-click text files to edit them in place, images to view them,
 web pages (`.html`) to see them rendered in a window of their own (the page
-runs sandboxed, apart from the desktop; **Edit Source** on its right-click
-menu opens the text instead). The **Artifacts** folder is where the agents
+runs sandboxed, apart from the desktop; the right-click menu's **Open in
+New Window** shows it in a browser window instead, and **Edit Source**
+opens the text). The **Artifacts** folder is where the agents
 publish the pages they make — Claude's claude.ai artifacts land there.
 Right-click for Get Info and Download; right-click a window's empty space
 for New Folder, New Text File and Upload; **File → Upload to Workspace…**

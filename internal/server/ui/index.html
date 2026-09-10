@@ -3420,6 +3420,7 @@ async function loadFinder(w) {
       const rel = path ? path + "/" + en.name : en.name;
       showCtxMenu(e.clientX, e.clientY, [
         { label: "Open", act: () => openEntry(en, rel, w) },
+        ...(isPageFile(en.name) ? [{ label: "Open in New Window", act: () => openPageTab(rel) }] : []),
         ...(isPageFile(en.name) && en.size < 1 << 20 ? [{ label: "Edit Source", act: () => openEditorWin(rel, w) }] : []),
         { label: "Move To Trash", act: () => wsTrash(rel, w) },
         "-",
@@ -4675,6 +4676,27 @@ function openPageWin(path, fromWin) {
     });
   }
   loadPage(w);
+}
+// the same page in a browser window of its own (the Finder's Open in New
+// Window): a bare shell on our origin whose whole viewport is the sandboxed
+// frame the page window uses, so the page still runs apart from the
+// desktop's token and API. The window opens inside the click, before the
+// fetch, or a popup blocker would keep it.
+async function openPageTab(rel) {
+  const shell = window.open("", "_blank");
+  if (!shell) { toast("The browser kept the window from opening"); return; }
+  const name = rel.split("/").pop();
+  shell.document.write(`<!doctype html><title></title><style>html,body{margin:0;height:100%;background:#fff}iframe{display:block;border:0;width:100%;height:100%}</style><iframe sandbox="allow-scripts allow-popups allow-forms allow-modals"></iframe>`);
+  shell.document.close();
+  shell.document.title = name;
+  try {
+    const r = await api(wsUrl(rel));
+    const blob = await r.blob();
+    const u = URL.createObjectURL(new Blob([blob], { type: "text/html" }));
+    const fr = shell.document.querySelector("iframe");
+    fr.title = name; fr.src = u;
+    shell.addEventListener("pagehide", () => URL.revokeObjectURL(u));
+  } catch (e) { shell.close(); toast(e.message); }
 }
 async function loadPage(w) {
   const path = w.dataset.path, fr = w.querySelector(".pv-frame"), dims = w.querySelector(".iv-dims");
