@@ -4625,8 +4625,11 @@ const IMG_EXT = new Set("png jpg jpeg gif webp bmp ico avif".split(" "));
 // agents publish): rendered in a window of their own, inside a sandboxed
 // frame with no same-origin — so a page cannot reach the desktop's token
 // or its API — while its scripts, fonts, data: pictures and the CDNs still
-// work. The file arrives as a blob through an authed fetch, like a picture,
-// so no token lands in a URL; the text editor stays a context-menu away.
+// work. The frame loads the page from a URL of its own on this origin,
+// bought with a short-lived ticket (POST /v1/pages) so no token lands in a
+// URL the page can read; a blob: URL would do, except that a sandboxed
+// blob document cannot follow its own #anchor links. The text editor stays
+// a context-menu away.
 function isPageFile(name) {
   const n = name.toLowerCase();
   return n.endsWith(".html") || n.endsWith(".htm");
@@ -4682,7 +4685,7 @@ function openPageWin(path, fromWin) {
 // Window): a bare shell on our origin whose whole viewport is the sandboxed
 // frame the page window uses, so the page still runs apart from the
 // desktop's token and API. The window opens inside the click, before the
-// fetch, or a popup blocker would keep it.
+// ticket comes, or a popup blocker would keep it.
 async function openPageTab(rel) {
   const shell = window.open("", "_blank");
   if (!shell) { toast("The browser kept the window from opening"); return; }
@@ -4691,23 +4694,24 @@ async function openPageTab(rel) {
   shell.document.close();
   shell.document.title = name;
   try {
-    const r = await api(wsUrl(rel));
-    const blob = await r.blob();
-    const u = URL.createObjectURL(new Blob([blob], { type: "text/html" }));
+    const t = await pageTicket(rel);
     const fr = shell.document.querySelector("iframe");
-    fr.title = name; fr.src = u;
-    shell.addEventListener("pagehide", () => URL.revokeObjectURL(u));
+    fr.title = name; fr.src = t.url;
   } catch (e) { shell.close(); toast(e.message); }
+}
+// a ticketed URL for one Workspace page, absolute: the shell above is
+// about:blank and has no base of its own
+async function pageTicket(rel) {
+  const t = await j("/v1/pages", { method: "POST", json: { path: rel } });
+  t.url = new URL(t.url, location.href).href;
+  return t;
 }
 async function loadPage(w) {
   const path = w.dataset.path, fr = w.querySelector(".pv-frame"), dims = w.querySelector(".iv-dims");
   try {
-    const r = await api(wsUrl(path));
-    const blob = await r.blob();
-    if (w._pageURL) URL.revokeObjectURL(w._pageURL); // reopen refetches — drop the old blob
-    w._pageURL = URL.createObjectURL(new Blob([blob], { type: "text/html" }));
-    fr.src = w._pageURL;
-    dims.textContent = fmtBytes(blob.size);
+    const t = await pageTicket(path); // reopen buys a fresh ticket: the file may have changed
+    fr.src = t.url;
+    dims.textContent = fmtBytes(t.size);
   } catch (e) { dims.textContent = e.message; }
 }
 function isImageFile(name) {

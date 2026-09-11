@@ -65,6 +65,10 @@ type Server struct {
 	agentLastMu sync.Mutex
 	agentLast   map[string]string
 
+	// Tickets for rendered Workspace pages (pages.go): ticket -> file, expiry.
+	pageMu      sync.Mutex
+	pageTickets map[string]pageTicket
+
 	// Cached Cloudflare heartbeat so UI polling doesn't hammer the CF API.
 	cfHealthMu  sync.Mutex
 	cfHealthAt  time.Time
@@ -182,6 +186,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/workspace/{path...}", s.handleWorkspacePut)
 	mux.HandleFunc("POST /v1/workspace/{path...}", s.handleWorkspaceMove)
 	mux.HandleFunc("DELETE /v1/workspace/{path...}", s.handleWorkspaceDelete)
+	mux.HandleFunc("POST /v1/pages", s.handlePageTicket)
+	mux.HandleFunc("GET /pages/{ticket}/{name}", s.handlePage)
 	mux.HandleFunc("GET /v1/newsfeed", s.handleNewsfeedGet)
 	mux.HandleFunc("POST /v1/newsfeed", s.handleNewsfeedPost)
 	mux.HandleFunc("DELETE /v1/newsfeed/{id}", s.handleNewsfeedDelete)
@@ -242,7 +248,9 @@ func (s *Server) Handler() http.Handler {
 // auth guards the API; the static UI page itself is public (it holds no
 // data — every API call it makes carries the token). /v1/peer/* is exempt:
 // those routes authenticate each request by peer signature (or join code)
-// instead, and expose nothing beyond app-data sync.
+// instead, and expose nothing beyond app-data sync. /pages/ is outside
+// /v1 on purpose: a rendered Workspace page is authorized by its ticket
+// (pages.go), never by the token.
 func (s *Server) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/v1/peer/") {
