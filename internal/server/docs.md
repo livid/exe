@@ -96,6 +96,15 @@ this machine for `/resume` inside Claude Code or Codex — the desktop keeps no 
 of its own. Archive shows only once the conversation exists; when the
 window was showing that session it moves to the one before it.
 
+A window whose link drops — the tab left behind while the laptop slept, a
+network that came and went, the daemon restarted — reconnects on its own,
+in the background, to the session it showed; a window whose tmux client
+was detached with the sessions still there does the same. Only when the
+agent's last session has ended does it stop and say so: close and reopen
+it for a fresh conversation. The same session can be open in more than
+one window at once — a phone beside the desktop — and the terminal takes
+the size of whichever was attached, typed in or resized last.
+
 A Codex thread started elsewhere on this machine — in the ChatGPT app on
 your phone (its remote Codex runs here), the Codex app, VS Code — is a
 conversation on this machine all the same, and the Codex window's column

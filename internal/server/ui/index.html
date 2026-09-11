@@ -5568,6 +5568,47 @@ function openHostTermWin(app, cmd) {
   const url = `${proto}://${location.host}/v1/host/terminal${qs.size ? "?" + qs : ""}`;
   const enc = new TextEncoder();
   let ws = null, retry = 0, retryTimer = 0;
+  // the link's pulse, the browser's side: a {"ping":t} every 25 s, which
+  // the daemon answers {"pong":t}. A beat that finds the last one
+  // unanswered has a link that died under a socket still saying open —
+  // a laptop back from sleep, a network that came and went — and drops
+  // it to reconnect, rather than sit "connected" until a key finds out.
+  // The send itself is the other half: a socket the daemon has given up
+  // on closes the moment something goes down it. A tab in the background
+  // may get its timer once a minute (Chrome throttles), which only
+  // spaces the beats out; the daemon's own pings need no script here at
+  // all, so its side stays sure of the link whatever the tab's state
+  let hb = 0, pinged = 0, probe = 0;
+  const beat = () => {
+    if (!ws || ws.readyState !== 1) return;
+    if (pinged) { drop(); return; }
+    pinged = Date.now();
+    ws.send(JSON.stringify({ ping: pinged }));
+  };
+  // drop abandons a socket the pulse found dead and goes on as for any
+  // lost link; the socket's own close, whenever the browser gets to it,
+  // is no longer news
+  const drop = () => {
+    const dead = ws;
+    ws = null;
+    dead.onclose = dead.onmessage = null;
+    try { dead.close(); } catch (e) {}
+    lost(1006, "");
+  };
+  // back in view — the tab switched to, a lid opened — the window checks
+  // the link now rather than at the next beat: a reconnect that was
+  // waiting its turn goes at once, an open socket gets a ping and five
+  // seconds to answer it
+  const onVisible = () => {
+    if (document.hidden || !agent) return;
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = 0; connect(false); return; }
+    if (!ws || ws.readyState !== 1) return;
+    pinged = 0; // a beat from before the tab went away is not held against the link
+    beat();
+    clearTimeout(probe);
+    probe = setTimeout(() => { probe = 0; if (pinged && ws) drop(); }, 5000);
+  };
+  document.addEventListener("visibilitychange", onVisible);
   const resize = () => {
     if (ws && ws.readyState === 1) {
       fit.fit();
@@ -5581,6 +5622,9 @@ function openHostTermWin(app, cmd) {
     ws.binaryType = "arraybuffer";
     ws.onopen = () => {
       retry = 0;
+      pinged = 0;
+      clearInterval(hb);
+      hb = setInterval(beat, 25000);
       status.textContent = "connected";
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
       if (initial) term.focus(); // never steal focus on a background reconnect
@@ -5591,11 +5635,12 @@ function openHostTermWin(app, cmd) {
     // (null: the session the column moved to has none yet), {"usage":…}
     // with the ChatGPT subscription's for Codex — or the session column's
     // list, {"sessions":[…],"current":…}, or an {"error":…} for a switch
-    // or New that failed
+    // or New that failed, or the {"pong":…} to a beat above
     ws.onmessage = e => {
       if (typeof e.data !== "string") { term.write(new Uint8Array(e.data)); return; }
       let msg;
       try { msg = JSON.parse(e.data); } catch (err) { return; }
+      if ("pong" in msg) { pinged = 0; clearTimeout(probe); probe = 0; }
       if ("status" in msg) { if (msg.status) showAgentUsage(usage, msg.status); else usage.hidden = true; }
       if ("usage" in msg) showOpenAIUsage(usage, msg.usage);
       if (Array.isArray(msg.sessions)) {
@@ -5606,27 +5651,38 @@ function openHostTermWin(app, cmd) {
       }
       if (msg.error) toast(msg.error);
     };
-    ws.onclose = e => {
-      usage.hidden = true; // the figures come back with the link
-      // An agent window is a persistent tmux session, so a dead *link*
-      // (daemon restart, network blip — close code isn't 1000) is worth
-      // winning back automatically. A clean 1000 means the session side
-      // ended on purpose: the agent exited, or another window of it took
-      // the session over with -D — reconnecting would fight that window
-      // for it, kick for kick, forever. Terminal windows lose their
-      // shell with the link, so a reconnect could only offer a stranger.
-      if (agent && e.code !== 1000) {
-        if (!retry) term.write("\r\n\x1b[90m[connection lost — reconnecting]\x1b[0m\r\n");
-        retryTimer = setTimeout(() => connect(false), Math.min(1000 << retry, 5000));
-        retry++;
-        status.textContent = "reconnecting… (" + retry + ")";
-        return;
-      }
-      term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-      status.textContent = agent ? "session ended — close and reopen to start again"
-        : tool ? tool + " exited — close and reopen to run it again"
-        : "disconnected — close and reopen for a new shell";
-    };
+    ws.onclose = e => lost(e.code, e.reason);
+  }
+  // lost is the link's end, however it came. An agent window is a
+  // persistent tmux session, so a dead link (daemon restart, network
+  // blip, the pulse above) is worth winning back automatically, and so
+  // is a client detached with the sessions still there — the daemon's
+  // "detached" (close 1000): the CLI in the session on screen exited
+  // while others remain, or a hang-up by hand. The window comes back to
+  // the session it showed, else to the one shown last (startAgent); a
+  // second window of the session, on a phone say, is left attached
+  // beside it rather than kicked, so the two never fight for it. Only
+  // the daemon's word that the agent's last session ended is final —
+  // the CLI exited, or Archive took it — as a reconnect there could only
+  // start a conversation nobody asked for. Terminal windows lose their
+  // shell with the link, so a reconnect could only offer a stranger.
+  function lost(code, reason) {
+    ws = null;
+    clearInterval(hb); hb = 0;
+    clearTimeout(probe); probe = 0;
+    usage.hidden = true; // the figures come back with the link
+    if (agent && !(code === 1000 && reason === "session ended")) {
+      if (!retry) term.write("\r\n\x1b[90m[" + (reason === "detached" ? "detached" : "connection lost") + " — reconnecting]\x1b[0m\r\n");
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => { retryTimer = 0; connect(false); }, Math.min(1000 * 2 ** retry, 5000));
+      retry++;
+      status.textContent = "reconnecting… (" + retry + ")";
+      return;
+    }
+    term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
+    status.textContent = agent ? "session ended — close and reopen to start again"
+      : tool ? tool + " exited — close and reopen to run it again"
+      : "disconnected — close and reopen for a new shell";
   }
   connect(true);
   // the wheel in a tmux window: tmux draws in its alternate screen, so
@@ -5673,9 +5729,11 @@ function openHostTermWin(app, cmd) {
   w._fit = resize; // applyWinState: refit after a remote geometry change
   w._teardown = () => {
     window.removeEventListener("resize", resize);
+    document.removeEventListener("visibilitychange", onVisible);
     clearTimeout(retryTimer);
-    ws.onclose = null;
-    try { ws.close(); } catch (e) {}
+    clearInterval(hb);
+    clearTimeout(probe);
+    if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
     term.dispose();
   };
 }

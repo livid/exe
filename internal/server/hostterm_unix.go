@@ -65,10 +65,18 @@ func (s *unixShell) Close() error {
 // desktop icon returns to the running conversation — to the session the
 // window showed last when the column has moved it (lastAgentSession),
 // attached directly so nothing is shown first and then switched away
-// from, whichever browser reopens it; -d, like -D below, kicks any stale
-// client so the pty size follows the newest window. Without a session
-// shown yet the icon's own is attached, created when it does not exist
-// (-A). Without tmux each window is a fresh CLI run. The CLI is launched
+// from, whichever browser reopens it. Without a session shown yet the
+// icon's own is attached, created when it does not exist (-A). Any
+// other client of the session stays attached: a phone's window beside
+// the desktop's, or the same window's reconnect while the daemon has
+// yet to notice its old link died. The pane still follows the newest
+// window — tmux sizes a window to the client that most recently
+// attached, typed or resized (window-size latest, its default), which a
+// stale client never does again, and the link's pulse
+// (handleHostTerminal) retires it within the minute. Attaching with -d
+// kicked the others instead, and a kicked window read its own end in
+// that ("session ended") and stayed dead until the page was reloaded.
+// Without tmux each window is a fresh CLI run. The CLI is launched
 // with the arguments that point its hooks at the session's status file
 // (agentCommand) — the session's first launch decides, as -A attaching
 // ignores the command line — and that file is cleared for a fresh
@@ -89,13 +97,13 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, string, er
 	if has := tmuxCmd("has-session", "-t", "="+a.session); has != nil {
 		if last := s.lastAgentSession(a); last != "" {
 			session = last
-			cmd = tmuxCmd("attach-session", "-d", "-t", "="+last)
+			cmd = tmuxCmd("attach-session", "-t", "="+last)
 		} else {
 			if has.Run() != nil {
 				os.Remove(file)
 				os.Remove(stateFileOf(file))
 			}
-			cmd = tmuxCmd("new-session", "-A", "-D", "-s", a.session, "-c", dir, line)
+			cmd = tmuxCmd("new-session", "-A", "-s", a.session, "-c", dir, line)
 		}
 	} else {
 		os.Remove(file)

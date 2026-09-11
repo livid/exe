@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -35,6 +36,16 @@ type agentShell interface {
 	Switch(session string) error
 	Scroll(lines int) error
 }
+
+// termPingEvery is how often handleHostTerminal pings a window's link,
+// and termPongWait how long a ping may go unanswered before the link
+// counts as dead. The browser's own pulse runs a little faster (25 s),
+// so a live link sees traffic both ways within the minute. Variables
+// so a test can hurry them.
+var (
+	termPingEvery = 30 * time.Second
+	termPongWait  = 15 * time.Second
+)
 
 // tmuxSocket names the tmux server the agent sessions live on: "" for
 // the user's default server, a -L socket name in tests so they never
@@ -180,7 +191,17 @@ func shQuote(s string) string {
 // back as {"error":…}. {"scroll":n} is
 // the window's wheel: the daemon scrolls the pane's tmux history
 // (unixShell.Scroll) — the browser terminal cannot, as tmux draws in
-// its alternate screen, which keeps no scrollback.
+// its alternate screen, which keeps no scrollback. {"ping":t} is the
+// window's pulse, answered {"pong":t}: the answer is how the browser
+// tells a live link from one that died under it — a laptop back from
+// sleep, a tunnel that came and went — while its socket still says
+// open; the daemon's side of that pulse is the WebSocket ping below.
+// The link's close says why it ended, and an agent window reads its
+// reason (close 1000): "session ended" is final — the agent's last
+// session is gone, the CLI exited or Archive took it — while "detached"
+// means the sessions live on without this client (the CLI in the
+// session on screen exited and others remain; a hang-up by hand) and
+// the window reconnects to them.
 // ?cmd=<command line> runs that one command in a login shell — the desktop
 // menu's "terminal <command>" shortcut to a CLI tool; the session ends
 // with the command.
@@ -223,8 +244,42 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	out := &wsWriter{ctx: ctx, c: c}
 	go func() {
 		io.Copy(out, sh) // pty output → browser; EOF when the shell exits
-		c.Close(websocket.StatusNormalClosure, "session ended")
+		// an agent window's tmux client can be gone with its sessions
+		// still there: it detached, and the window comes back to them
+		reason := "session ended"
+		if agent != nil && len(s.agentSessions(*agent)) > 0 {
+			reason = "detached"
+		}
+		c.Close(websocket.StatusNormalClosure, reason)
 		cancel()
+	}()
+	// the link's pulse, the daemon's side: a ping every termPingEvery,
+	// which the browser answers itself, with no script of the page's run
+	// — a tab in the background, its timers throttled to one a minute,
+	// answers as fast as the one in front. One unanswered for
+	// termPongWait ends the link, and with it the tmux client, which
+	// would otherwise sit attached until TCP gave the link up: a quarter
+	// of an hour with output pending, the window's own reconnect
+	// attached beside it the whole time. A blocked write holds the
+	// frame lock the ping waits for, so a peer that stopped reading ends
+	// the same way; cancelling the context frees the write.
+	go func() {
+		t := time.NewTicker(termPingEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			pctx, pcancel := context.WithTimeout(ctx, termPongWait)
+			err := c.Ping(pctx)
+			pcancel()
+			if err != nil {
+				cancel()
+				return
+			}
+		}
 	}()
 	var col *agentColumn
 	if agent != nil {
@@ -250,15 +305,21 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 		case websocket.MessageText:
 			var msg struct {
-				Resize  []int  `json:"resize"`
-				Switch  string `json:"switch"`
-				New     bool   `json:"new"`
-				Archive string `json:"archive"`
-				Resume  string `json:"resume"`
-				Scroll  *int   `json:"scroll"` // 0 means back to the live screen, so nil tells absent
+				Resize  []int           `json:"resize"`
+				Switch  string          `json:"switch"`
+				New     bool            `json:"new"`
+				Archive string          `json:"archive"`
+				Resume  string          `json:"resume"`
+				Scroll  *int            `json:"scroll"` // 0 means back to the live screen, so nil tells absent
+				Ping    json.RawMessage `json:"ping"`   // echoed as is: the browser's stamp, not the daemon's business
 			}
 			if json.Unmarshal(data, &msg) != nil {
 				continue
+			}
+			if len(msg.Ping) > 0 {
+				if out.WriteText([]byte(`{"pong":`+string(msg.Ping)+`}`)) != nil {
+					return
+				}
 			}
 			if len(msg.Resize) == 2 {
 				sh.Resize(msg.Resize[0], msg.Resize[1])
