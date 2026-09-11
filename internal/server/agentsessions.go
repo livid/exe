@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -287,7 +288,11 @@ func (c *agentColumn) follow(ctx context.Context) {
 		}
 		list := c.s.agentSessions(c.a)
 		c.s.markAgentStates(c.a, list)
-		msg, _ := json.Marshal(map[string]any{"sessions": list, "current": c.current()})
+		frame := map[string]any{"sessions": list, "current": c.current()}
+		if threads := c.s.agentThreads(c.a, list); threads != nil {
+			frame["threads"] = threads // Codex: threads started elsewhere (codexthreads.go)
+		}
+		msg, _ := json.Marshal(frame)
 		if string(msg) != last {
 			last = string(msg)
 			if c.out.WriteText(msg) != nil {
@@ -362,15 +367,55 @@ func (c *agentColumn) archive(name string) error {
 // open starts a new session of the agent's, numbered after the highest
 // live one, and moves the window to it.
 func (c *agentColumn) open() error {
-	n := 2
-	for _, s := range c.s.agentSessions(c.a) {
-		if s.Number >= n {
-			n = s.Number + 1
-		}
-	}
-	name := agentSessionName(c.a, n)
+	name := c.s.nextAgentSession(c.a)
 	if err := c.s.newAgentSession(c.a, name); err != nil {
 		return err
 	}
 	return c.switchTo(name)
+}
+
+// nextAgentSession names the agent's next numbered session: one past
+// the highest in use, 2 at the least (the icon's own is 1).
+func (s *Server) nextAgentSession(a hostAgent) string {
+	n := 2
+	for _, ss := range s.agentSessions(a) {
+		if ss.Number >= n {
+			n = ss.Number + 1
+		}
+	}
+	return agentSessionName(a, n)
+}
+
+// resume continues a thread started elsewhere (codexthreads.go) in a
+// session of its own, in the thread's own folder when it still exists,
+// and moves the window there. The session is marked with the thread at
+// once (noteCodexThread), so the thread's row leaves the list as the
+// session's arrives.
+func (c *agentColumn) resume(id string) error {
+	if !c.a.notify {
+		return fmt.Errorf("%s has no threads to continue here", c.a.title)
+	}
+	if !agentIDPattern.MatchString(id) {
+		return errors.New("resume: not a thread id")
+	}
+	name := c.s.nextAgentSession(c.a)
+	if err := c.s.newAgentSessionIn(c.a, name, codexThreadDir(id), "resume", id); err != nil {
+		return err
+	}
+	c.s.noteCodexThread(c.a, name, id)
+	return c.switchTo(name)
+}
+
+// codexThreadDir is the folder a thread was started in, "" when it is
+// gone (the session then opens in the project folder, as any other).
+func codexThreadDir(id string) string {
+	for _, t := range codexAppThreads(codexHome(), nil, time.Now(), 0) {
+		if t.ID == id {
+			if st, err := os.Stat(t.Cwd); err == nil && st.IsDir() {
+				return t.Cwd
+			}
+			return ""
+		}
+	}
+	return ""
 }

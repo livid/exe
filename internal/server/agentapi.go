@@ -20,8 +20,10 @@ import (
 // first message, so the Claude Code window lists it while it works and
 // the conversation stays open there to be taken over or continued.
 //
-//	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states
+//	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states; for Codex also
+//	                                                 "threads", the threads started elsewhere (codexthreads.go)
 //	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode} → {name, number}
+//	                                                 (Codex: prompt and resume, a thread id, alone)
 //	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt}: pasted into the session as one message
 //	DELETE /v1/agents/{app}/sessions/{name}          ends the session, as the column's Archive does
 
@@ -42,13 +44,18 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 	}
 	list := s.agentSessions(a)
 	s.markAgentStates(a, list)
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": list})
+	out := map[string]any{"sessions": list}
+	if threads := s.agentThreads(a, list); threads != nil {
+		out["threads"] = threads // Codex: threads started elsewhere (codexthreads.go)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // agentLaunchRequest is what a session may start with: Claude Code's
 // resume (a fork of it, or the same conversation), a session id chosen
 // up front so the caller can find the transcript, a permission mode, and
-// the first message. Codex takes only the message.
+// the first message. Codex takes a thread to resume — one started in
+// the ChatGPT app, say (codexthreads.go) — and the message.
 type agentLaunchRequest struct {
 	Prompt         string `json:"prompt"`
 	Resume         string `json:"resume"`
@@ -85,8 +92,16 @@ func agentLaunchArgs(a hostAgent, req agentLaunchRequest) ([]string, error) {
 			}
 			args = append(args, "--permission-mode", req.PermissionMode)
 		}
-	} else if req.Resume != "" || req.SessionID != "" || req.PermissionMode != "" {
-		return nil, fmt.Errorf("%s sessions take only a prompt", a.title)
+	} else {
+		if req.Fork || req.SessionID != "" || req.PermissionMode != "" {
+			return nil, fmt.Errorf("%s sessions take only a prompt, or a thread to resume", a.title)
+		}
+		if req.Resume != "" {
+			if !agentIDPattern.MatchString(req.Resume) {
+				return nil, errors.New("resume: not a thread id")
+			}
+			args = append(args, "resume", req.Resume)
+		}
 	}
 	if req.Prompt != "" {
 		args = append(args, req.Prompt)
@@ -116,9 +131,16 @@ func (s *Server) handleAgentSessionCreate(w http.ResponseWriter, r *http.Request
 		}
 	}
 	name := agentSessionName(a, n)
-	if err := s.newAgentSession(a, name, extra...); err != nil {
+	dir := ""
+	if a.notify && req.Resume != "" {
+		dir = codexThreadDir(req.Resume)
+	}
+	if err := s.newAgentSessionIn(a, name, dir, extra...); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
+	}
+	if a.notify && req.Resume != "" {
+		s.noteCodexThread(a, name, req.Resume)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"name": name, "number": n, "state_file": s.agentStateFile(a, name)})
 }

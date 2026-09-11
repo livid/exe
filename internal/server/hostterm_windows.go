@@ -30,6 +30,10 @@ func (s *Server) newAgentSession(a hostAgent, name string, extra ...string) erro
 	return fmt.Errorf("a second session needs tmux, which Windows has not")
 }
 
+func (s *Server) newAgentSessionIn(a hostAgent, name, dir string, extra ...string) error {
+	return s.newAgentSession(a, name, extra...)
+}
+
 // startHostShell starts an interactive PowerShell on a ConPTY — PowerShell 7
 // when installed, Windows PowerShell otherwise. A non-empty command runs in
 // it instead of a prompt and the session ends when it exits.

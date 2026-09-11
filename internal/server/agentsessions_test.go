@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -295,4 +296,49 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor("the client to detach with the last session", func() bool { return sh.Current() == "" })
+
+	// a thread started elsewhere, continued here: a Codex-like agent (notify:
+	// its config overrides go on the command line) whose binary is a shell
+	// that ignores them. resume starts a numbered session in the thread's own
+	// folder with `resume <id>` on the line, notes the thread on the session
+	// at once, and the window moves there; the thread then leaves the list
+	fake := filepath.Join(t.TempDir(), "fakecodex")
+	os.WriteFile(fake, []byte("#!/bin/sh\nexec sh\n"), 0o755)
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	id := "01a0755c-a0f7-7313-8d1c-e6d5385fb06f"
+	dir := t.TempDir()
+	writeRollout(t, home, "05", id, "codex_chatgpt_ios_remote", `"vscode"`, "", dir, "hello from the phone", time.Now())
+	b := hostAgent{app: "fx", bin: fake, title: "Fake", session: "exe-test-fx", openaiUsage: true, notify: true}
+	sh2, _, err := s.startAgent(b, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sh2.Close()
+	go drain(sh2)
+	waitFor("the fake agent's client to attach", func() bool { return sh2.Current() == b.session })
+	col2 := newAgentColumn(s, b, sh2, b.session, nil)
+	if th := s.agentThreads(b, s.agentSessions(b)); len(th) != 1 || th[0].ID != id || th[0].Title != "hello from the phone" {
+		t.Fatalf("threads before: %+v", th)
+	}
+	if err := col2.resume("not an id"); err == nil {
+		t.Fatal("resume of a non-id succeeded")
+	}
+	if err := col2.resume(id); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("the client on the resumed session", func() bool { return sh2.Current() == "exe-test-fx-2" })
+	out, _ := tmuxCmd("display-message", "-p", "-t", "exe-test-fx-2", "#{pane_start_command}\t#{pane_start_path}").Output()
+	if line := string(out); !strings.Contains(line, " 'resume' '"+id+"'") || !strings.Contains(line, "\t"+dir) {
+		t.Fatalf("resumed session's command line: %q", line)
+	}
+	if got := readAgentThreadID(s.agentStatusFile(b, "exe-test-fx-2")); got != id {
+		t.Fatalf("thread noted on the session: %q", got)
+	}
+	if th := s.agentThreads(b, s.agentSessions(b)); len(th) != 0 {
+		t.Fatalf("threads after: %+v", th)
+	}
+	if th := s.agentThreads(a, s.agentSessions(a)); th != nil {
+		t.Fatalf("a hookless agent lists threads: %+v", th)
+	}
 }

@@ -769,6 +769,14 @@ a.svc:hover { text-decoration: underline; }
    output in the last few seconds — while the window shows another; the
    Chat list's streaming dot, so green means the same thing everywhere */
 .sess-live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: cs-pulse 1.2s ease-in-out infinite; }
+/* threads started elsewhere — the ChatGPT app on a phone, the Codex app —
+   follow the sessions under a rule; the hollow dot says the thread is not
+   here yet, a click continues it in a session of its own (the row greys
+   while that opens) */
+.sess-sep { flex: none; height: 0; border-top: 1px solid var(--black); }
+.sess-away { flex: none; width: 7px; height: 7px; display: block; }
+.sess-away svg { display: block; }
+.sess-row.pending .t { color: #777; }
 .sess-btns { flex: none; border-top: 1px solid var(--black); padding: 12px; display: flex; justify-content: center; }
 .sess-btns button { min-width: 58px; }
 /* Text inset lives on .xterm, not the box: FitAddon subtracts element padding
@@ -1053,6 +1061,7 @@ body.mobile .term-window .agent-wrap .hostterm-box { flex: 1; min-height: 0; hei
 body.mobile .sess-col { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--black); contain: none; }
 body.mobile .sess-list { display: flex; overflow-x: auto; overflow-y: hidden; }
 body.mobile .sess-row { flex: none; max-width: 150px; height: auto; padding: 0 8px; border-bottom: 0; border-right: 1px solid #efefef; }
+body.mobile .sess-sep { height: auto; width: 0; border-top: 0; border-left: 1px solid var(--black); }
 body.mobile .sess-btns { border-top: 0; border-left: 1px solid var(--black); padding: 6px 8px; }
 body.mobile .sess-grip { display: none; }
 body.mobile #term-box { height: calc(var(--vvh, 100dvh) - 260px); min-height: 180px; }
@@ -5407,6 +5416,11 @@ function openHostTermWin(app, cmd) {
   // frame says so — the browser keeps no note of its own
   const list = w.querySelector(".sess-list"), newBtn = w.querySelector(".sess-new");
   let sessions = [{ name: "", number: 1, title: "" }], current = "", shown = "";
+  // Codex: threads started elsewhere — in the ChatGPT app on a phone,
+  // the Codex app — from the daemon's "threads" (codexthreads.go); a
+  // click continues one here, in a session of its own, and pending is
+  // the one on its way, greyed until the next frame carries the session
+  let threads = [], pending = "";
   const sessTitle = s => s.title ? s.title.replace(/^✳\s*/, "") : agent.title + " " + s.number;
   // when a session started, short enough for a menu line: the time alone
   // today, weekday and date before that, the year once it differs
@@ -5441,6 +5455,17 @@ function openHostTermWin(app, cmd) {
       row.onclick = () => { if (s.name && s.name !== current) switchSession(s.name); term.focus(); };
       row.addEventListener("contextmenu", e => sessMenu(e, s));
       return row;
+    }), ...(threads.length ? [el("div", { class: "sess-sep" })] : []), ...threads.map(t => {
+      // a thread from elsewhere: the green dot while a turn runs there,
+      // the hollow dot otherwise — it is not here yet
+      const row = el("div", { class: "sess-row" + (t.title ? "" : " untitled") + (t.thread === pending ? " pending" : ""),
+        title: threadTitle(t) + "\nstarted in " + t.origin + " " + sessWhen(t.created) + (t.cwd ? ", in " + t.cwd : "")
+          + (t.working ? "\nstill working there" : "") + "\nclick to continue it here, in a session of its own" });
+      row.append(t.working ? el("span", { class: "sess-live" }) : sessAway());
+      row.append(el("span", { class: "t" }, threadTitle(t)));
+      row.onclick = () => { resumeThread(t); term.focus(); };
+      row.addEventListener("contextmenu", e => threadMenu(e, t));
+      return row;
     }));
     // the current row comes into view when the current session changes
     // — the phone's strip slides sideways to the one the window opened
@@ -5455,6 +5480,27 @@ function openHostTermWin(app, cmd) {
     current = name;
     renderSessions();
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ switch: name }));
+  }
+  const threadTitle = t => t.title || t.thread.slice(0, 8);
+  function resumeThread(t) {
+    if (pending || !(ws && ws.readyState === 1)) return; // one at a time: a second click must not start a second session
+    pending = t.thread;
+    renderSessions();
+    ws.send(JSON.stringify({ resume: t.thread }));
+  }
+  // a thread row's menu: where and when it started, greyed, then the click's
+  // action in words, and its title to copy
+  function threadMenu(e, t) {
+    e.preventDefault(); e.stopPropagation();
+    focusWin(w);
+    term.blur();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: "Started in " + t.origin + " " + sessWhen(t.created), dis: true },
+      "-",
+      { label: "Continue Here", dis: !!pending, act: () => resumeThread(t) },
+      "-",
+      { label: "Copy Title", act: () => copyText(threadTitle(t), "title") },
+    ], () => term.focus());
   }
   const sendNew = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
   if (newBtn) newBtn.onclick = sendNew;
@@ -5555,6 +5601,7 @@ function openHostTermWin(app, cmd) {
       if (Array.isArray(msg.sessions)) {
         if (msg.sessions.length) sessions = msg.sessions;
         current = msg.current || current;
+        if (Array.isArray(msg.threads)) { threads = msg.threads; pending = ""; }
         renderSessions();
       }
       if (msg.error) toast(msg.error);
@@ -5648,6 +5695,12 @@ function revealRow(list, row) {
 function sessBell() {
   const b = el("span", { class: "sess-bell" });
   b.innerHTML = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1z" fill="currentColor"/></svg>';
+  return b;
+}
+// the same dot hollow: a thread that lives elsewhere, not in a session here
+function sessAway() {
+  const b = el("span", { class: "sess-away" });
+  b.innerHTML = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path fill-rule="evenodd" d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1zM2 2h3v3h-3z" fill="currentColor"/></svg>';
   return b;
 }
 

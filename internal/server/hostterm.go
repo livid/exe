@@ -173,8 +173,11 @@ func shQuote(s string) string {
 // {"sessions":[…],"current":…}, the agent's tmux sessions and the one the
 // window shows — the session it showed last, whichever browser that was
 // (lastAgentSession). The window sends {"switch":"exe-claude-2"} to move to
-// another, {"new":true} to start one and {"archive":"exe-claude-2"} to
-// end one; what goes wrong comes back as {"error":…}. {"scroll":n} is
+// another, {"new":true} to start one, {"archive":"exe-claude-2"} to
+// end one and, for Codex, {"resume":"<thread id>"} to continue a thread
+// started elsewhere in a session of its own (the frames also carry
+// "threads", those threads — codexthreads.go); what goes wrong comes
+// back as {"error":…}. {"scroll":n} is
 // the window's wheel: the daemon scrolls the pane's tmux history
 // (unixShell.Scroll) — the browser terminal cannot, as tmux draws in
 // its alternate screen, which keeps no scrollback.
@@ -251,6 +254,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				Switch  string `json:"switch"`
 				New     bool   `json:"new"`
 				Archive string `json:"archive"`
+				Resume  string `json:"resume"`
 				Scroll  *int   `json:"scroll"` // 0 means back to the live screen, so nil tells absent
 			}
 			if json.Unmarshal(data, &msg) != nil {
@@ -264,7 +268,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				// notch; the window simply stays where it is
 				ash.Scroll(*msg.Scroll)
 			}
-			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "") {
+			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "" && msg.Resume == "") {
 				continue
 			}
 			var err error
@@ -273,6 +277,8 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				err = col.switchTo(msg.Switch)
 			case msg.Archive != "":
 				err = col.archive(msg.Archive)
+			case msg.Resume != "":
+				err = col.resume(msg.Resume)
 			default:
 				err = col.open()
 			}

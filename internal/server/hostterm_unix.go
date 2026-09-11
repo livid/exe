@@ -134,11 +134,20 @@ func agentCommand(a hostAgent, bin, file string) (args []string, line string) {
 // extra are further CLI arguments (agentLaunchArgs: a resume, a session
 // id, the first message), quoted onto the same command line.
 func (s *Server) newAgentSession(a hostAgent, name string, extra ...string) error {
+	return s.newAgentSessionIn(a, name, "", extra...)
+}
+
+// newAgentSessionIn is newAgentSession in a folder of the caller's —
+// a resumed thread's own (agentColumn.resume) — the project folder
+// when dir is "".
+func (s *Server) newAgentSessionIn(a hostAgent, name, dir string, extra ...string) error {
 	bin := agentPath(a)
 	if bin == "" {
 		return fmt.Errorf("%s is not installed on this host", a.title)
 	}
-	dir := s.agentProjectDir()
+	if dir == "" {
+		dir = s.agentProjectDir()
+	}
 	file := s.agentStatusFile(a, name)
 	args, line := agentCommand(a, bin, file)
 	if args != nil {

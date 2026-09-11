@@ -95,6 +95,19 @@ this machine for `/resume` inside Claude Code or Codex — the desktop keeps no 
 of its own. Archive shows only once the conversation exists; when the
 window was showing that session it moves to the one before it.
 
+A Codex thread started elsewhere on this machine — in the ChatGPT app on
+your phone (its remote Codex runs here), the Codex app, VS Code — is a
+conversation on this machine all the same, and the Codex window's column
+lists the latest ten under a rule below its sessions, titled the way the
+app titles them, with a hollow dot (a green one while a turn runs there).
+Hover a row for where and when it started. Click it, or choose **Continue
+Here** from its menu, and the thread opens in a session of its own, in the
+folder it was started in: the row moves up among the sessions and the
+conversation carries on here; leave it be and it stays where it is. The
+API takes the same: `POST /v1/agents/codex/sessions` with `{"resume":
+"<thread id>"}`, and `GET …/sessions` lists the threads beside the
+sessions.
+
 The column is also an API, for tools that want a conversation you can
 watch: `GET /v1/agents/claude/sessions` lists the rows with their states,
 `POST /v1/agents/claude/sessions` opens a numbered session with a first
