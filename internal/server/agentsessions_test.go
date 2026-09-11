@@ -41,11 +41,12 @@ func TestParseAgentSessions(t *testing.T) {
 	if len(list) != 3 {
 		t.Fatalf("got %d sessions: %+v", len(list), list)
 	}
-	if list[2].Name != "exe-claude-4" || list[2].Title != "a title: with colons" || !list[2].Working || list[2].lastAttached != 1788718600 {
-		t.Errorf("session 4 = %+v", list[2])
+	// latest first: 4 (created 1788692009), 3 (…008), then the icon's own (…000)
+	if list[0].Name != "exe-claude-4" || list[0].Title != "a title: with colons" || !list[0].Working || list[0].lastAttached != 1788718600 {
+		t.Errorf("session 4 = %+v", list[0])
 	}
-	if list[0].Name != "exe-claude" || list[0].Number != 1 || list[0].Title != "✳ Daily routine not running" || !list[0].Attached || list[0].Bell || list[0].Working || list[0].lastAttached != 1788718700 {
-		t.Errorf("session 1 = %+v", list[0])
+	if list[2].Name != "exe-claude" || list[2].Number != 1 || list[2].Title != "✳ Daily routine not running" || !list[2].Attached || list[2].Bell || list[2].Working || list[2].lastAttached != 1788718700 {
+		t.Errorf("session 1 = %+v", list[2])
 	}
 	if list[1].Name != "exe-claude-3" || list[1].Number != 3 || list[1].Title != "" || list[1].Attached || !list[1].Bell || list[1].Created != 1788692008 || !list[1].Working || list[1].lastAttached != 0 {
 		t.Errorf("session 3 = %+v", list[1])
@@ -67,16 +68,17 @@ func TestParseAgentSessions(t *testing.T) {
 	if len(list) != 4 {
 		t.Fatalf("got %d codex sessions: %+v", len(list), list)
 	}
-	if l := list[0]; l.Title != "List numbers through 40" || !l.Working || !l.spinner {
+	// latest first: created 38, 37, 36, 35 — the icon's own last
+	if l := list[3]; l.Title != "List numbers through 40" || !l.Working || !l.spinner {
 		t.Errorf("spinner row = %+v", l)
 	}
-	if l := list[1]; l.Title != "" || l.Working || l.spinner || !l.Bell {
+	if l := list[2]; l.Title != "" || l.Working || l.spinner || !l.Bell {
 		t.Errorf("thread-id row = %+v", l)
 	}
-	if l := list[2]; l.Title != "" || !l.Working || l.spinner || !l.Attached {
+	if l := list[1]; l.Title != "" || !l.Working || l.spinner || !l.Attached {
 		t.Errorf("project-name row = %+v", l)
 	}
-	if l := list[3]; l.Title != "Inspect exe-city unstaged changes" || l.Working || l.spinner {
+	if l := list[0]; l.Title != "Inspect exe-city unstaged changes" || l.Working || l.spinner {
 		t.Errorf("titled idle row = %+v", l)
 	}
 }
@@ -218,8 +220,8 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatalf("column current after open = %q", col.current())
 	}
 	list = s.agentSessions(a)
-	if len(list) != 2 || list[0].Attached || !list[1].Attached {
-		t.Fatalf("after open: %+v", list)
+	if len(list) != 2 || list[0].Name != "exe-test-sh-2" || !list[0].Attached || list[1].Attached {
+		t.Fatalf("after open (latest first): %+v", list)
 	}
 	if err := col.switchTo(a.session); err != nil {
 		t.Fatal(err)
@@ -246,7 +248,7 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor("the client on session 2 after the archive", func() bool { return sh.Current() == "exe-test-sh-2" })
-	if list = s.agentSessions(a); len(list) != 2 || list[1].Name != "exe-test-sh-2" {
+	if list = s.agentSessions(a); len(list) != 2 || list[0].Name != "exe-test-sh-2" {
 		t.Fatalf("after killing 3: %+v", list)
 	}
 	// close the window and open it again: it lands on session 2, where it
@@ -273,7 +275,7 @@ func TestAgentSessionsLive(t *testing.T) {
 		t.Fatalf("reopened window opens on %q, want session 2", session)
 	}
 	waitFor("the reopened client on session 2", func() bool { return sh.Current() == "exe-test-sh-2" })
-	if list = s.agentSessions(a); len(list) != 2 || list[0].Attached || !list[1].Attached {
+	if list = s.agentSessions(a); len(list) != 2 || !list[0].Attached || list[1].Attached {
 		t.Fatalf("after reopening: %+v", list)
 	}
 	col = newAgentColumn(s, a, sh, session, nil)

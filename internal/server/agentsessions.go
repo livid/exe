@@ -109,7 +109,10 @@ const tmuxSessionFormat = "#{session_name}:#{session_created}:#{window_activity}
 var uuidTitle = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // parseAgentSessions picks the agent's sessions out of list-panes output
-// in tmuxSessionFormat, in number order. untitled lists what a pane is
+// in tmuxSessionFormat, the latest first: the one started most
+// recently at the top of the column, where a new conversation opens,
+// and the icon's own — the oldest, unless it was started over — at the
+// bottom; two started within a second go by number. untitled lists what a pane is
 // titled when its program has set no title of its own — the hostname,
 // tmux's default, and the project folder's name, Codex's default before
 // the daemon put the thread's name there — which counts as none, as
@@ -144,7 +147,12 @@ func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) [
 			Working: spinner || activity > 0 && now-activity <= agentWorkingSeconds, spinner: spinner,
 			lastAttached: lastAttached})
 	}
-	sort.Slice(list, func(i, j int) bool { return list[i].Number < list[j].Number })
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].Created != list[j].Created {
+			return list[i].Created > list[j].Created
+		}
+		return list[i].Number > list[j].Number
+	})
 	return list
 }
 
@@ -334,12 +342,14 @@ func (c *agentColumn) archive(name string) error {
 		return fmt.Errorf("not a %s session: %q", c.a.title, name)
 	}
 	if name == c.current() {
+		// the neighbours by number, whatever order the list is in
 		var prev, next string
+		var pn, nn int
 		for _, s := range c.s.agentSessions(c.a) {
-			if s.Number < n {
-				prev = s.Name
-			} else if s.Number > n && next == "" {
-				next = s.Name
+			if s.Number < n && s.Number > pn {
+				prev, pn = s.Name, s.Number
+			} else if s.Number > n && (nn == 0 || s.Number < nn) {
+				next, nn = s.Name, s.Number
 			}
 		}
 		if other := prev; other != "" || next != "" {

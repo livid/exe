@@ -75,7 +75,8 @@ Codex, which the desktop starts with its terminal title set to the
 thread, on the thread's name (a session started before that keeps its
 old title until it is restarted). Click a
 row and the window moves to that session; **New** starts another
-conversation in a session of its own, beside the first. While the window
+conversation in a session of its own, at the top: the list runs latest
+first, the icon's own session at the bottom. While the window
 shows another session, a pulsing green dot marks one still working and a
 black dot one that waits for you — its turn finished, or a permission or
 question pending. Claude Code reports those through its hooks; Codex
