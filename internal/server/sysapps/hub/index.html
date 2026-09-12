@@ -120,6 +120,18 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-foot { margin: 5px 0 0 22px; display: flex; gap: 10px; align-items: center; }
 .p-replies { font-size: 10px; color: var(--hl); }
 .p-del { margin-left: auto; }
+/* a nested reply in a thread: stepped in under the reply it answers,
+   a thin rule marking the fold — the public pages' numbers, scaled down */
+.post.deep { padding-left: calc(10px + min(var(--d, 2) - 1, 4) * 18px); border-left: 1px solid #ddd; }
+/* a link card: the post's first link, unfurled by the hub at ingest */
+.p-card { margin: 6px 0 0 22px; max-width: 400px; display: flex; text-decoration: none;
+  color: var(--black); border: 1px solid var(--black); background: #fff;
+  box-shadow: 1px 1px 0 var(--black); }
+.p-card .c-i { flex: none; width: 48px; border-right: 1px solid var(--black); }
+.p-card .c-i img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.p-card .c-b { min-width: 0; padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; }
+.p-card .c-t { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-card .c-d, .p-card .c-h { font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #777; padding: 10px; }
 /* loading placeholders mirror the loaded rows so nothing shifts when data lands */
 .ph { padding: 7px 10px 8px; border-bottom: 1px solid #efefef; }
@@ -453,6 +465,16 @@ function renderPost(p, opts = {}) {
   const node = el("div", { class: "post" + (opts.focus ? " focus" : "") }, head);
   node.dataset.id = p.id;
   if (p.text) node.append(el("div", { class: "p-text" }, ...formatText(p.text)));
+  if (p.card) { // the first link, unfurled by the hub at ingest
+    const box = el("a", { class: "p-card", href: p.card.url, target: "_blank", rel: "noopener nofollow" });
+    if (p.card.image) box.append(el("span", { class: "c-i" },
+      el("img", { src: hub + "/v1/embed/" + p.card.image, alt: "", loading: "lazy" })));
+    const body = el("span", { class: "c-b" }, el("span", { class: "c-t" }, p.card.title));
+    if (p.card.desc) body.append(el("span", { class: "c-d" }, p.card.desc));
+    if (p.card.host) body.append(el("span", { class: "c-h" }, p.card.host));
+    box.append(body);
+    node.append(box);
+  }
   if (p.embeds && p.embeds.length) {
     const box = el("div", { class: "p-embeds" });
     for (const em of p.embeds) {
@@ -554,6 +576,19 @@ async function loadFeed(more) {
   }
 }
 
+// threadNode renders one reply at its place in the tree: dataset.depth
+// keys live inserts, and past the first level the row steps in under
+// the reply it answers.
+function threadNode(p, depth = p.depth || 1) {
+  const n = renderPost(p, { inThread: true });
+  n.dataset.depth = depth;
+  if (depth > 1) {
+    n.classList.add("deep");
+    n.style.setProperty("--d", depth);
+  }
+  return n;
+}
+
 async function openThread(id) {
   view = { kind: "thread", id };
   $("#thread-head").classList.add("on");
@@ -561,8 +596,12 @@ async function openThread(id) {
   feedEl.replaceChildren(placeholders(3));
   try {
     const out = await hget("/v1/post/" + id);
-    feedEl.replaceChildren(renderPost(out.post, { inThread: true, focus: true }));
-    for (const p of out.replies) feedEl.append(renderPost(p, { inThread: true }));
+    const headNode = renderPost(out.post, { inThread: true, focus: true });
+    headNode.dataset.depth = 0;
+    feedEl.replaceChildren(headNode);
+    // the whole tree in reading order, a reply under the reply it
+    // answers (out.replies is one level only, kept for an older hub)
+    for (const p of out.thread || out.replies) feedEl.append(threadNode(p));
     $("#thread-title").textContent = "Thread — " +
       (out.post.author_name || out.post.author);
   } catch (e) {
@@ -688,11 +727,31 @@ function connectEvents() {
       return;
     }
     if (m.type === "post.delete") { seen(m.id)?.remove(); return; }
+    if (m.type === "post.card") { // the post's link card landed: redraw it in place
+      const cur = seen(m.id);
+      if (!cur || view.kind === "search") return;
+      const out = await hget("/v1/post/" + m.id);
+      const fresh = view.kind === "thread"
+        ? threadNode(out.post, +cur.dataset.depth || 1) : renderPost(out.post);
+      if (cur.classList.contains("focus")) fresh.classList.add("focus");
+      if (cur.dataset.depth !== undefined) fresh.dataset.depth = cur.dataset.depth;
+      cur.replaceWith(fresh);
+      return;
+    }
     if (m.type !== "post.create" || seen(m.id)) return;
     if (view.kind === "thread") {
-      if (m.reply_to !== view.id) return;
+      // any visible post can be the parent, the head or a reply; the
+      // new reply lands at the end of its parent's subtree, so the
+      // tree keeps reading order without a refetch
+      const parent = m.reply_to && seen(m.reply_to);
+      if (!parent) return;
       const out = await hget("/v1/post/" + m.id);
-      if (!seen(m.id)) feedEl.append(renderPost(out.post, { inThread: true }));
+      if (seen(m.id)) return;
+      const d = (+parent.dataset.depth || 0) + 1;
+      let last = parent;
+      while (last.nextElementSibling && +last.nextElementSibling.dataset.depth > +parent.dataset.depth)
+        last = last.nextElementSibling;
+      last.after(threadNode(out.post, d));
       return;
     }
     if (view.kind === "search") return; // a snapshot; Refresh re-runs it
