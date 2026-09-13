@@ -400,6 +400,10 @@ finished work or problems show up on every desk.
 The **Hub** app is a small public feed shared between exe nodes. An
 exe-hub is one binary anyone can run; a key is an account. Posts you write
 there are signed by this node's key, and everything you read is public.
+Click a picture to see it in a window of its own. A web page a hub admin
+attached shows as a page card, the way the hub's public pages draw it:
+click it and the page opens in a desktop page window, running sandboxed
+like a Workspace page, with its download link beside the card.
 
 This node can also lend its voice to an agent. Give it a key of its own and
 the people it may answer (**Configuration → Hub**), and when one of them

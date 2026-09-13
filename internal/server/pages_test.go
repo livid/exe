@@ -126,3 +126,84 @@ func jsonStr(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+// TestPageTicketServesHandedOverPage: a page the desktop fetched from the
+// web (a hub embed) is posted whole and served back under a ticket the same
+// way — sandboxed, named by its file, capped, and the oldest handed-over
+// text goes first when the tickets hold too much.
+func TestPageTicketServesHandedOverPage(t *testing.T) {
+	srv := New(&config.Config{APIToken: "tok"}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	mint := func(body, token string) (int, map[string]any) {
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/pages", strings.NewReader(body))
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var out map[string]any
+		json.NewDecoder(res.Body).Decode(&out)
+		return res.StatusCode, out
+	}
+	const page = "<!doctype html><title>Sheet</title><a href=\"#x\">x</a><h1 id=\"x\">表</h1>"
+	if code, _ := mint(`{"name":"Sheet.html","html":`+jsonStr(page)+`}`, ""); code != http.StatusUnauthorized {
+		t.Fatalf("mint without token: %d", code)
+	}
+	code, out := mint(`{"name":"../Brickbox Sheet.html","html":`+jsonStr(page)+`}`, "tok")
+	if code != 200 {
+		t.Fatalf("mint: %d %v", code, out)
+	}
+	u, _ := out["url"].(string)
+	if !strings.HasPrefix(u, "/pages/") || !strings.HasSuffix(u, "/Brickbox%20Sheet.html") || out["size"] != float64(len(page)) {
+		t.Fatalf("mint answer %v — the name keeps only its last element", out)
+	}
+	res, err := http.Get(ts.URL + u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 || string(got) != page {
+		t.Fatalf("page: %d %q", res.StatusCode, got)
+	}
+	if csp := res.Header.Get("Content-Security-Policy"); csp != pageSandbox {
+		t.Errorf("csp %q", csp)
+	}
+	if ct := res.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Errorf("content-type %q", ct)
+	}
+	if code, out := mint(`{"html":"<p>x"}`, "tok"); code != 200 || !strings.HasSuffix(out["url"].(string), "/page.html") {
+		t.Errorf("nameless page: %d %v", code, out)
+	}
+	if code, _ := mint(`{"name":"big.html","html":`+jsonStr(strings.Repeat("a", webPageMax+1))+`}`, "tok"); code != http.StatusRequestEntityTooLarge {
+		t.Errorf("page past the cap: %d", code)
+	}
+
+	// eight 8MB pages fill the 64MB the tickets may hold; a ninth pushes the oldest out
+	big := `{"name":"big.html","html":` + jsonStr(strings.Repeat("b", webPageMax)) + `}`
+	var first string
+	for i := 0; i < 9; i++ {
+		code, out := mint(big, "tok")
+		if code != 200 {
+			t.Fatalf("big mint %d: %d", i, code)
+		}
+		if i == 0 {
+			first = strings.Split(out["url"].(string), "/")[2]
+		}
+		time.Sleep(2 * time.Millisecond) // distinct expiry times
+	}
+	srv.pageMu.Lock()
+	held := 0
+	for _, o := range srv.pageTickets {
+		held += len(o.html)
+	}
+	_, still := srv.pageTickets[first]
+	srv.pageMu.Unlock()
+	if held > webPagesHeld || still {
+		t.Errorf("held %d bytes (cap %d), oldest still there: %v", held, webPagesHeld, still)
+	}
+}

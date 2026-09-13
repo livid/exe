@@ -117,6 +117,16 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-embeds img { max-width: 180px; max-height: 140px; border: 1px solid var(--black);
   background: var(--g300); cursor: pointer; }
 .p-file { font-size: 11px; border: 1px solid var(--black); background: var(--g200); padding: 2px 8px; }
+/* a page: an admin's HTML embed (the hub lists it in the post's `pages`),
+   drawn as the public pages draw it, a white card with a page glyph, and
+   opened in a desktop page window; its download link sits beside it */
+.p-pagerow { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.p-page { position: relative; display: block; min-width: 0; padding: 2px 8px 2px 24px;
+  border: 1px solid var(--black); background: #fff; box-shadow: 1px 1px 0 var(--black);
+  color: var(--black); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.p-page::before { content: ""; position: absolute; left: 7px; top: 3px; width: 10px; height: 12px; box-sizing: border-box;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="12" shape-rendering="crispEdges"><path fill="%23fff" d="M1 1h8v10h-8z"/><path fill="black" d="M0 0h10v1h-10z M0 11h10v1h-10z M0 1h1v10h-1z M9 1h1v10h-1z M1 3h8v1h-8z M1 6h8v1h-8z M1 9h8v1h-8z"/></svg>') no-repeat; }
+.p-pagedl { flex: none; font-size: 10px; color: var(--hl); cursor: default; }
 .p-foot { margin: 5px 0 0 22px; display: flex; gap: 10px; align-items: center; }
 .p-replies { font-size: 10px; color: var(--hl); }
 .p-del { margin-left: auto; }
@@ -381,6 +391,16 @@ function avatarEl(id, cid, cls) {
   return c;
 }
 
+// a clicked page opens in the desktop's page window through the app bridge,
+// in a sandboxed frame like a Workspace page; standalone, the hub's own
+// thread page opens it in its page window
+function viewPage(p, em) {
+  const url = hub + "/v1/embed/" + em.cid;
+  if (window.parent !== window)
+    parent.postMessage({ exe: "view-page", url, name: em.filename || "Page" }, location.origin);
+  else window.open(hub + "/p/" + p.id + "#page=" + em.cid, "_blank", "noopener");
+}
+
 // a clicked picture opens in the desktop's PictureViewer window (the same
 // viewer Finder uses) through the app bridge; standalone, a plain new tab
 function viewImage(em) {
@@ -482,6 +502,12 @@ function renderPost(p, opts = {}) {
         const img = el("img", { src: hub + "/v1/embed/" + em.cid, alt: em.alt || "", loading: "lazy" });
         img.onclick = e => { e.stopPropagation(); viewImage(em); };
         box.append(img);
+      } else if ((p.pages || []).includes(em.cid)) {
+        const url = hub + "/v1/embed/" + em.cid;
+        const page = el("a", { class: "p-page", href: url }, em.filename || "Page");
+        page.onclick = e => { e.preventDefault(); e.stopPropagation(); viewPage(p, em); };
+        box.append(el("div", { class: "p-pagerow" }, page,
+          el("a", { class: "p-pagedl", href: url, target: "_blank" }, "download")));
       } else {
         const a = el("a", { class: "p-file", href: hub + "/v1/embed/" + em.cid, target: "_blank" },
           em.filename || em.mime);

@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,13 +28,29 @@ import (
 // that keeps the document off this origin even when the URL is opened at
 // top level. A leaked ticket exposes nothing but that one file, which the
 // page holding the URL already has.
+//
+// A page from the web — a hub embed the Hub app hands over through the app
+// bridge — takes the same road: the desktop fetches it bare (no token, no
+// cookies), posts its text here, and the ticket holds that text instead of
+// a path. The hub never serves HTML as a document, and srcdoc would break
+// the page's #anchor links the way it did for the Workspace.
 const pageTicketTTL = 10 * time.Minute
+
+// webPageMax is a handed-over page's cap — the hub's embed cap — and
+// webPagesHeld bounds the text all live tickets keep in memory; past it the
+// oldest handed-over pages go first (reopening one mints a fresh ticket).
+const (
+	webPageMax   = 8 << 20
+	webPagesHeld = 64 << 20
+)
 
 // pageSandbox mirrors the sandbox attribute of the desktop's page frame.
 const pageSandbox = "sandbox allow-scripts allow-popups allow-forms allow-modals"
 
 type pageTicket struct {
-	path string // workspace-relative, slash-separated
+	path string // workspace-relative, slash-separated; "" for a handed-over page
+	name string // the file name the URL ends in
+	html []byte // a handed-over page's text
 	exp  time.Time
 }
 
@@ -41,47 +59,85 @@ func isPagePath(rel string) bool {
 	return strings.HasSuffix(n, ".html") || strings.HasSuffix(n, ".htm")
 }
 
-// handlePageTicket (POST /v1/pages, {"path"}) mints a ticket for one
-// Workspace page and answers with the URL to load it from, plus its size
-// for the window's status line.
+// handlePageTicket mints a ticket for one page and answers with the URL to
+// load it from, plus its size for the window's status line. POST /v1/pages
+// takes {"path"} for a Workspace page, or {"name", "html"} for a page the
+// desktop fetched from the web itself.
 func (s *Server) handlePageTicket(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Path string `json:"path"`
+		Path string  `json:"path"`
+		Name string  `json:"name"`
+		HTML *string `json:"html"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// JSON escaping at most doubles the text
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2*webPageMax+4096)).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if !isPagePath(req.Path) {
-		writeErr(w, http.StatusBadRequest, errors.New("not a web page"))
-		return
-	}
-	p, err := scopedPath(s.workspaceDir(), req.Path)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err)
-		return
-	}
-	info, err := os.Stat(p)
-	if err != nil || info.IsDir() {
-		writeErr(w, http.StatusNotFound, errors.New("not found"))
-		return
+	var t pageTicket
+	var size int64
+	if req.HTML != nil {
+		if len(*req.HTML) > webPageMax {
+			writeErr(w, http.StatusRequestEntityTooLarge, fmt.Errorf("pages are capped at %dMB", webPageMax>>20))
+			return
+		}
+		name := path.Base(strings.ReplaceAll(req.Name, "\\", "/"))
+		if name == "." || name == "/" {
+			name = "page.html"
+		}
+		t = pageTicket{name: name, html: []byte(*req.HTML)}
+		size = int64(len(t.html))
+	} else {
+		if !isPagePath(req.Path) {
+			writeErr(w, http.StatusBadRequest, errors.New("not a web page"))
+			return
+		}
+		p, err := scopedPath(s.workspaceDir(), req.Path)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		info, err := os.Stat(p)
+		if err != nil || info.IsDir() {
+			writeErr(w, http.StatusNotFound, errors.New("not found"))
+			return
+		}
+		t = pageTicket{path: req.Path, name: path.Base(req.Path)}
+		size = info.Size()
 	}
 	tok := rand.Text()
 	now := time.Now()
+	t.exp = now.Add(pageTicketTTL)
 	s.pageMu.Lock()
 	if s.pageTickets == nil {
 		s.pageTickets = map[string]pageTicket{}
 	}
-	for k, t := range s.pageTickets {
-		if now.After(t.exp) {
+	held := len(t.html)
+	for k, o := range s.pageTickets {
+		if now.After(o.exp) {
 			delete(s.pageTickets, k)
+		} else {
+			held += len(o.html)
 		}
 	}
-	s.pageTickets[tok] = pageTicket{path: req.Path, exp: now.Add(pageTicketTTL)}
+	for held > webPagesHeld {
+		oldest := ""
+		for k, o := range s.pageTickets {
+			if o.html != nil && (oldest == "" || o.exp.Before(s.pageTickets[oldest].exp)) {
+				oldest = k
+			}
+		}
+		if oldest == "" {
+			break
+		}
+		held -= len(s.pageTickets[oldest].html)
+		delete(s.pageTickets, oldest)
+	}
+	s.pageTickets[tok] = t
 	s.pageMu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"url":  "/pages/" + tok + "/" + url.PathEscape(path.Base(req.Path)),
-		"size": info.Size(),
+		"url":  "/pages/" + tok + "/" + url.PathEscape(t.name),
+		"size": size,
 	})
 }
 
@@ -93,8 +149,16 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	s.pageMu.Lock()
 	t, ok := s.pageTickets[r.PathValue("ticket")]
 	s.pageMu.Unlock()
-	if !ok || time.Now().After(t.exp) || path.Base(t.path) != r.PathValue("name") {
-		http.Error(w, "This page's link has expired. Open it from the Workspace again.", http.StatusNotFound)
+	if !ok || time.Now().After(t.exp) || t.name != r.PathValue("name") {
+		http.Error(w, "This page's link has expired. Open the page again.", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", pageSandbox)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer") // the ticket URL stays out of Referer headers
+	if t.html != nil {
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(t.html))
 		return
 	}
 	p, err := scopedPath(s.workspaceDir(), t.path)
@@ -113,9 +177,5 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", pageSandbox)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Referrer-Policy", "no-referrer") // the ticket URL stays out of Referer headers
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }

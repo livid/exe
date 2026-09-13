@@ -3310,10 +3310,14 @@ window.addEventListener("message", e => {
     // the app selected the item a search result named — stop repeating
     clearInterval(revealTimer);
     revealTimer = null;
-  } else if (e.data.exe === "view-image" && isImageURL(e.data.url || "")) {
+  } else if (e.data.exe === "view-image" && isWebURL(e.data.url || "")) {
     // apps have no window chrome of their own, so a clicked picture (a hub
     // embed, say) opens in a desktop PictureViewer window via the bridge
     openImageWin(e.data.url, w, typeof e.data.name === "string" ? e.data.name : "");
+  } else if (e.data.exe === "view-page" && isWebURL(e.data.url || "")) {
+    // a page (an admin's HTML embed on the hub) opens the same way, in a
+    // desktop page window, sandboxed like a Workspace page
+    openPageWin(webPagePath(e.data.url, typeof e.data.name === "string" ? e.data.name : ""), w);
   } else if (e.data.exe === "display-fullscreen" && w.id === "win-app-macos9" && typeof e.data.active === "boolean") {
     const active = e.data.active && !w.hidden;
     w.classList.toggle("display-fullscreen", active);
@@ -4639,6 +4643,21 @@ const IMG_EXT = new Set("png jpg jpeg gif webp bmp ico avif".split(" "));
 // URL the page can read; a blob: URL would do, except that a sandboxed
 // blob document cannot follow its own #anchor links. The text editor stays
 // a context-menu away.
+// A page from the web (a hub embed, handed over by the Hub app) is keyed by
+// its URL with the file's name in the fragment: a restored layout has only
+// the window id to go on, and a fragment never reaches the server.
+const isWebURL = src => /^https?:\/\//.test(src);
+function webPagePath(url, name) {
+  const u = new URL(url);
+  u.hash = name ? encodeURIComponent(name) : "";
+  return u.href;
+}
+function pageName(path) {
+  if (!isWebURL(path)) return path.split("/").pop();
+  const u = new URL(path);
+  try { if (u.hash.length > 1) return decodeURIComponent(u.hash.slice(1)); } catch (e) {}
+  return u.pathname.split("/").pop();
+}
 function isPageFile(name) {
   const n = name.toLowerCase();
   return n.endsWith(".html") || n.endsWith(".htm");
@@ -4665,9 +4684,11 @@ function openPageWin(path, fromWin) {
         <div class="pv-box"><iframe class="pv-frame" sandbox="allow-scripts allow-popups allow-forms allow-modals"></iframe></div>
         ${GROW_TILE}
       </div>`;
-    const name = path.split("/").pop();
+    const name = pageName(path);
     w.querySelector(".title").textContent = name;
-    w.querySelector(".iv-path").textContent = "Workspace :" + path.split("/").join(" :");
+    w.querySelector(".iv-path").textContent = isWebURL(path)
+      ? new URL(path).host + " :" + name
+      : "Workspace :" + path.split("/").join(" :");
     w.querySelector(".pv-frame").title = name;
     w.querySelector(".pv-box").style.height = Math.min(620, Math.max(200, window.innerHeight - 180)) + "px";
     w.dataset.path = path;
@@ -4715,10 +4736,23 @@ async function pageTicket(rel) {
   t.url = new URL(t.url, location.href).href;
   return t;
 }
+// a page from the web: fetched bare (no credentials; the desktop token never
+// leaves this origin), then handed to the daemon, which serves it under a
+// ticket like a Workspace page, so its #anchor links still work
+async function webPageTicket(url) {
+  const u = new URL(url);
+  u.hash = "";
+  const r = await fetch(u.href, { credentials: "omit" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const t = await j("/v1/pages", { method: "POST", json: { name: pageName(url), html: await r.text() } });
+  t.url = new URL(t.url, location.href).href;
+  return t;
+}
 async function loadPage(w) {
   const path = w.dataset.path, fr = w.querySelector(".pv-frame"), dims = w.querySelector(".iv-dims");
   try {
-    const t = await pageTicket(path); // reopen buys a fresh ticket: the file may have changed
+    // reopen buys a fresh ticket: the file may have changed
+    const t = isWebURL(path) ? await webPageTicket(path) : await pageTicket(path);
     fr.src = t.url;
     dims.textContent = fmtBytes(t.size);
   } catch (e) { dims.textContent = e.message; }
@@ -4732,7 +4766,6 @@ function isArchiveFile(name) {
   const dot = name.lastIndexOf(".");
   return dot > 0 && ARC_EXT.has(name.slice(dot + 1).toLowerCase());
 }
-const isImageURL = src => /^https?:\/\//.test(src);
 function openImageWin(path, fromWin, name) {
   const id = "win-iv-" + encodeURIComponent(path);
   let w = document.getElementById(id);
@@ -4759,7 +4792,7 @@ function openImageWin(path, fromWin, name) {
         ${GROW_TILE}
       </div>`;
     w.querySelector(".title").textContent = name || path.split("/").pop();
-    w.querySelector(".iv-path").textContent = isImageURL(path)
+    w.querySelector(".iv-path").textContent = isWebURL(path)
       ? new URL(path).host + " :" + (name || path.split("/").pop())
       : "Workspace :" + path.split("/").join(" :");
     w.dataset.path = path;
@@ -4773,7 +4806,7 @@ function openImageWin(path, fromWin, name) {
 async function loadImage(w) {
   const path = w.dataset.path, box = w.querySelector(".iv-box"), dims = w.querySelector(".iv-dims");
   try {
-    const r = isImageURL(path) ? await fetch(path) : await api(wsUrl(path));
+    const r = isWebURL(path) ? await fetch(path) : await api(wsUrl(path));
     if (!r.ok) throw new Error("HTTP " + r.status); // bare fetch — api() already threw
     const blob = await r.blob();
     if (w._imgURL) URL.revokeObjectURL(w._imgURL); // reopen refetches — drop the old blob
