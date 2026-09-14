@@ -424,6 +424,13 @@ function viewPage(p, em) {
   else window.open(hub + "/p/" + p.id + "#page=" + em.cid, "_blank", "noopener");
 }
 
+// a linked picture's window is named by the file its link ends in, when
+// the link names one (a gateway path can end in the CID alone)
+function pictureName(url) {
+  const m = /\/([^\/?#]+\.[a-z0-9]{2,5})(?:[?#]|$)/i.exec(url);
+  return m ? decodeURIComponent(m[1]) : "Picture";
+}
+
 // a clicked picture opens in the desktop's PictureViewer window (the same
 // viewer Finder uses) through the app bridge; standalone, a plain new tab
 function viewImage(em) {
@@ -612,9 +619,9 @@ function renderPost(p, opts = {}) {
     }
     node.append(card);
   }
-  if (p.embeds && p.embeds.length) {
+  if ((p.embeds && p.embeds.length) || (p.pictures && p.pictures.length)) {
     const box = el("div", { class: "p-embeds" });
-    for (const em of p.embeds) {
+    for (const em of p.embeds || []) {
       if ((em.mime || "").startsWith("image/")) {
         const img = el("img", { src: hub + "/v1/embed/" + em.cid, alt: em.alt || "", loading: "lazy" });
         img.onclick = e => { e.stopPropagation(); viewImage(em); };
@@ -634,6 +641,14 @@ function renderPost(p, opts = {}) {
           em.filename || em.mime);
         box.append(a);
       }
+    }
+    // the pictures the post's IPFS links name, fetched by the hub and
+    // served from its own copy, drawn like attached pictures; the link
+    // stays in the text
+    for (const pc of p.pictures || []) {
+      const img = el("img", { src: hub + "/v1/embed/" + pc.cid, alt: "", loading: "lazy", title: pc.url });
+      img.onclick = e => { e.stopPropagation(); viewImage({ cid: pc.cid, filename: pictureName(pc.url) }); };
+      box.append(img);
     }
     node.append(box);
   }
