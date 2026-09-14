@@ -175,12 +175,15 @@ func (s *Server) handleAgentSessionPrompt(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusInternalServerError, fmt.Errorf("tmux load-buffer: %s", strings.TrimSpace(string(out))))
 		return
 	}
-	if out, err := tmuxCmd("paste-buffer", "-p", "-d", "-b", "exe-prompt", "-t", "="+name).CombinedOutput(); err != nil {
+	// paste-buffer and send-keys want a pane: "=name" names a session but
+	// not a pane ("can't find pane"), "=name:" is its current window's
+	pane := "=" + name + ":"
+	if out, err := tmuxCmd("paste-buffer", "-p", "-d", "-b", "exe-prompt", "-t", pane).CombinedOutput(); err != nil {
 		writeErr(w, http.StatusNotFound, fmt.Errorf("tmux paste-buffer: %s", strings.TrimSpace(string(out))))
 		return
 	}
 	time.Sleep(400 * time.Millisecond) // the CLI takes the paste in before Return lands
-	if out, err := tmuxCmd("send-keys", "-t", "="+name, "Enter").CombinedOutput(); err != nil {
+	if out, err := tmuxCmd("send-keys", "-t", pane, "Enter").CombinedOutput(); err != nil {
 		writeErr(w, http.StatusInternalServerError, fmt.Errorf("tmux send-keys: %s", strings.TrimSpace(string(out))))
 		return
 	}

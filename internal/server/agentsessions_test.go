@@ -1,7 +1,11 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -342,5 +346,53 @@ func TestAgentSessionsLive(t *testing.T) {
 	}
 	if th := s.agentThreads(a, s.agentSessions(a)); th != nil {
 		t.Fatalf("a hookless agent lists threads: %+v", th)
+	}
+}
+
+// The prompt endpoint types into a live session: pasted and sent with
+// Return. Its tmux target is a pane, and "=name" alone is not one
+// ("can't find pane"), which sent every hub reply meant for an open
+// session to a headless run instead.
+func TestAgentSessionPromptLive(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux on this host")
+	}
+	tmuxSocket = fmt.Sprintf("exe-test-prompt-%d", os.Getpid())
+	defer func() {
+		if c := tmuxCmd("kill-server"); c != nil {
+			c.Run()
+		}
+		tmuxSocket = ""
+	}()
+	dir := t.TempDir()
+	if out, err := tmuxCmd("new-session", "-d", "-s", "exe-claude-2", "-x", "80", "-y", "24", "sh").CombinedOutput(); err != nil {
+		t.Fatalf("new-session: %v %s", err, out)
+	}
+	typed := filepath.Join(dir, "typed")
+	body, _ := json.Marshal(map[string]string{"prompt": "echo pasted > " + typed})
+	s := &Server{StateDir: dir}
+	prompt := func(name string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/v1/agents/claude/sessions/"+name+"/prompt", bytes.NewReader(body))
+		r.SetPathValue("app", "claude")
+		r.SetPathValue("name", name)
+		w := httptest.NewRecorder()
+		s.handleAgentSessionPrompt(w, r)
+		return w
+	}
+	if w := prompt("exe-claude-2"); w.Code != http.StatusNoContent {
+		t.Fatalf("prompt: %d %s", w.Code, w.Body)
+	}
+	for i := 0; ; i++ {
+		if b, _ := os.ReadFile(typed); strings.TrimSpace(string(b)) == "pasted" {
+			break
+		}
+		if i == 100 {
+			pane, _ := tmuxCmd("capture-pane", "-p", "-t", "=exe-claude-2:").Output()
+			t.Fatalf("the prompt never ran; pane shows %q", pane)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if w := prompt("exe-claude-3"); w.Code != http.StatusNotFound {
+		t.Fatalf("prompt to a session that does not exist: %d %s, want 404", w.Code, w.Body)
 	}
 }
