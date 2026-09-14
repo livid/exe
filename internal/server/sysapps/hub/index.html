@@ -142,6 +142,9 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-card .c-b { min-width: 0; padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; }
 .p-card .c-t { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-card .c-d, .p-card .c-h { font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the card's page kept in the Internet Archive: a line under the card */
+.p-arch { display: block; width: max-content; max-width: calc(100% - 22px); margin: 3px 0 0 22px;
+  font-size: 10px; color: var(--hl); cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #777; padding: 10px; }
 /* loading placeholders mirror the loaded rows so nothing shifts when data lands */
 .ph { padding: 7px 10px 8px; border-bottom: 1px solid #efefef; }
@@ -494,6 +497,11 @@ function renderPost(p, opts = {}) {
     if (p.card.host) body.append(el("span", { class: "c-h" }, p.card.host));
     box.append(body);
     node.append(box);
+    if (p.card.archive) { // the page's copy in the Internet Archive, found or saved by the hub
+      const day = p.card.archive.match(/\/web\/(\d{4})(\d\d)(\d\d)/);
+      node.append(el("a", { class: "p-arch", href: p.card.archive, target: "_blank", rel: "noopener nofollow" },
+        "Archived copy" + (day ? " · " + day.slice(1).join("-") : "")));
+    }
   }
   if (p.embeds && p.embeds.length) {
     const box = el("div", { class: "p-embeds" });
