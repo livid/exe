@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -168,6 +169,68 @@ func (s *Server) handleHubUpload(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("X-Hub-Ts", ts)
 	req.Header.Set("X-Hub-Sig", sig)
 	resp, err := hubClient.Do(req)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, fmt.Errorf("hub unreachable: %w", err))
+		return
+	}
+	defer resp.Body.Close()
+	relayJSON(w, resp)
+}
+
+// hubMediaMax bounds what the Hub app may send for conversion; the hub
+// holds it to its own, lower limit (/v1/hub's media.max_mb) and says so.
+const hubMediaMax = 1 << 30
+
+// hubStream carries media to the hub: a file of hundreds of megabytes
+// outlasts hubClient's minute, so only the wait for the hub's answer,
+// which comes once the body is in, is bounded.
+var hubStream = &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: 2 * time.Minute}}
+
+// handleHubMedia signs a video, sound or GIF for the hub's converter
+// (POST /v1/media) and streams it there. The signature covers the body's
+// SHA-256, so the file is staged in the state directory while it is
+// hashed, then sent from disk; the hub's job (202) relays unchanged, and
+// the app follows it on the hub directly.
+func (s *Server) handleHubMedia(w http.ResponseWriter, r *http.Request) {
+	hub, err := hubURL(r.URL.Query().Get("hub"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	id, err := s.hubIdentity()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	f, err := os.CreateTemp(s.StateDir, ".hub-media-*")
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	sum := sha256.New()
+	n, err := io.Copy(io.MultiWriter(f, sum), http.MaxBytesReader(w, r.Body, hubMediaMax))
+	if err != nil {
+		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Errorf("reading the file: %w", err))
+		return
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	sig := id.Sign([]byte(hubUploadPrefix + ts + "\n" + hex.EncodeToString(sum.Sum(nil))))
+	req, err := http.NewRequestWithContext(r.Context(), "POST", hub+"/v1/media", f)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	req.ContentLength = n
+	req.Header.Set("X-Hub-Author", id.PubKey())
+	req.Header.Set("X-Hub-Ts", ts)
+	req.Header.Set("X-Hub-Sig", sig)
+	resp, err := hubStream.Do(req)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, fmt.Errorf("hub unreachable: %w", err))
 		return

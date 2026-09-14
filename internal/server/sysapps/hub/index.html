@@ -77,6 +77,12 @@ textarea { resize: none; }
   border: 1px solid var(--black); padding: 1px 3px 1px 6px; font-size: 10px; max-width: 160px; }
 .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip img { width: 16px; height: 16px; object-fit: cover; border: 1px solid var(--g500); }
+/* a file on its way through the hub's converter: the Platinum progress
+   bar (the Mac OS 9 app's), small, beside its name */
+.chip progress { appearance: none; flex: none; width: 48px; height: 10px; margin: 0; border: 1px solid var(--black); background: var(--g400); }
+.chip progress::-webkit-progress-bar { background: var(--g400); box-shadow: inset 1px 1px 0 var(--g600); }
+.chip progress::-webkit-progress-value { background: var(--hl); border-right: 1px solid var(--black); }
+.chip progress::-moz-progress-bar { background: var(--hl); }
 
 /* the feed: a sunken white list, same chrome as a Finder list view */
 #feed { flex: 1; background: #fff; border: 1px solid var(--black);
@@ -117,6 +123,19 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-embeds img { max-width: 180px; max-height: 140px; border: 1px solid var(--black);
   background: var(--g300); cursor: pointer; }
 .p-file { font-size: 11px; border: 1px solid var(--black); background: var(--g200); padding: 2px 8px; }
+/* a video: a box of its final size from the embed's facts, set before the
+   file loads (mediaBox), black behind the frame, with the poster and
+   native controls; a converted GIF plays muted on a loop without them */
+.p-vid { max-width: 100%; border: 1px solid var(--black); background: #000; }
+.p-vid video { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* a sound: its waveform over the player, and a foot with its name and
+   length, a card like the link card */
+.p-aud { width: 322px; max-width: 100%; border: 1px solid var(--black); background: #fff; box-shadow: 1px 1px 0 var(--black); }
+.p-aud .wave { display: block; width: 100%; height: 33px; object-fit: fill; border: 0; border-bottom: 1px solid var(--black);
+  background: var(--g200); cursor: default; max-width: none; max-height: none; }
+.p-aud audio { display: block; width: 100%; height: 32px; }
+.p-aud .a-f { display: block; padding: 2px 7px; line-height: 13px; background: var(--g200); font-size: 10px; color: #777;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* a page: an admin's HTML embed (the hub lists it in the post's `pages`),
    drawn as the public pages draw it, a white card with a page glyph, and
    opened in a desktop page window; its download link sits beside it */
@@ -325,7 +344,7 @@ let hubInfo = null;  // GET /v1/hub
 let who = null;      // {id, name, pubkey} from the daemon
 let myProfile = null;
 let view = { kind: "feed" }; // or {kind:"thread", id} or {kind:"search", q, oldest}
-let attachments = [];        // [{cid, mime, filename}]
+let attachments = [];        // [{cid, mime, filename}], plus a converted file's facts; no cid while converting
 let oldestId = "";           // feed keyset cursor
 const feedEl = $("#feed"), cStatus = $("#c-status");
 
@@ -480,6 +499,46 @@ function linkify(text) {
   return out;
 }
 
+// A video's box has its final size before the file loads: the embed's
+// width and height fitted into maxW×maxH, never enlarged, whole pixels
+// both ways and the 1px border counted in (box-sizing is border-box).
+// A video that did not say its shape gets a 16:9 box.
+function mediaBox(em, maxW, maxH) {
+  let w = em.width, h = em.height, f;
+  if (w > 0 && h > 0) f = Math.min(1, maxW / w, maxH / h);
+  else { w = 16; h = 9; f = maxW / w; }
+  const bw = Math.max(1, Math.floor(w * f)), bh = Math.max(1, Math.round(bw * h / w));
+  return { width: bw + 2 + "px", aspectRatio: (bw + 2) + " / " + (bh + 2) };
+}
+function fmtLength(sec) {
+  const s = Math.round(sec);
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function videoEl(em) {
+  const v = el("video", { src: hub + "/v1/embed/" + em.cid, playsinline: "" });
+  if (em.poster) v.setAttribute("poster", hub + "/v1/embed/" + em.poster);
+  if (em.loop) { // a GIF, converted: plays muted, over and over, no controls
+    v.muted = true;
+    v.loop = v.autoplay = true;
+    v.setAttribute("muted", "");
+    v.preload = "auto";
+  } else {
+    v.controls = true;
+    v.preload = em.poster ? "none" : "metadata"; // nothing downloads until it plays
+  }
+  if (em.alt) v.setAttribute("aria-label", em.alt);
+  const box = el("div", { class: "p-vid" }, v);
+  Object.assign(box.style, mediaBox(em, 360, 240));
+  return box;
+}
+function soundEl(em) {
+  const box = el("div", { class: "p-aud" });
+  if (em.poster) box.append(el("img", { class: "wave", src: hub + "/v1/embed/" + em.poster, alt: "" }));
+  box.append(el("audio", { src: hub + "/v1/embed/" + em.cid, controls: "", preload: "none" }),
+    el("span", { class: "a-f" }, (em.filename || "Sound") + (em.duration ? " · " + fmtLength(em.duration) : "")));
+  return box;
+}
+
 function renderPost(p, opts = {}) {
   const head = el("div", { class: "p-head" },
     avatarEl(p.author, p.avatar),
@@ -515,6 +574,10 @@ function renderPost(p, opts = {}) {
         const img = el("img", { src: hub + "/v1/embed/" + em.cid, alt: em.alt || "", loading: "lazy" });
         img.onclick = e => { e.stopPropagation(); viewImage(em); };
         box.append(img);
+      } else if ((em.mime || "").startsWith("video/")) {
+        box.append(videoEl(em));
+      } else if ((em.mime || "").startsWith("audio/")) {
+        box.append(soundEl(em));
       } else if ((p.pages || []).includes(em.cid)) {
         const url = hub + "/v1/embed/" + em.cid;
         const page = el("a", { class: "p-page", href: url }, em.filename || "Page");
@@ -540,7 +603,7 @@ function renderPost(p, opts = {}) {
       p.replies ? p.replies + (p.replies === 1 ? " reply" : " replies") : "reply");
     foot.append(rep);
     node.style.cursor = "default";
-    node.onclick = e => { if (!e.target.closest("a, button, .p-text, .p-card")) openThread(p.id); };
+    node.onclick = e => { if (!e.target.closest("a, button, .p-text, .p-card, .p-vid, .p-aud")) openThread(p.id); };
     rep.onclick = () => openThread(p.id);
   }
   if (who && p.author === who.id) {
@@ -820,17 +883,28 @@ function renderChips() {
   box.replaceChildren();
   for (const [i, a] of attachments.entries()) {
     const x = el("button", { class: "ghost sm danger" }, "×");
+    // Cancel on a file still converting only lets it go here; the hub
+    // finishes the job and sweeps the unposted result within a day
     x.onclick = () => { attachments.splice(i, 1); renderChips(); };
     const chip = el("div", { class: "chip" });
-    if (a.mime.startsWith("image/")) chip.append(el("img", { src: hub + "/v1/embed/" + a.cid }));
-    chip.append(el("span", {}, a.filename || a.mime), x);
+    chip.title = a.filename || "";
+    if (!a.cid) { // uploading or converting on the hub
+      a.bar = el("progress", { max: "1" });
+      a.bar.value = a.progress || 0;
+      chip.append(el("span", {}, a.filename), a.bar, x);
+    } else {
+      const thumb = a.poster || (a.mime.startsWith("image/") ? a.cid : "");
+      if (thumb) chip.append(el("img", { src: hub + "/v1/embed/" + thumb }));
+      chip.append(el("span", {}, (a.filename || a.mime) + (a.duration ? " · " + fmtLength(a.duration) : "")), x);
+    }
     box.append(chip);
   }
   $("#attach").disabled = attachments.length >= 4;
   updatePostBtn();
 }
 function updatePostBtn() {
-  $("#post").disabled = !$("#text").value.trim() && !attachments.length;
+  // a file still converting has nothing to embed yet
+  $("#post").disabled = (!$("#text").value.trim() && !attachments.length) || attachments.some(a => !a.cid);
 }
 
 // ---- pictures are scrubbed before they leave the browser ----
@@ -1047,13 +1121,57 @@ async function prepareImage(f) {
 }
 
 $("#attach").onclick = () => $("#file").click();
+
+// ---- video, sound and GIFs go through the hub's converter ----
+// A hub with ffmpeg (/v1/hub's "media") takes the original, drops its
+// location, turns a phone's portrait video upright and fits it under
+// 8 MB; the daemon signs and streams the file, and the chip follows the
+// job on the hub until the result can be embedded.
+const MEDIA_EXT = /\.(mov|mp4|m4v|3gp|webm|mkv|m4a|mp3|wav|aac|flac|ogg|opus|gif)$/i;
+function isMedia(f) {
+  return /^(video|audio)\//.test(f.type) || f.type === "image/gif" || (!f.type && MEDIA_EXT.test(f.name));
+}
+async function addMedia(f) {
+  const max = hubInfo.media.max_mb;
+  if (f.size > max * 1048576) throw new Error(f.name + " is over " + max + " MB");
+  const a = { filename: f.name, progress: 0 };
+  attachments.push(a);
+  renderChips();
+  const drop = () => { const i = attachments.indexOf(a); if (i >= 0) attachments.splice(i, 1); renderChips(); };
+  say("Uploading " + f.name + "…");
+  let job;
+  try {
+    const r = await api("/v1/hub/media?hub=" + encodeURIComponent(hub), { method: "POST", body: f });
+    job = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(job.error || "HTTP " + r.status);
+  } catch (err) { drop(); throw err; }
+  let misses = 0;
+  while (attachments.includes(a)) {
+    say(job.status === "queued" && job.ahead ? f.name + " waits for " + job.ahead + " ahead of it…"
+      : "Converting " + f.name + (job.status === "converting" ? " — " + Math.round((job.progress || 0) * 100) + "%" : "…"));
+    if (a.bar) a.bar.value = a.progress = job.progress || 0;
+    if (job.status === "done") {
+      Object.assign(a, job.result); // cid, mime, poster, width, height, duration, loop
+      say("");
+      renderChips();
+      return;
+    }
+    if (job.status === "failed") { drop(); throw new Error(f.name + ": " + job.error); }
+    await new Promise(res => setTimeout(res, 700));
+    try { job = await hget("/v1/media/" + job.job); misses = 0; }
+    catch (err) { if (++misses > 10) { drop(); throw new Error(f.name + ": the hub stopped answering (" + err.message + ")"); } }
+  }
+  say(""); // cancelled with its chip's ×
+}
+
 async function addFiles(files) {
   for (let f of files) {
     if (attachments.length >= 4) { say("Up to 4 attachments per post", true); break; }
     try {
+      if (isMedia(f) && hubInfo && hubInfo.media) { await addMedia(f); continue; }
       say("Preparing " + f.name + "…");
       f = await prepareImage(f);
-      if (f.size > 8 << 20) throw new Error(f.name + " is over 8MB");
+      if (f.size > 8 << 20) throw new Error(f.name + " is over 8MB" + (isMedia(f) ? " (this hub does not convert video)" : ""));
       say("Uploading " + f.name + "…");
       const r = await api("/v1/hub/upload?hub=" + encodeURIComponent(hub),
         { method: "POST", body: f });
@@ -1089,7 +1207,13 @@ async function doPost() {
   const body = { text };
   if (view.kind === "thread") body.reply_to = view.id;
   if (attachments.length)
-    body.embeds = attachments.map(a => ({ cid: a.cid, mime: a.mime, filename: a.filename, alt: a.filename }));
+    body.embeds = attachments.map(a => {
+      const e = { cid: a.cid, mime: a.mime, filename: a.filename, alt: a.filename };
+      // the converter's facts, repeated exactly: the hub refuses a post
+      // that bends them, and every hub draws the player from them
+      for (const k of ["poster", "width", "height", "duration", "loop"]) if (a[k]) e[k] = a[k];
+      return e;
+    });
   try {
     await publish("post.create", body);
     $("#text").value = "";

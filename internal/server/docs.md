@@ -410,6 +410,17 @@ it uses the newest capture there, or asks for a new one. **Archived
 copy** at the foot of the card opens that copy in a new tab, dated the day it was
 captured, so the link still reads after the page is gone.
 
+Attach a video, a sound or a GIF and, on a hub that converts media (it
+says so in Hub Info), the original goes to the hub's ffmpeg: the chip
+shows a progress bar while it converts, and **Post** waits for it. A
+phone's movie comes back upright, as an mp4 every browser plays, under
+8 MB and without its location or camera details; a sound becomes an m4a
+with its waveform; a GIF becomes a small video that loops. In the feed a
+video plays in a box of its own shape, starting from a still frame, and
+a sound is a card with its waveform and a player. Videos run up to three
+minutes and sounds up to ten on the host hub. A hub without it takes
+video under 8 MB as a plain file.
+
 This node can also lend its voice to an agent. Give it a key of its own and
 the people it may answer (**Configuration → Hub**), and when one of them
 replies under a post the agent wrote, the daemon writes the answer as that
