@@ -514,20 +514,65 @@ function fmtLength(sec) {
   const s = Math.round(sec);
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 }
+// Videos in view play themselves, the way sepia.sol.build's do: muted and
+// looping once half of one is in view, paused when it leaves (a window
+// closed or scrolled away included). A video's controls show while the
+// mouse moves over it or a finger taps it, and hide once it has been still
+// a moment; a video its reader paused keeps its controls and stays paused,
+// and unmuting one mutes the rest. With reduced motion or Save-Data
+// nothing starts on its own. The hub's public pages do the same.
+const CALM = matchMedia("(prefers-reduced-motion: reduce)").matches || !!(navigator.connection && navigator.connection.saveData);
+const videoState = new WeakMap(); // video -> {held, auto}
+const videoSeen = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const v = e.target, st = videoState.get(v);
+    if (!v.isConnected) { videoSeen.unobserve(v); continue; }
+    // half of it in view, or half the view for one taller than that
+    // (isIntersecting alone is any sliver)
+    const seen = e.isIntersecting && (e.intersectionRatio >= 0.5 || (e.rootBounds && e.intersectionRect.height >= e.rootBounds.height / 2));
+    if (seen && v.paused && !st.held) {
+      v.play().catch(() => { v.muted = true; v.play().catch(() => { v.controls = true; }); });
+    } else if (!seen && !v.paused) {
+      st.auto = true;
+      v.pause();
+    }
+  }
+}, { threshold: [0, 0.25, 0.5, 0.75, 1] });
+function watchVideo(v, loop) {
+  const st = { held: false, auto: false };
+  videoState.set(v, st);
+  if (CALM) {
+    v.controls = true;
+    return;
+  }
+  v.muted = v.loop = true;
+  let t = 0;
+  const hide = () => { clearTimeout(t); if (!loop && !v.paused) v.controls = false; };
+  const show = ms => { if (loop) return; v.controls = true; clearTimeout(t); t = setTimeout(hide, ms); };
+  v.addEventListener("pointermove", e => { if (e.pointerType === "mouse") show(2000); });
+  v.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") hide(); });
+  v.addEventListener("pointerdown", e => { if (e.pointerType !== "mouse") show(3000); });
+  v.addEventListener("pause", () => {
+    if (st.auto) { st.auto = false; return; }
+    st.held = true; // the reader paused it: it stays so, controls showing
+    clearTimeout(t);
+    if (!loop) v.controls = true;
+  });
+  v.addEventListener("play", () => { st.held = false; if (v.controls) show(2000); });
+  v.addEventListener("volumechange", () => {
+    if (!v.muted) for (const o of document.querySelectorAll(".p-vid video")) if (o !== v) o.muted = true;
+  });
+  videoSeen.observe(v);
+}
 function videoEl(em) {
   const v = el("video", { src: hub + "/v1/embed/" + em.cid, playsinline: "" });
   if (em.poster) v.setAttribute("poster", hub + "/v1/embed/" + em.poster);
-  if (em.loop) { // a GIF, converted: plays muted, over and over, no controls
-    v.muted = true;
-    v.loop = v.autoplay = true;
-    v.setAttribute("muted", "");
-    v.preload = "auto";
-  } else {
-    v.controls = true;
-    v.preload = em.poster ? "none" : "metadata"; // nothing downloads until it plays
-  }
+  // nothing downloads until it plays, which is when it comes into view
+  v.preload = em.poster ? "none" : "metadata";
   if (em.alt) v.setAttribute("aria-label", em.alt);
+  watchVideo(v, !!em.loop); // a converted GIF never wears controls
   const box = el("div", { class: "p-vid" }, v);
+  if (em.loop) box.dataset.loop = "";
   Object.assign(box.style, mediaBox(em, 360, 240));
   return box;
 }

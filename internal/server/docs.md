@@ -416,8 +416,12 @@ shows a progress bar while it converts, and **Post** waits for it. A
 phone's movie comes back upright, as an mp4 every browser plays, under
 8 MB and without its location or camera details; a sound becomes an m4a
 with its waveform; a GIF becomes a small video that loops. In the feed a
-video plays in a box of its own shape, starting from a still frame, and
-a sound is a card with its waveform and a player. Videos run up to three
+video sits in a box of its own shape and plays by itself, muted, while
+it is in view, pausing when you scroll past; move the mouse over it (or
+tap it) for its controls, which tuck away again when you stop. A video
+you pause stays paused, and unmuting one mutes the others. With reduced
+motion turned on nothing starts by itself. A sound is a card with its
+waveform and a player. Videos run up to three
 minutes and sounds up to ten on the host hub. A hub without it takes
 video under 8 MB as a plain file.
 
