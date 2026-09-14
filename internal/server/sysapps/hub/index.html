@@ -134,17 +134,18 @@ canvas.ava-big { image-rendering: pixelated; }
    a thin rule marking the fold — the public pages' numbers, scaled down */
 .post.deep { padding-left: calc(10px + min(var(--d, 2) - 1, 4) * 18px); border-left: 1px solid #ddd; }
 /* a link card: the post's first link, unfurled by the hub at ingest */
-.p-card { margin: 6px 0 0 22px; max-width: 400px; display: flex; text-decoration: none;
-  color: var(--black); border: 1px solid var(--black); background: #fff;
+.p-card { margin: 6px 0 0 22px; max-width: 400px; border: 1px solid var(--black); background: #fff;
   box-shadow: 1px 1px 0 var(--black); }
+.p-card .c-m { display: flex; text-decoration: none; color: var(--black); }
 .p-card .c-i { flex: none; width: 48px; border-right: 1px solid var(--black); }
 .p-card .c-i img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .p-card .c-b { min-width: 0; padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; }
 .p-card .c-t { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-card .c-d, .p-card .c-h { font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* the card's page kept in the Internet Archive: a line under the card */
-.p-arch { display: block; width: max-content; max-width: calc(100% - 22px); margin: 3px 0 0 22px;
-  font-size: 10px; color: var(--hl); cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the card's page kept in the Internet Archive: the card's foot, a quieter
+   grey with no rule above it */
+.p-card .c-a { display: block; padding: 2px 8px; background: var(--g200); font-size: 10px; color: var(--hl);
+  text-decoration: none; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #777; padding: 10px; }
 /* loading placeholders mirror the loaded rows so nothing shifts when data lands */
 .ph { padding: 7px 10px 8px; border-bottom: 1px solid #efefef; }
@@ -489,19 +490,23 @@ function renderPost(p, opts = {}) {
   node.dataset.id = p.id;
   if (p.text) node.append(el("div", { class: "p-text" }, ...formatText(p.text)));
   if (p.card) { // the first link, unfurled by the hub at ingest
-    const box = el("a", { class: "p-card", href: p.card.url, target: "_blank", rel: "noopener nofollow" });
+    // a box holding two links, the page and its archived copy (a link
+    // cannot sit inside another)
+    const card = el("div", { class: "p-card" });
+    const box = el("a", { class: "c-m", href: p.card.url, target: "_blank", rel: "noopener nofollow" });
     if (p.card.image) box.append(el("span", { class: "c-i" },
       el("img", { src: hub + "/v1/embed/" + p.card.image, alt: "", loading: "lazy" })));
     const body = el("span", { class: "c-b" }, el("span", { class: "c-t" }, p.card.title));
     if (p.card.desc) body.append(el("span", { class: "c-d" }, p.card.desc));
     if (p.card.host) body.append(el("span", { class: "c-h" }, p.card.host));
     box.append(body);
-    node.append(box);
+    card.append(box);
     if (p.card.archive) { // the page's copy in the Internet Archive, found or saved by the hub
       const day = p.card.archive.match(/\/web\/(\d{4})(\d\d)(\d\d)/);
-      node.append(el("a", { class: "p-arch", href: p.card.archive, target: "_blank", rel: "noopener nofollow" },
+      card.append(el("a", { class: "c-a", href: p.card.archive, target: "_blank", rel: "noopener nofollow" },
         "Archived copy" + (day ? " · " + day.slice(1).join("-") : "")));
     }
+    node.append(card);
   }
   if (p.embeds && p.embeds.length) {
     const box = el("div", { class: "p-embeds" });
@@ -535,7 +540,7 @@ function renderPost(p, opts = {}) {
       p.replies ? p.replies + (p.replies === 1 ? " reply" : " replies") : "reply");
     foot.append(rep);
     node.style.cursor = "default";
-    node.onclick = e => { if (!e.target.closest("a, button, .p-text")) openThread(p.id); };
+    node.onclick = e => { if (!e.target.closest("a, button, .p-text, .p-card")) openThread(p.id); };
     rep.onclick = () => openThread(p.id);
   }
   if (who && p.author === who.id) {

@@ -407,7 +407,7 @@ like a Workspace page, with its download link beside the card.
 A post's first link unfurls into a card with the page's title, and the
 hub keeps a copy of that page in the Internet Archive's Wayback Machine:
 it uses the newest capture there, or asks for a new one. **Archived
-copy** under the card opens that copy in a new tab, dated the day it was
+copy** at the foot of the card opens that copy in a new tab, dated the day it was
 captured, so the link still reads after the page is gone.
 
 This node can also lend its voice to an agent. Give it a key of its own and
