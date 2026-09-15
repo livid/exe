@@ -138,6 +138,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   scales to 1.35 and fades to nothing over 120ms ease-in, then the window
   covers it and the tile resets unseen (`launchIcon`). That is the only
   motion on the desktop; honour `prefers-reduced-motion`.
+- A tmux-backed terminal (the agent windows) has no scrollback of its
+  own, so a finger drag there turns into synthetic wheel notches, one per
+  cell travelled, that take the wheel's own road (tmux copy mode, or the
+  CLI's mouse reports); a flick glides on with a per-ms decay of 0.995.
+  The box carries `touch-action: none` so the page never pans instead.
 - A list beside a terminal (the agent windows' session column): a 160px
   sunken white list of 18px rows, the selected row `--hl` with white
   text, its one seam with the terminal the 1px line on its right — a 6px

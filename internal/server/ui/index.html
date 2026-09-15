@@ -746,7 +746,8 @@ a.svc:hover { text-decoration: underline; }
    like Chat's; its one seam with the terminal is the 1px line on its
    right, and New gets a row of its own under the list */
 .agent-wrap { display: flex; align-items: stretch; }
-.agent-wrap .hostterm-box { flex: 1; min-width: 0; }
+.agent-wrap .hostterm-box { flex: 1; min-width: 0;
+  touch-action: none; } /* a finger drag scrolls the pane's history (openHostTermWin), never the page */
 /* contain: size — the column takes the terminal's height and its list
    scrolls; without it, a long list is what the wrap stretches to, and the
    window grows row by row */
@@ -5766,6 +5767,59 @@ function openHostTermWin(app, cmd) {
     if (performance.now() - lastScroll >= 40) flushScroll();
     else if (!pendTimer) pendTimer = setTimeout(flushScroll, 40);
   }, { capture: true, passive: false });
+  // a finger in a tmux window: a drag makes touch events, never wheel
+  // ones, and xterm's own touch scrolling moves only its scrollback,
+  // which a tmux pane's window never has — so a phone could not scroll
+  // back at all. Each cell the finger travels becomes one synthetic
+  // wheel notch of a line, dispatched on the screen at the finger, so
+  // it takes the wheel's road above: to the daemon as tmux lines, or —
+  // with the mouse tracked (Claude Code) — into xterm's own wheel
+  // report, one per notch. A lift with speed keeps the lines
+  // coming a little, slowing as a native list does; the next touch stops
+  // it. Two fingers are the desk menu's, and a plain Terminal keeps
+  // xterm's scrollback and touch scrolling of its own
+  if (column) {
+    let tx = 0, ty = 0, tAt = 0, acc = 0, vel = 0, fling = 0;
+    const cellH = () => {
+      const scr = box.querySelector(".xterm-screen");
+      return (scr && term.rows && scr.getBoundingClientRect().height / term.rows) || 15;
+    };
+    const notch = up => { // in lines, not pixels: neither the handler above nor xterm rounds a whole line away
+      const t = box.querySelector(".xterm");
+      if (t) t.dispatchEvent(new WheelEvent("wheel", { deltaY: up ? -1 : 1, deltaMode: 1,
+        clientX: tx, clientY: ty, bubbles: true, cancelable: true }));
+    };
+    const travel = dy => { // finger pixels; down (> 0) shows older lines, as wheel-up does
+      acc += dy;
+      const cell = cellH();
+      while (Math.abs(acc) >= cell) { notch(acc > 0); acc -= Math.sign(acc) * cell; }
+    };
+    box.addEventListener("touchstart", e => {
+      cancelAnimationFrame(fling); fling = 0;
+      if (e.touches.length !== 1) return;
+      tx = e.touches[0].clientX; ty = e.touches[0].clientY; tAt = e.timeStamp; acc = 0; vel = 0;
+    }, { passive: true });
+    box.addEventListener("touchmove", e => {
+      if (e.touches.length !== 1) return;
+      const y = e.touches[0].clientY, dt = e.timeStamp - tAt;
+      if (dt > 0) vel = (y - ty) / dt; // px per ms, the last move's
+      travel(y - ty);
+      tx = e.touches[0].clientX; ty = y; tAt = e.timeStamp;
+    }, { passive: true });
+    box.addEventListener("touchend", e => {
+      // a finger that rested before lifting flings nothing
+      if (e.touches.length || e.timeStamp - tAt > 80 || Math.abs(vel) < 0.3) return;
+      let last = performance.now();
+      const step = now => {
+        const dt = now - last; last = now;
+        travel(vel * dt);
+        vel *= 0.995 ** dt; // ~200 px of glide per px/ms of lift speed
+        fling = Math.abs(vel) > 0.05 ? requestAnimationFrame(step) : 0;
+      };
+      fling = requestAnimationFrame(step);
+    }, { passive: true });
+    box.addEventListener("touchcancel", () => { vel = 0; }, { passive: true });
+  }
   term.onData(d => {
     if (!(ws && ws.readyState === 1)) return;
     if (scrolled) sendScroll(0);
