@@ -347,13 +347,23 @@ func handleFileList(w http.ResponseWriter, root string) {
 	writeJSON(w, http.StatusOK, map[string]any{"files": files})
 }
 
-func handleFileGet(w http.ResponseWriter, root, rel string) {
+// mediaTypes pins the types the desktop's movie window plays; the host's
+// /etc/mime.types may be absent or disagree, and a media element fed
+// application/octet-stream under nosniff is a download, not a movie.
+var mediaTypes = map[string]string{
+	".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
+	".webm": "video/webm", ".m4a": "audio/mp4", ".mp3": "audio/mpeg",
+	".wav": "audio/wav", ".aac": "audio/aac", ".ogg": "audio/ogg",
+	".oga": "audio/ogg", ".flac": "audio/flac",
+}
+
+func handleFileGet(w http.ResponseWriter, r *http.Request, root, rel string) {
 	p, err := scopedPath(root, rel)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	b, err := os.ReadFile(p)
+	f, err := os.Open(p)
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeErr(w, http.StatusNotFound, errors.New("not found"))
@@ -362,7 +372,17 @@ func handleFileGet(w http.ResponseWriter, root, rel string) {
 		}
 		return
 	}
-	ct := mime.TypeByExtension(filepath.Ext(p))
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || fi.IsDir() {
+		writeErr(w, http.StatusInternalServerError, errors.New("not a file"))
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(p))
+	ct := mediaTypes[ext]
+	if ct == "" {
+		ct = mime.TypeByExtension(ext)
+	}
 	if ct == "" {
 		ct = "application/octet-stream"
 	}
@@ -371,7 +391,11 @@ func handleFileGet(w http.ResponseWriter, root, rel string) {
 	// a page on this origin (fetch() by apps is unaffected).
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", "attachment")
-	w.Write(b)
+	// ServeContent answers Range with 206 and the requested bytes, so a
+	// movie streams and scrubs (Safari refuses media served whole). The
+	// name stays empty: the type is already set, and the modtime carries
+	// the caching.
+	http.ServeContent(w, r, "", fi.ModTime(), f)
 }
 
 // handleFilePut reports success so app-data callers can notify the sync
@@ -453,7 +477,7 @@ func (s *Server) handleAppDataList(w http.ResponseWriter, r *http.Request) {
 	s.withAppData(w, r, func(root string) { handleFileList(w, root) })
 }
 func (s *Server) handleAppDataGet(w http.ResponseWriter, r *http.Request) {
-	s.withAppData(w, r, func(root string) { handleFileGet(w, root, r.PathValue("path")) })
+	s.withAppData(w, r, func(root string) { handleFileGet(w, r, root, r.PathValue("path")) })
 }
 func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
 	s.withAppData(w, r, func(root string) {
@@ -591,7 +615,7 @@ func handleDirList(w http.ResponseWriter, root, rel string) {
 	writeJSON(w, http.StatusOK, map[string]any{"entries": list, "free": diskFree(p)})
 }
 func (s *Server) handleWorkspaceGet(w http.ResponseWriter, r *http.Request) {
-	handleFileGet(w, s.workspaceDir(), r.PathValue("path"))
+	handleFileGet(w, r, s.workspaceDir(), r.PathValue("path"))
 }
 
 // Workspace writes version + push like app-data writes, under the reserved

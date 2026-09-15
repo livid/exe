@@ -222,3 +222,39 @@ func TestAppAliasSharesDataVersionsAndEvents(t *testing.T) {
 		})
 	}
 }
+
+// A movie in the Workspace streams: the file GET answers a Range request
+// with 206 and only the requested bytes (Safari refuses media served
+// whole), and a movie extension gets its media type even where the host
+// has no mime table.
+func TestWorkspaceFileGetServesRanges(t *testing.T) {
+	s := New(&config.Config{APIToken: "test-secret"}, nil, nil, "", t.TempDir())
+	h := s.Handler()
+	if err := os.MkdirAll(s.workspaceDir(), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.workspaceDir(), "clip.mp4"), []byte("0123456789"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	w := appRequest(h, "GET", "/v1/workspace/clip.mp4", "", 0)
+	if w.Code != 200 || w.Body.String() != "0123456789" {
+		t.Fatalf("whole file: %d %q", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Content-Type"); got != "video/mp4" {
+		t.Fatalf("Content-Type: %q", got)
+	}
+	if got := w.Header().Get("Accept-Ranges"); got != "bytes" {
+		t.Fatalf("Accept-Ranges: %q", got)
+	}
+	r := httptest.NewRequest("GET", "http://exe.test/v1/workspace/clip.mp4", nil)
+	r.Header.Set("Authorization", "Bearer test-secret")
+	r.Header.Set("Range", "bytes=2-5")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != 206 || rec.Body.String() != "2345" {
+		t.Fatalf("range: %d %q", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Range"); got != "bytes 2-5/10" {
+		t.Fatalf("Content-Range: %q", got)
+	}
+}

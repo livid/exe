@@ -451,6 +451,38 @@ body.mobile #cstrip { z-index: 5; }
 .pv-box { background: #fff; height: 420px; overflow: hidden; }
 .pv-frame { display: block; border: 0; width: 100%; height: 100%; background: #fff; }
 body.win-drag iframe { pointer-events: none; }
+/* movie windows: the movie on black over QuickTime's Platinum controller —
+   sound button, play, the scrub track with its lined thumb, two step
+   buttons, the grow box at the strip's right end. The strip is the status
+   bar's metric (1px black line, 14px face) so the 15px grow tile's black
+   top row lands on the strip's line. */
+.mv-box { background: #000; height: 300px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; }
+.mv-box video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.mv-ctl { position: relative; height: 14px; flex: none; background: var(--g300);
+  border-top: 1px solid var(--black); display: flex; }
+/* a sound window's controller sits right under the info bar, whose black
+   bottom line is the one seam — drop the controller's own */
+.iv-info + .mv-ctl { border-top: 0; }
+.mv-ctl.mv-grown { padding-right: 15px; }
+body.mobile .mv-ctl.mv-grown { padding-right: 0; }
+.mv-btn { flex: none; width: 22px; height: 14px; padding: 0; margin: 0;
+  border: 0; border-right: 1px solid var(--black); background: var(--g300);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 var(--g600);
+  color: var(--black); display: flex; align-items: center; justify-content: center; }
+.mv-btn:active { background: var(--g700); color: #fff;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 var(--g600); }
+.mv-btn svg { display: block; }
+.mv-back { border-left: 1px solid var(--black); }
+/* the grow tile's own black left column is the last seam; without a grow
+   box the window frame's edge is */
+.mv-fwd { border-right: 0; }
+.mv-track { flex: 1; position: relative; background: var(--g500);
+  box-shadow: inset 1px 1px 0 var(--g700), inset -1px -1px 0 var(--g200); }
+.mv-thumb { position: absolute; top: 1px; bottom: 1px; left: 0; width: 11px;
+  box-sizing: border-box; background: #9999ff; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #ccccff, inset -1px -1px 0 #6666cc;
+  display: flex; align-items: center; justify-content: center; }
 
 /* ---------- Icon Editor ----------
    A system app over the UI's own pixel icons: a Finder-style gallery of
@@ -1051,6 +1083,7 @@ body.mobile .win-frame > .app-frame,
 body.mobile .win-frame > .finder-icons,
 body.mobile .win-frame > .ed-text,
 body.mobile .win-frame > .iv-box,
+body.mobile .win-frame > .mv-box,
 body.mobile .win-frame > .pv-box { flex: 1; min-height: 0; height: auto !important; }
 body.mobile #log-out { height: 100% !important; }
 body.mobile #news-list { height: 100% !important; }
@@ -2017,7 +2050,7 @@ function mobileSwapIn(w) {
 // name, carried alongside.
 const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps", "win-icons", "win-menu"]);
 const mobRestorable = id => MOB_RESTORE.has(id)
-  || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-pv-") || id.startsWith("win-ic-");
+  || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-pv-") || id.startsWith("win-mv-") || id.startsWith("win-ic-");
 function mobSave() {
   const vis = [...document.querySelectorAll("#desktop .window")].find(w => !w.hidden && !MOB_DIALOG.has(w.id));
   localStorage.setItem("exe_mobile_winstate", JSON.stringify({
@@ -2071,6 +2104,7 @@ function mobRestore() {
     else if (id.startsWith("win-ed-")) openEditorWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-iv-")) openImageWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-pv-")) openPageWin(decodeURIComponent(id.slice(7)));
+    else if (id.startsWith("win-mv-")) openMovieWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-ic-")) openIconEditor(id.slice(7));
     else (WIN_OPENERS[id] || (() => openWin("#" + id)))();
   }
@@ -2098,6 +2132,8 @@ function closeWin(w) {
   const wasFront = w.classList.contains("front");
   w.hidden = true;
   tellApp(w, "hide");
+  // a hidden movie window must fall silent; reopening resumes where it was
+  w.querySelectorAll("video").forEach(v => v.pause());
   if (w.id === "win-detail") { closeTerm(); flushNotes(); currentVM = null; }
   if (w.id === "win-newvm") $("#c-status").textContent = "";
   if (w.id === "win-upload") {
@@ -2364,7 +2400,7 @@ function winSnapshot() {
       open: !w.hidden, shaded: w.classList.contains("shaded"),
     };
     // app, Finder, editor, image, chat and agent windows are also resizable
-    const g = w.querySelector(".app-frame, .finder-icons, .ed-text, .iv-box, .chat-wrap, .hostterm-box");
+    const g = w.querySelector(".app-frame, .finder-icons, .ed-text, .iv-box, .mv-box, .chat-wrap, .hostterm-box");
     if (g) st[w.id].h = parseInt(g.style.height) || g.offsetHeight || 0;
     // an agent window's session column keeps its dragged width
     const sc = w.querySelector(".sess-col");
@@ -2409,11 +2445,13 @@ function applyWinState(st) {
         else if (w && !v.open && !w.hidden) closeWin(w);
         continue;
       }
-      if (id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-pv-")) {
-        // Finder folder / editor / image / page windows: same on-demand
-        // pattern as app windows, with the path recovered from the id
+      if (id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-pv-") || id.startsWith("win-mv-")) {
+        // Finder folder / editor / image / page / movie windows: same
+        // on-demand pattern as app windows, with the path recovered from
+        // the id
         const open = id.startsWith("win-ws-") ? openFinderWin
-          : id.startsWith("win-ed-") ? openEditorWin : id.startsWith("win-iv-") ? openImageWin : openPageWin;
+          : id.startsWith("win-ed-") ? openEditorWin : id.startsWith("win-iv-") ? openImageWin
+          : id.startsWith("win-mv-") ? openMovieWin : openPageWin;
         if (v.open && !w) open(decodeURIComponent(id.slice(7)));
         else if (w && v.open && w.hidden) openWin(w);
         else if (w && !v.open && !w.hidden) closeWin(w);
@@ -2460,8 +2498,8 @@ function applyWinState(st) {
       if (id === "win-config") $("#win-config .win-body").style.height = v.h ? Math.max(200, Math.min(window.innerHeight - 170, v.h)) + "px" : "";
       if (id === "win-detail") $("#win-detail .win-body").style.height = v.h ? Math.max(360, Math.min(window.innerHeight - 170, v.h)) + "px" : "";
       if (id === "win-chat" && v.h) $(".chat-wrap").style.height = Math.max(240, Math.min(window.innerHeight - 190, v.h)) + "px";
-      if ((id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-")) && v.h) {
-        const g = w.querySelector(".finder-icons, .ed-text, .iv-box");
+      if ((id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-mv-")) && v.h) {
+        const g = w.querySelector(".finder-icons, .ed-text, .iv-box, .mv-box");
         if (g) g.style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       }
       if (id.startsWith("win-app-") && v.h) {
@@ -3152,6 +3190,17 @@ let PAGE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering
   <path fill="#4c4c96" d="M17 21h5v1h-5z"/>
   <path fill="#6666be" d="M17 22h5v1h-5z"/>
 </svg>`;
+// movie document (mp4/mov/m4a): the page with a strip of film — sprocket
+// holes over two frames of sky and hill
+let MOVIE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
+  <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
+  <rect x="9.5" y="12.5" width="13" height="13" fill="#444" stroke="#000"/>
+  <path fill="#fff" d="M11 14h1v1h-1zM13 14h1v1h-1zM15 14h1v1h-1zM17 14h1v1h-1zM19 14h1v1h-1zM21 14h1v1h-1zM11 23h1v1h-1zM13 23h1v1h-1zM15 23h1v1h-1zM17 23h1v1h-1zM19 23h1v1h-1zM21 23h1v1h-1z"/>
+  <rect x="11" y="16" width="4" height="6" fill="#99ccff"/>
+  <rect x="17" y="16" width="4" height="6" fill="#99ccff"/>
+  <path fill="#336633" d="M12 20h2v2h-2zM18 20h2v2h-2z"/>
+</svg>`;
 // archive document (zip/dmg/rar/7z): the page with a zipper down the middle
 let ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
@@ -3163,6 +3212,7 @@ let ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-render
 const fileIcon = en => en.dir ? FOLDER_ICON
   : isImageFile(en.name) ? IMAGE_ICON
   : isPageFile(en.name) ? PAGE_ICON
+  : isMovieFile(en.name) || isSoundFile(en.name) ? MOVIE_ICON
   : isArchiveFile(en.name) ? ARCHIVE_ICON : DOC_ICON;
 // host Terminal: the compact Mac with a dark screen showing a green prompt
 let TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
@@ -3465,6 +3515,7 @@ function openEntry(en, rel, w) {
   if (en.dir) openFinderWin(rel, w);
   else if (isImageFile(en.name)) openImageWin(rel, w);
   else if (isPageFile(en.name)) openPageWin(rel, w);
+  else if (isMovieFile(en.name) || isSoundFile(en.name)) openMovieWin(rel, w);
   else if (isTextFile(en.name) && en.size < 1 << 20) openEditorWin(rel, w);
   else openWorkspaceFile(rel);
 }
@@ -3580,6 +3631,7 @@ const ICON_DEFS = [
   { key: "doc", label: "Document", size: 32, get: () => DOC_ICON, set: s => DOC_ICON = s },
   { key: "image", label: "Image File", size: 32, get: () => IMAGE_ICON, set: s => IMAGE_ICON = s },
   { key: "page", label: "Web Page", size: 32, get: () => PAGE_ICON, set: s => PAGE_ICON = s },
+  { key: "movie", label: "Movie File", size: 32, get: () => MOVIE_ICON, set: s => MOVIE_ICON = s },
   { key: "archive", label: "Archive", size: 32, get: () => ARCHIVE_ICON, set: s => ARCHIVE_ICON = s },
   { key: "log", label: "Daemon Log", size: 32, get: () => LOG_ICON, set: s => LOG_ICON = s },
   { key: "app", label: "App", size: 32, get: () => APP_FALLBACK_ICON, set: s => APP_FALLBACK_ICON = s },
@@ -4467,6 +4519,7 @@ function winIcon(w) {
   if (id.startsWith("win-ed-")) return at16(DOC_ICON);
   if (id.startsWith("win-iv-")) return at16(IMAGE_ICON);
   if (id.startsWith("win-pv-")) return at16(PAGE_ICON);
+  if (id.startsWith("win-mv-")) return at16(MOVIE_ICON);
   if (id.startsWith("win-term-")) return at16(TERMINAL_ICON);
   if (agentOfWin(id)) return at16(AGENT_APPS[agentOfWin(id)].icon());
   if (id === "win-chat") return at16($("#chat-icon svg").outerHTML);
@@ -4846,6 +4899,162 @@ async function loadImage(w) {
     img.src = w._imgURL;
     box.replaceChildren(img);
   } catch (e) { dims.textContent = e.message; }
+}
+// ---- movie windows: QuickTime for the Workspace ----
+// A movie or sound from Finder opens over the Platinum movie controller:
+// sound, play, the scrub track with its lined thumb, two frame steps. The
+// <video> streams straight from /v1/workspace, whose Range answers make
+// scrubbing seeks instead of downloads.
+const MOVIE_EXT = new Set("mp4 m4v mov webm".split(" "));
+const SOUND_EXT = new Set("m4a mp3 wav aac ogg oga flac".split(" "));
+function isMovieFile(name) {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && MOVIE_EXT.has(name.slice(dot + 1).toLowerCase());
+}
+function isSoundFile(name) {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && SOUND_EXT.has(name.slice(dot + 1).toLowerCase());
+}
+const MV_GLYPH = {
+  play: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M2 0h1v8H2zM3 1h1v6H3zM4 2h1v4H4zM5 3h1v2H5z"/></svg>`,
+  pause: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h2v6H1zM5 1h2v6H5z"/></svg>`,
+  snd: `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 3h1v2H1zM2 2h1v4H2zM3 1h1v6H3zM4 0h1v8H4zM6 3h1v2H6zM7 1h1v1H7zM8 2h1v4H8zM7 6h1v1H7z"/></svg>`,
+  mute: `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 3h1v2H1zM2 2h1v4H2zM3 1h1v6H3zM4 0h1v8H4z"/></svg>`,
+  back: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h1v6H1zM4 3h1v2H4zM5 2h1v4H5zM6 1h1v6H6z"/></svg>`,
+  fwd: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3zM6 1h1v6H6z"/></svg>`,
+  grip: `<svg width="5" height="8" viewBox="0 0 5 8" shape-rendering="crispEdges"><path fill="#ccccff" d="M0 0h1v8H0zM3 0h1v8H3z"/><path fill="#333399" d="M1 0h1v8H1zM4 0h1v8H4z"/></svg>`,
+};
+function fmtClock(s) {
+  s = Math.max(0, Math.floor(Number.isFinite(s) ? s : 0));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function openMovieWin(path, fromWin, name) {
+  const id = "win-mv-" + encodeURIComponent(path);
+  let w = document.getElementById(id);
+  if (!w) {
+    // a sound has no picture: its window is the controller under the info
+    // line, fixed size, so no grow box and no movie box at all
+    const sound = isSoundFile(path);
+    w = el("div", { class: sound ? "window movie-window" : "window grow movie-window", id });
+    if (fromWin) {
+      w.style.left = (parseInt(fromWin.style.left) || 130) + 24 + "px";
+      w.style.top = (parseInt(fromWin.style.top) || 60) + 24 + "px";
+      if (!sound) w.dataset.fit = "1"; // size to the movie once its shape is known
+    } else {
+      const n = document.querySelectorAll("#desktop .movie-window").length;
+      w.style.left = (190 + n * 26) + "px";
+      w.style.top = (100 + n * 22) + "px";
+    }
+    w.style.width = sound ? "300px" : "480px";
+    w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title"></div>
+      <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
+      <div class="win-frame">
+        <div class="iv-info"><span class="iv-path"></span><span class="iv-dims">…</span></div>
+        ${sound ? `<video hidden playsinline></video>` : `<div class="mv-box"><video playsinline></video></div>`}
+        <div class="mv-ctl${sound ? "" : " mv-grown"}">
+          <button class="mv-btn mv-snd" title="Sound"></button>
+          <button class="mv-btn mv-play" title="Play"></button>
+          <div class="mv-track"><div class="mv-thumb">${MV_GLYPH.grip}</div></div>
+          <button class="mv-btn mv-back" title="Back One Frame"></button>
+          <button class="mv-btn mv-fwd" title="Forward One Frame"></button>
+        </div>
+        ${sound ? "" : GROW_TILE}
+      </div>`;
+    w.querySelector(".title").textContent = name || path.split("/").pop();
+    w.querySelector(".iv-path").textContent = "Workspace :" + path.split("/").join(" :");
+    w.dataset.path = path;
+    if (!sound) wireGrow(w.querySelector(".grow-box"), w, w.querySelector(".mv-box"), 240, { minH: 120 });
+    $("#desktop").append(w);
+    initWindow(w);
+    wireMovie(w);
+  }
+  openWin(w);
+  loadMovie(w);
+}
+function wireMovie(w) {
+  const v = w.querySelector("video"), dims = w.querySelector(".iv-dims"),
+    play = w.querySelector(".mv-play"), snd = w.querySelector(".mv-snd"),
+    back = w.querySelector(".mv-back"), fwd = w.querySelector(".mv-fwd"),
+    track = w.querySelector(".mv-track"), thumb = w.querySelector(".mv-thumb");
+  play.innerHTML = MV_GLYPH.play;
+  snd.innerHTML = MV_GLYPH.snd;
+  back.innerHTML = MV_GLYPH.back;
+  fwd.innerHTML = MV_GLYPH.fwd;
+  const setThumb = () => {
+    const run = track.clientWidth - thumb.offsetWidth;
+    thumb.style.left = (v.duration && run > 0 ? Math.round(v.currentTime / v.duration * run) : 0) + "px";
+  };
+  const setTime = () => {
+    dims.textContent = (v.videoWidth ? v.videoWidth + " × " + v.videoHeight + " · " : "")
+      + fmtClock(v.currentTime) + " / " + fmtClock(v.duration)
+      + (w._mvSize ? " · " + w._mvSize : "");
+  };
+  w._mvTime = setTime;
+  v.addEventListener("timeupdate", () => { setThumb(); setTime(); });
+  v.addEventListener("durationchange", () => { setThumb(); setTime(); });
+  v.addEventListener("play", () => { play.innerHTML = MV_GLYPH.pause; play.title = "Pause"; });
+  v.addEventListener("pause", () => { play.innerHTML = MV_GLYPH.play; play.title = "Play"; });
+  v.addEventListener("error", () => { dims.textContent = "can’t play this movie"; });
+  play.addEventListener("click", () => { if (v.paused) v.play().catch(e => toast(e.message)); else v.pause(); });
+  snd.addEventListener("click", () => {
+    v.muted = !v.muted;
+    snd.innerHTML = v.muted ? MV_GLYPH.mute : MV_GLYPH.snd;
+  });
+  // QuickTime's frame steps: pause, then a 30th of a second either way
+  back.addEventListener("click", () => { v.pause(); v.currentTime = Math.max(0, v.currentTime - 1 / 30); });
+  fwd.addEventListener("click", () => { v.pause(); if (v.duration) v.currentTime = Math.min(v.duration, v.currentTime + 1 / 30); });
+  const seek = e => {
+    const r = track.getBoundingClientRect(), run = r.width - thumb.offsetWidth;
+    if (!v.duration || run <= 0) return;
+    v.currentTime = Math.min(Math.max((e.clientX - r.left - thumb.offsetWidth / 2) / run, 0), 1) * v.duration;
+  };
+  track.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    track.setPointerCapture(e.pointerId);
+    seek(e);
+    const move = ev => seek(ev);
+    track.addEventListener("pointermove", move);
+    track.addEventListener("pointerup", () => track.removeEventListener("pointermove", move), { once: true });
+  });
+  new ResizeObserver(setThumb).observe(track);
+  v.addEventListener("loadedmetadata", () => {
+    setTime(); setThumb();
+    if (w.dataset.fit) {
+      // like PictureViewer: hug the movie's shape, scaled into the viewport,
+      // then pulled fully on screen — opened from a low Finder window the
+      // controller would hang off the desktop
+      delete w.dataset.fit;
+      if (!IS_MOBILE && v.videoWidth) {
+        const scale = Math.min((window.innerWidth - 90) / v.videoWidth,
+          (window.innerHeight - 200) / v.videoHeight, 1);
+        w.style.width = Math.max(240, Math.round(v.videoWidth * scale) + 10) + "px";
+        w.querySelector(".mv-box").style.height = Math.max(120, Math.round(v.videoHeight * scale)) + "px";
+        const desktop = $("#desktop");
+        w.style.left = Math.max(4, Math.min(w.offsetLeft, desktop.clientWidth - w.offsetWidth - 4)) + "px";
+        w.style.top = Math.max(4, Math.min(w.offsetTop, desktop.clientHeight - w.offsetHeight - 4)) + "px";
+        winSave();
+      }
+    }
+  });
+}
+// the token rides the URL the way the app frames carry it: a media element
+// cannot send the Authorization header, and a blob: URL would download the
+// whole movie before the first frame
+function movieURL(path) {
+  return wsUrl(path) + (tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "");
+}
+async function loadMovie(w, refresh) {
+  const v = w.querySelector("video");
+  // a reopen keeps the movie where it was; only a changed file refetches
+  if (!v.getAttribute("src") || refresh) v.src = movieURL(w.dataset.path);
+  if (!w._mvSize) {
+    try {
+      const r = await api(wsUrl(w.dataset.path), { method: "HEAD" });
+      const n = parseInt(r.headers.get("Content-Length"));
+      if (n) { w._mvSize = fmtBytes(n); w._mvTime?.(); }
+    } catch (e) {}
+  }
 }
 $("#desktop").addEventListener("mousedown", e => {
   if (e.target === $("#desktop")) {
@@ -7922,6 +8131,8 @@ function workspaceChanged(path, deleted, client) {
   if (ed && !ed.hidden && !deleted) loadEditor(ed);
   const iv = document.getElementById("win-iv-" + encodeURIComponent(path));
   if (iv && !iv.hidden && !deleted) loadImage(iv);
+  const mv = document.getElementById("win-mv-" + encodeURIComponent(path));
+  if (mv && !mv.hidden && !deleted) loadMovie(mv, true);
 }
 
 // ---- boot ----

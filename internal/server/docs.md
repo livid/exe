@@ -364,7 +364,11 @@ view — double-click text files to edit them in place, images to view them,
 web pages (`.html`) to see them rendered in a window of their own (the page
 runs sandboxed, apart from the desktop; the right-click menu's **Open in
 New Window** shows it in a browser window instead, and **Edit Source**
-opens the text). The **Artifacts** folder is where the agents
+opens the text). A movie (`.mp4`, `.mov`, `.webm`) or a sound (`.m4a`,
+`.mp3`, `.wav` and friends) opens in a QuickTime-style player window: play,
+scrub, step a frame at a time, click the speaker to mute. The movie streams
+from the daemon, so a long clip starts at once and scrubbing seeks instead
+of downloading. The **Artifacts** folder is where the agents
 publish the pages they make — Claude's claude.ai artifacts land there.
 Right-click for Get Info and Download; right-click a window's empty space
 for New Folder, New Text File and Upload; **File → Upload to Workspace…**
