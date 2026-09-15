@@ -64,9 +64,14 @@ a { color: #202a87; text-decoration: underline; }
 .menu.appl { padding: 0 12px; }
 .menu.open { background: var(--hl); color: #fff; }
 .mb-right { margin-left: auto; display: flex; align-items: stretch; }
-#search-btn { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
+/* the two glyph buttons at the right: Show All Windows, then the magnifier */
+#showall-btn, #search-btn { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
   background: none; font: inherit; color: inherit; }
-#search-btn:active { background: var(--hl); color: #fff; }
+#showall-btn:active, #search-btn:active { background: var(--hl); color: #fff; }
+/* while the windows are laid out the button stays inverted, like an open menu title */
+#showall-btn.on { background: var(--hl); color: #fff; }
+/* a phone shows one window at a time; there the Apple menu is the switcher */
+body.mobile #showall-btn { display: none; }
 #clock { display: flex; align-items: center; padding: 0 12px; font-weight: bold;
   border-left: 1px solid var(--g600); box-shadow: inset 1px 0 0 #fff; }
 #clock:active { background: var(--hl); color: #fff; }
@@ -140,6 +145,25 @@ body.mobile #clock { padding: 0 10px; }
 .sr-item.sel { background: var(--hl); }
 .sr-item.sel .sr-title, .sr-item.sel .sr-sub { color: #fff; }
 .sr-hint { padding: 10px; }
+
+/* ---------- Show All Windows (the menubar's Exposé) ---------- */
+/* every open window shrinks into a grid by a CSS transform from its own
+   corner, so the geometry the layout saved never changes; the flight there
+   and back takes 200ms. A shield over the desktop takes the pointer for
+   the duration — a click on a tile picks that window, anywhere else puts
+   them all back — and carries each tile's title in the desktop icons'
+   label style */
+body.showall #desktop .window, body.showall-out #desktop .window {
+  transform-origin: 0 0; transition: transform .2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  body.showall #desktop .window, body.showall-out #desktop .window { transition: none; }
+}
+#sa-shield { position: fixed; inset: calc(20px + var(--sat)) 0 0 0; z-index: 2999; }
+/* the desktop icons step aside for the grid, the way Mission Control clears the desk */
+body.showall #rail { visibility: hidden; }
+.sa-label { position: absolute; text-align: center; pointer-events: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #fff; text-shadow: 1px 1px 1px #000; padding: 0 4px; font-size: 11px; line-height: 16px; }
 
 /* ---------- desktop icons ---------- */
 #desktop { position: fixed; inset: calc(20px + var(--sat)) 0 0 0; }
@@ -1138,6 +1162,11 @@ body.mobile th.sorted {
   <div class="menu" data-m="special">Special</div>
   <div class="menu" data-m="help">Help</div>
   <div class="mb-right">
+    <!-- Show All Windows: four small windows in a grid; fill follows the
+         text color so :active and .on invert it -->
+    <button id="showall-btn" title="Show all windows">
+      <svg width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges" fill="currentColor"><path d="M1 2h6v2H1zM1 4h1v2H1zM6 4h1v2H6zM1 6h6v1H1zM8 2h6v2H8zM8 4h1v2H8zM13 4h1v2h-1zM8 6h6v1H8zM1 8h6v2H1zM1 10h1v2H1zM6 10h1v2H6zM1 12h6v1H1zM8 8h6v2H8zM8 10h1v2H8zM13 10h1v2h-1zM8 12h6v1H8z"/></svg>
+    </button>
     <!-- pixel magnifier; fill follows the text color so :active inverts it -->
     <button id="search-btn" title="Search VMs, chats, notes and todos">
       <svg width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges" fill="currentColor"><path d="M4 1h4v1H4zM3 2h1v1H3zM8 2h1v1H8zM2 3h1v4H2zM9 3h1v4H9zM3 7h1v1H3zM8 7h1v1H8zM4 8h4v1H4zM8 8h1v1H8zM9 9h2v2H9zM10 10h2v2h-2zM11 11h2v2h-2z"/></svg>
@@ -1695,6 +1724,10 @@ body.mobile th.sorted {
   </div>
 </div>
 
+<!-- Show All Windows: the shield over the desktop while the windows are
+     laid out; it holds the tiles' titles and takes every click -->
+<div id="sa-shield" hidden></div>
+
 <div id="status-bar"></div>
 
 <!-- Cloudflare status summary (modal) -->
@@ -2019,6 +2052,7 @@ const j = (p, o) => api(p, o).then(r => r.json());
 
 // ---- window manager ----
 let zTop = 10;
+let showAllOn = false; // Show All Windows is up: the windows sit in the grid
 function focusWin(w) {
   zTop++;
   w.style.zIndex = zTop;
@@ -2117,6 +2151,7 @@ function tellApp(w, exe) {
 }
 function openWin(sel) {
   const w = typeof sel === "string" ? $(sel) : sel;
+  if (showAllOn) showAllExit();
   if (IS_MOBILE && !MOB_DIALOG.has(w.id)) mobileSwapIn(w);
   const wasHidden = w.hidden;
   w.hidden = false;
@@ -2128,6 +2163,7 @@ function openWin(sel) {
   return w;
 }
 function closeWin(w) {
+  if (showAllOn) showAllExit();
   const wasFront = w.classList.contains("front");
   w.hidden = true;
   tellApp(w, "hide");
@@ -2427,6 +2463,7 @@ function winSnapshot() {
 }
 function applyWinState(st) {
   if (!st || IS_MOBILE) return; // snapshots describe the spatial desktop, not the phone view
+  if (showAllOn) showAllExit();
   st = canonicalAppKeys(st, canonicalWindowID);
   // remember each agent window's geometry for its next open — never auto-open
   // one: connecting takes the tmux session over from whichever browser has it
@@ -2617,6 +2654,7 @@ const ACTIONS = {
   newvm: () => { openWin("#win-newvm"); $("#c-name").focus(); },
   upload: () => openWin("#win-upload"),
   closewin: closeFrontWindow,
+  showall: showAllToggle,
   refresh: () => {
     const jobs = [loadVMs(), loadApps()];
     if (!$("#win-myapps").hidden) jobs.push(loadMyApps());
@@ -3037,6 +3075,103 @@ $("#search-input").addEventListener("keydown", e => {
     if (sel) sel.scrollIntoView({ block: "nearest" });
   }
 });
+
+// ---- Show All Windows: the menubar's Exposé ----
+// The button left of the magnifier lays every open window out in a grid,
+// each shrunk to fit its cell (never enlarged) with its title underneath,
+// the way Mission Control does; a click on a tile brings that window
+// forward and the rest fly back. Windows travel by a CSS transform from
+// their own corner, so left/top/width stay what the layout saved and the
+// snapshot never hears about it. A shield over the desktop takes the
+// pointer for the duration: a click on a tile picks it, anywhere else —
+// the desk, the Control Strip — ends the view, as do Escape, the button,
+// and anything that opens, closes or re-lays a window meanwhile.
+const SA_PAD = 24, SA_GAP = 24, SA_LABEL = 20, SA_STRIP = 40; // the field's inset, between tiles, the title row, clear of the Control Strip
+let saTiles = []; // the laid-out tiles in desktop coordinates, for the shield's hit test
+function showAllLayout() {
+  const wins = [...document.querySelectorAll("#desktop .window")].filter(w => !w.hidden);
+  if (!wins.length) return false;
+  const desk = $("#desktop");
+  const fw = desk.clientWidth - 2 * SA_PAD, fh = desk.clientHeight - SA_PAD - SA_STRIP;
+  const geo = wins.map(w => ({ w, l: w.offsetLeft, t: w.offsetTop, W: w.offsetWidth, H: w.offsetHeight }));
+  // spatial order: the topmost windows make the first row, left to right
+  geo.sort((a, b) => (a.t + a.H / 2) - (b.t + b.H / 2));
+  const n = geo.length;
+  // the column count whose worst-fitted window comes out largest (a tie
+  // goes to the layout that keeps the others larger on average)
+  let best = null;
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const cw = Math.max(1, (fw - SA_GAP * (cols - 1)) / cols);
+    const ch = Math.max(1, (fh - SA_GAP * (rows - 1)) / rows - SA_LABEL);
+    const sc = geo.map(g => Math.min(1, cw / g.W, ch / g.H));
+    const min = Math.min(...sc), mean = sc.reduce((s, x) => s + x, 0) / n;
+    if (!best || min > best.min + 1e-6 || (min > best.min - 1e-6 && mean > best.mean)) best = { cols, rows, cw, ch, min, mean };
+  }
+  const { cols, rows, cw, ch } = best;
+  const order = [];
+  for (let r = 0; r < rows; r++)
+    order.push(...geo.slice(r * cols, (r + 1) * cols).sort((a, b) => (a.l + a.W / 2) - (b.l + b.W / 2)));
+  const shield = $("#sa-shield");
+  shield.replaceChildren();
+  saTiles = [];
+  order.forEach((g, i) => {
+    const r = Math.floor(i / cols), c = i % cols;
+    const inRow = Math.min(cols, n - r * cols);
+    // a short last row sits centred under the full ones
+    const cx = SA_PAD + (cols - inRow) * (cw + SA_GAP) / 2 + c * (cw + SA_GAP);
+    const cy = SA_PAD + r * (ch + SA_LABEL + SA_GAP);
+    const s = Math.min(1, cw / g.W, ch / g.H);
+    const tw = g.W * s, th = g.H * s;
+    const x = Math.round(cx + (cw - tw) / 2), y = Math.round(cy + (ch - th) / 2);
+    g.w.style.transform = `translate(${x - g.l}px, ${y - g.t}px) scale(${s})`;
+    const lbl = el("div", { class: "sa-label" }, winLabel(g.w));
+    Object.assign(lbl.style, { left: Math.round(cx) + "px", width: Math.round(cw) + "px", top: Math.round(y + th + 4) + "px" });
+    shield.append(lbl);
+    saTiles.push({ w: g.w, x, y, tw, th });
+  });
+  return true;
+}
+function showAllEnter() {
+  if (showAllOn || IS_MOBILE) return;
+  menuClose();
+  // the transition rule goes on before the transforms change, so the windows fly
+  document.body.classList.remove("showall-out");
+  document.body.classList.add("showall");
+  if (!showAllLayout()) { document.body.classList.remove("showall"); toast("No windows are open"); return; }
+  showAllOn = true;
+  $("#showall-btn").classList.add("on");
+  $("#sa-shield").hidden = false;
+  // an app's frame or a terminal may hold the focus; Escape must reach the desktop
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+}
+let showAllOutT = null;
+function showAllExit() {
+  if (!showAllOn) return;
+  showAllOn = false;
+  $("#sa-shield").hidden = true;
+  $("#showall-btn").classList.remove("on");
+  // the windows fly back; the transition rule stays on for the trip
+  document.body.classList.replace("showall", "showall-out");
+  for (const t of saTiles) t.w.style.transform = "";
+  saTiles = [];
+  clearTimeout(showAllOutT);
+  showAllOutT = setTimeout(() => document.body.classList.remove("showall-out"), 250);
+}
+function showAllToggle() { if (showAllOn) showAllExit(); else showAllEnter(); }
+$("#showall-btn").onclick = showAllToggle;
+$("#sa-shield").addEventListener("click", e => {
+  // the labels take no pointer, so the click's offsets are the shield's own
+  const x = e.offsetX, y = e.offsetY;
+  const hit = saTiles.find(t => x >= t.x && x < t.x + t.tw && y >= t.y && y < t.y + t.th);
+  showAllExit();
+  if (hit) openWin(hit.w);
+});
+$("#sa-shield").addEventListener("contextmenu", e => e.preventDefault());
+document.addEventListener("keydown", e => {
+  if (showAllOn && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); showAllExit(); }
+}, true);
+window.addEventListener("resize", () => { if (showAllOn) showAllLayout(); });
 
 // ---- desktop icons ----
 const SCREEN_COLORS = { running: "#7FD67F", starting: "#E8B34B", stopping: "#E8B34B", stopped: "#3A3F46", error: "#D66A6A" };
@@ -3649,6 +3784,7 @@ const ICON_DEFS = [
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
+  { key: "showall", label: "Show All Windows", size: 15, dom: "#showall-btn svg" },
   { key: "search", label: "Search", size: 15, dom: "#search-btn svg" },
   { key: "clock", label: "Clock (phone)", size: 15, get: () => CLOCK_ICON, set: s => CLOCK_ICON = s,
     note: "the phone menubar's clock face; the hands are drawn live" },

@@ -123,6 +123,18 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - Desktop icons: 32x32 pixel art at exactly 32 CSS px, 11px white labels
   with a 1px black text shadow; selected is a `#333399` label and a darkened
   icon. Window lists show the 32px art scaled to 16.
+- Show All Windows (the menubar button left of the magnifier, inverted
+  like an open menu title while it is up): every open window flies into a
+  grid on a field inset 24px from the desktop, 24px between tiles, 40px
+  kept clear above the Control Strip, and a 20px title row under each
+  tile in the desktop icons' label style. The column count is the one
+  whose worst-fitted window comes out largest (a window never grows past
+  scale 1; ties go to the larger mean); tiles keep their spatial order,
+  top row first, and a short last row sits centred. Windows move by
+  `transform` alone, origin at their corner, so the saved geometry is
+  untouched; the desktop icons step aside (`#rail` hidden), a shield over
+  the desktop takes the pointer, and a pick, the desk, the button or
+  Escape puts everything back.
 
 ## Seams, stability, phones
 
@@ -136,8 +148,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   when words will not fit (the Hub's Find, Refresh, Profile). A tapped
   desktop icon launches its window the way a home screen does: the tile
   scales to 1.35 and fades to nothing over 120ms ease-in, then the window
-  covers it and the tile resets unseen (`launchIcon`). That is the only
-  motion on the desktop; honour `prefers-reduced-motion`.
+  covers it and the tile resets unseen (`launchIcon`). That, and the 200ms
+  flight of Show All Windows, is all the motion on the desktop; both honour
+  `prefers-reduced-motion`.
 - A tmux-backed terminal (the agent windows) has no scrollback of its
   own, so a finger drag there turns into synthetic wheel notches, one per
   cell travelled, that take the wheel's own road (tmux copy mode, or the
