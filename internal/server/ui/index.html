@@ -451,38 +451,37 @@ body.mobile #cstrip { z-index: 5; }
 .pv-box { background: #fff; height: 420px; overflow: hidden; }
 .pv-frame { display: block; border: 0; width: 100%; height: 100%; background: #fff; }
 body.win-drag iframe { pointer-events: none; }
-/* movie windows: the movie on black over QuickTime's Platinum controller —
-   sound button, play, the scrub track with its lined thumb, two step
-   buttons, the grow box at the strip's right end. The strip is the status
-   bar's metric (1px black line, 14px face) so the 15px grow tile's black
-   top row lands on the strip's line. */
+/* movie windows: the movie over QuickTime's own controller, traced pixel
+   for pixel from real Mac OS 9 — SimpleText playing a movie in the QEMU
+   guest, screendumped over QMP (refs in ~/tools/playwright/ref/
+   os9-movie-controller). A 16px strip of sampled SVG cells: speaker
+   (present only when the movie carries sound, as QuickTime did), play,
+   the white channel with its round bead, two frame steps — joined by the
+   sampled 1px separator columns; the channel's soft ends are their own
+   cap art over a 2px repeating slice. */
 .mv-box { background: #000; height: 300px; overflow: hidden;
   display: flex; align-items: center; justify-content: center; }
 .mv-box video { display: block; width: 100%; height: 100%; object-fit: contain; }
-.mv-ctl { position: relative; height: 14px; flex: none; background: var(--g300);
-  border-top: 1px solid var(--black); display: flex; }
-/* a sound window's controller sits right under the info bar, whose black
-   bottom line is the one seam — drop the controller's own */
-.iv-info + .mv-ctl { border-top: 0; }
+.mv-ctl { position: relative; height: 16px; flex: none; display: flex;
+  background: var(--g300); }
+/* the strip is pixel art: the info line above it keeps an integer height
+   so the cells land on the device grid (12px type at 1.45 is 17.4px) */
+.movie-window .iv-info { line-height: 17px; }
+.mv-ctl svg { display: block; }
 .mv-ctl.mv-grown { padding-right: 15px; }
 body.mobile .mv-ctl.mv-grown { padding-right: 0; }
-.mv-btn { flex: none; width: 22px; height: 14px; padding: 0; margin: 0;
-  border: 0; border-right: 1px solid var(--black); background: var(--g300);
-  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 var(--g600);
-  color: var(--black); display: flex; align-items: center; justify-content: center; }
-.mv-btn:active { background: var(--g700); color: #fff;
-  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 var(--g600); }
-.mv-btn svg { display: block; }
-.mv-back { border-left: 1px solid var(--black); }
-/* the grow tile's own black left column is the last seam; without a grow
-   box the window frame's edge is */
-.mv-fwd { border-right: 0; }
-.mv-track { flex: 1; position: relative; background: var(--g500);
-  box-shadow: inset 1px 1px 0 var(--g700), inset -1px -1px 0 var(--g200); }
-.mv-thumb { position: absolute; top: 1px; bottom: 1px; left: 0; width: 11px;
-  box-sizing: border-box; background: #9999ff; border: 1px solid var(--black);
-  box-shadow: inset 1px 1px 0 #ccccff, inset -1px -1px 0 #6666cc;
-  display: flex; align-items: center; justify-content: center; }
+.mv-btn { flex: none; width: 15px; height: 16px; padding: 0; margin: 0;
+  border: 0; background: none; }
+.mv-btn:active { filter: brightness(.82); }
+.mv-sep, .mv-edge, .mv-end { flex: none; width: 1px; }
+/* the grow tile ends a resizable strip; the sampled end column closes the
+   others (sound windows, and phones where the tile hides) */
+body:not(.mobile) .mv-grown .mv-end { display: none; }
+.mv-silent .mv-snd, .mv-silent .mv-snd-sep { display: none; }
+.mv-track { flex: 1; position: relative; overflow: hidden; }
+.mv-capl { position: absolute; left: 0; top: 0; }
+.mv-capr { position: absolute; right: 0; top: 0; }
+.mv-thumb { position: absolute; top: 0; left: 0; width: 13px; height: 16px; }
 
 /* ---------- Icon Editor ----------
    A system app over the UI's own pixel icons: a Finder-style gallery of
@@ -4901,10 +4900,12 @@ async function loadImage(w) {
   } catch (e) { dims.textContent = e.message; }
 }
 // ---- movie windows: QuickTime for the Workspace ----
-// A movie or sound from Finder opens over the Platinum movie controller:
-// sound, play, the scrub track with its lined thumb, two frame steps. The
-// <video> streams straight from /v1/workspace, whose Range answers make
-// scrubbing seeks instead of downloads.
+// A movie or sound from Finder opens over the movie controller traced
+// from real Mac OS 9 (MVQ below; the CSS block says how it was sampled):
+// speaker when the movie has sound, play, the channel with its round
+// bead, two frame steps. The <video> streams straight from
+// /v1/workspace, whose Range answers make scrubbing seeks instead of
+// downloads.
 const MOVIE_EXT = new Set("mp4 m4v mov webm".split(" "));
 const SOUND_EXT = new Set("m4a mp3 wav aac ogg oga flac".split(" "));
 function isMovieFile(name) {
@@ -4915,14 +4916,20 @@ function isSoundFile(name) {
   const dot = name.lastIndexOf(".");
   return dot > 0 && SOUND_EXT.has(name.slice(dot + 1).toLowerCase());
 }
-const MV_GLYPH = {
-  play: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M2 0h1v8H2zM3 1h1v6H3zM4 2h1v4H4zM5 3h1v2H5z"/></svg>`,
-  pause: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h2v6H1zM5 1h2v6H5z"/></svg>`,
-  snd: `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 3h1v2H1zM2 2h1v4H2zM3 1h1v6H3zM4 0h1v8H4zM6 3h1v2H6zM7 1h1v1H7zM8 2h1v4H8zM7 6h1v1H7z"/></svg>`,
-  mute: `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 3h1v2H1zM2 2h1v4H2zM3 1h1v6H3zM4 0h1v8H4z"/></svg>`,
-  back: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h1v6H1zM4 3h1v2H4zM5 2h1v4H5zM6 1h1v6H6z"/></svg>`,
-  fwd: `<svg width="8" height="8" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3zM6 1h1v6H6z"/></svg>`,
-  grip: `<svg width="5" height="8" viewBox="0 0 5 8" shape-rendering="crispEdges"><path fill="#ccccff" d="M0 0h1v8H0zM3 0h1v8H3z"/><path fill="#333399" d="M1 0h1v8H1zM4 0h1v8H4z"/></svg>`,
+const MVQ = {
+  edge: `<svg width="1" height="16" viewBox="0 0 1 16" shape-rendering="crispEdges"><rect width="1" height="16" fill="#999"/><path fill="#777" d="M0 1h1v1h-1zM0 15h1v1h-1z"/><path fill="#888" d="M0 2h1v1h-1zM0 6h1v1h-1z"/><path fill="#aaa" d="M0 9h1v1h-1zM0 10h1v1h-1z"/><path fill="#bbb" d="M0 11h1v1h-1zM0 12h1v1h-1zM0 13h1v1h-1zM0 14h1v1h-1z"/></svg>`,
+  snd: `<svg width="15" height="16" viewBox="0 0 15 16" shape-rendering="crispEdges"><rect width="15" height="16" fill="#fff"/><path fill="#999" d="M0 0h15v1h-15zM5 5h1v1h-1zM5 9h1v1h-1zM11 9h1v1h-1z"/><path fill="#bbb" d="M0 1h15v1h-15zM7 3h1v1h-1zM12 4h1v1h-1zM11 6h1v1h-1zM11 8h1v1h-1zM6 10h1v1h-1z"/><path fill="#ddd" d="M0 2h15v1h-15zM0 3h7v1h-7zM9 3h6v1h-6zM0 4h6v1h-6zM9 4h1v1h-1zM13 4h2v1h-2zM0 5h5v1h-5zM9 5h2v1h-2zM13 5h2v1h-2zM0 6h3v1h-3zM9 6h1v1h-1zM13 6h2v1h-2zM0 7h3v1h-3zM9 7h1v1h-1zM11 7h1v1h-1zM13 7h2v1h-2zM10 10h1v1h-1z"/><path fill="#000" d="M8 3h1v1h-1zM7 4h2v1h-2zM6 5h3v1h-3zM3 6h6v1h-6zM10 6h1v1h-1zM3 7h6v1h-6zM10 7h1v1h-1zM12 7h1v1h-1zM3 8h6v1h-6zM10 8h1v1h-1zM6 9h3v1h-3zM7 10h2v1h-2zM8 11h1v1h-1z"/><path fill="#aaa" d="M6 4h1v1h-1z"/><path fill="#ccc" d="M10 4h1v1h-1zM12 10h1v1h-1zM7 11h1v1h-1z"/><path fill="#444" d="M11 4h1v1h-1z"/><path fill="#888" d="M11 5h1v1h-1z"/><path fill="#555" d="M12 5h1v1h-1zM12 9h1v1h-1zM11 10h1v1h-1z"/><path fill="#111" d="M12 6h1v1h-1z"/><path fill="#eee" d="M0 8h3v1h-3zM9 8h1v1h-1zM13 8h2v1h-2zM0 9h5v1h-5zM9 9h2v1h-2zM13 9h2v1h-2z"/><path fill="#222" d="M12 8h1v1h-1z"/><path fill="#777" d="M0 15h15v1h-15z"/></svg>`,
+  sndmute: `<svg width="15" height="16" viewBox="0 0 15 16" shape-rendering="crispEdges"><rect width="15" height="16" fill="#fff"/><path fill="#999" d="M0 0h15v1h-15zM5 5h1v1h-1zM5 9h1v1h-1z"/><path fill="#bbb" d="M0 1h15v1h-15zM7 3h1v1h-1zM6 10h1v1h-1z"/><path fill="#ddd" d="M0 2h15v1h-15zM0 3h7v1h-7zM9 3h6v1h-6zM0 4h6v1h-6zM9 4h6v1h-6zM0 5h5v1h-5zM9 5h6v1h-6zM0 6h3v1h-3zM9 6h6v1h-6zM0 7h3v1h-3zM9 7h6v1h-6z"/><path fill="#000" d="M8 3h1v1h-1zM7 4h2v1h-2zM6 5h3v1h-3zM3 6h6v1h-6zM3 7h6v1h-6zM3 8h6v1h-6zM6 9h3v1h-3zM7 10h2v1h-2zM8 11h1v1h-1z"/><path fill="#aaa" d="M6 4h1v1h-1z"/><path fill="#eee" d="M0 8h3v1h-3zM9 8h6v1h-6zM0 9h5v1h-5zM9 9h6v1h-6z"/><path fill="#ccc" d="M7 11h1v1h-1z"/><path fill="#777" d="M0 15h15v1h-15z"/></svg>`,
+  sep: `<svg width="1" height="16" viewBox="0 0 1 16" shape-rendering="crispEdges"><rect width="1" height="16" fill="#bbb"/><path fill="#999" d="M0 0h1v1h-1zM0 1h1v1h-1z"/><path fill="#aaa" d="M0 2h1v1h-1zM0 6h1v1h-1zM0 7h1v1h-1z"/><path fill="#ccc" d="M0 9h1v1h-1zM0 10h1v1h-1z"/><path fill="#ddd" d="M0 11h1v1h-1zM0 12h1v1h-1zM0 13h1v1h-1zM0 14h1v1h-1z"/><path fill="#777" d="M0 15h1v1h-1z"/></svg>`,
+  play: `<svg width="15" height="16" viewBox="0 0 15 16" shape-rendering="crispEdges"><rect width="15" height="16" fill="#ddd"/><path fill="#999" d="M0 0h15v1h-15zM8 5h1v1h-1z"/><path fill="#bbb" d="M0 1h15v1h-15zM10 6h1v1h-1z"/><path fill="#000" d="M5 4h1v1h-1zM5 5h2v1h-2zM5 6h4v1h-4zM5 7h5v1h-5zM5 8h4v1h-4zM5 9h2v1h-2zM5 10h1v1h-1z"/><path fill="#555" d="M6 4h1v1h-1zM6 10h1v1h-1z"/><path fill="#ccc" d="M7 4h1v1h-1zM10 8h1v1h-1z"/><path fill="#222" d="M7 5h1v1h-1zM7 9h1v1h-1z"/><path fill="#666" d="M9 6h1v1h-1z"/><path fill="#444" d="M10 7h1v1h-1z"/><path fill="#eee" d="M0 8h5v1h-5zM11 8h4v1h-4zM0 9h5v1h-5zM9 9h6v1h-6z"/><path fill="#777" d="M9 8h1v1h-1zM0 15h15v1h-15z"/><path fill="#aaa" d="M8 9h1v1h-1z"/><path fill="#fff" d="M0 10h5v1h-5zM8 10h7v1h-7zM0 11h15v1h-15zM0 12h15v1h-15zM0 13h15v1h-15zM0 14h15v1h-15z"/></svg>`,
+  pause: `<svg width="15" height="16" viewBox="0 0 15 16" shape-rendering="crispEdges"><rect width="15" height="16" fill="#ddd"/><path fill="#999" d="M0 0h15v1h-15z"/><path fill="#bbb" d="M0 1h15v1h-15z"/><path fill="#111" d="M5 4h2v1h-2zM8 4h2v1h-2zM5 5h2v1h-2zM8 5h2v1h-2zM5 6h2v1h-2zM8 6h2v1h-2zM5 7h2v1h-2zM8 7h2v1h-2zM5 8h2v1h-2zM8 8h2v1h-2zM5 9h2v1h-2zM8 9h2v1h-2zM5 10h2v1h-2zM8 10h2v1h-2z"/><path fill="#eee" d="M0 8h5v1h-5zM7 8h1v1h-1zM10 8h5v1h-5zM0 9h5v1h-5zM7 9h1v1h-1zM10 9h5v1h-5z"/><path fill="#fff" d="M0 10h5v1h-5zM7 10h1v1h-1zM10 10h5v1h-5zM0 11h15v1h-15zM0 12h15v1h-15zM0 13h15v1h-15zM0 14h15v1h-15z"/><path fill="#777" d="M0 15h15v1h-15z"/></svg>`,
+  capl: `<svg width="9" height="16" viewBox="0 0 9 16" shape-rendering="crispEdges"><rect width="9" height="16" fill="#ddd"/><path fill="#999" d="M0 0h9v1h-9zM0 1h1v1h-1zM8 7h1v1h-1zM6 8h1v1h-1z"/><path fill="#bbb" d="M1 1h8v1h-8zM0 3h1v1h-1zM0 4h1v1h-1zM0 5h1v1h-1zM0 8h1v1h-1zM8 8h1v1h-1zM7 9h1v1h-1z"/><path fill="#aaa" d="M0 2h1v1h-1zM0 6h1v1h-1zM0 7h1v1h-1zM5 8h1v1h-1zM7 8h1v1h-1z"/><path fill="#ccc" d="M5 5h1v1h-1zM0 9h1v1h-1zM6 9h1v1h-1zM8 9h1v1h-1zM0 10h1v1h-1z"/><path fill="#777" d="M6 5h1v1h-1zM7 6h2v1h-2zM5 7h1v1h-1zM0 15h9v1h-9z"/><path fill="#555" d="M7 5h2v1h-2z"/><path fill="#888" d="M5 6h1v1h-1zM6 7h2v1h-2z"/><path fill="#666" d="M6 6h1v1h-1z"/><path fill="#eee" d="M1 8h4v1h-4zM1 9h4v1h-4z"/><path fill="#fff" d="M1 10h8v1h-8zM1 11h8v1h-8zM1 12h8v1h-8zM1 13h8v1h-8zM1 14h8v1h-8z"/></svg>`,
+  ch: `<svg width="2" height="16" viewBox="0 0 2 16" shape-rendering="crispEdges"><rect width="2" height="16" fill="#fff"/><path fill="#999" d="M0 0h2v1h-2z"/><path fill="#bbb" d="M0 1h2v1h-2zM1 8h1v1h-1z"/><path fill="#ddd" d="M0 2h2v1h-2zM0 3h2v1h-2zM0 4h2v1h-2z"/><path fill="#666" d="M0 5h1v1h-1z"/><path fill="#555" d="M1 5h1v1h-1z"/><path fill="#888" d="M0 6h2v1h-2z"/><path fill="#aaa" d="M0 7h2v1h-2z"/><path fill="#ccc" d="M0 8h1v1h-1zM0 9h2v1h-2z"/><path fill="#777" d="M0 15h2v1h-2z"/></svg>`,
+  capr: `<svg width="9" height="16" viewBox="0 0 9 16" shape-rendering="crispEdges"><rect width="9" height="16" fill="#fff"/><path fill="#999" d="M0 0h9v1h-9zM4 6h1v1h-1zM2 7h1v1h-1z"/><path fill="#bbb" d="M0 1h9v1h-9zM0 8h3v1h-3zM4 8h1v1h-1z"/><path fill="#ddd" d="M0 2h9v1h-9zM0 3h9v1h-9zM0 4h9v1h-9zM5 5h4v1h-4zM5 6h4v1h-4zM5 7h4v1h-4zM3 9h2v1h-2z"/><path fill="#555" d="M0 5h3v1h-3z"/><path fill="#777" d="M3 5h1v1h-1zM2 6h2v1h-2zM0 15h9v1h-9z"/><path fill="#ccc" d="M4 5h1v1h-1zM0 9h3v1h-3z"/><path fill="#888" d="M0 6h2v1h-2zM3 7h2v1h-2z"/><path fill="#aaa" d="M0 7h2v1h-2zM3 8h1v1h-1z"/><path fill="#eee" d="M5 8h4v1h-4zM5 9h4v1h-4z"/></svg>`,
+  back: `<svg width="15" height="16" viewBox="0 0 15 16" shape-rendering="crispEdges"><rect width="15" height="16" fill="#fff"/><path fill="#999" d="M0 0h15v1h-15z"/><path fill="#bbb" d="M0 1h15v1h-15zM5 9h1v1h-1zM6 10h1v1h-1z"/><path fill="#ddd" d="M0 2h15v1h-15zM0 3h15v1h-15zM0 4h6v1h-6zM8 4h1v1h-1zM11 4h4v1h-4zM0 5h5v1h-5zM8 5h1v1h-1zM11 5h4v1h-4zM0 6h4v1h-4zM8 6h1v1h-1zM11 6h4v1h-4zM0 7h4v1h-4zM8 7h1v1h-1zM11 7h4v1h-4z"/><path fill="#aaa" d="M6 4h1v1h-1zM5 5h1v1h-1zM4 6h1v1h-1zM4 8h1v1h-1z"/><path fill="#000" d="M7 4h1v1h-1zM9 4h2v1h-2zM6 5h2v1h-2zM9 5h2v1h-2zM5 6h3v1h-3zM9 6h2v1h-2zM4 7h4v1h-4zM9 7h2v1h-2zM5 8h3v1h-3zM9 8h2v1h-2zM6 9h2v1h-2zM9 9h2v1h-2zM7 10h1v1h-1zM9 10h2v1h-2z"/><path fill="#eee" d="M0 8h4v1h-4zM8 8h1v1h-1zM11 8h4v1h-4zM0 9h5v1h-5zM8 9h1v1h-1zM11 9h4v1h-4z"/><path fill="#777" d="M0 15h15v1h-15z"/></svg>`,
+  fwd: `<svg width="15" height="16" viewBox="0 0 15 16" shape-rendering="crispEdges"><rect width="15" height="16" fill="#fff"/><path fill="#999" d="M0 0h15v1h-15z"/><path fill="#bbb" d="M0 1h15v1h-15zM9 9h1v1h-1zM8 10h1v1h-1z"/><path fill="#ddd" d="M0 2h15v1h-15zM0 3h15v1h-15zM0 4h4v1h-4zM6 4h1v1h-1zM9 4h6v1h-6zM0 5h4v1h-4zM6 5h1v1h-1zM10 5h5v1h-5zM0 6h4v1h-4zM6 6h1v1h-1zM11 6h4v1h-4zM0 7h4v1h-4zM6 7h1v1h-1zM11 7h4v1h-4z"/><path fill="#000" d="M4 4h2v1h-2zM7 4h1v1h-1zM4 5h2v1h-2zM7 5h2v1h-2zM4 6h2v1h-2zM7 6h3v1h-3zM4 7h2v1h-2zM7 7h4v1h-4zM4 8h2v1h-2zM7 8h3v1h-3zM4 9h2v1h-2zM7 9h2v1h-2zM4 10h2v1h-2zM7 10h1v1h-1z"/><path fill="#aaa" d="M8 4h1v1h-1zM9 5h1v1h-1zM10 6h1v1h-1zM10 8h1v1h-1z"/><path fill="#eee" d="M0 8h4v1h-4zM6 8h1v1h-1zM11 8h4v1h-4zM0 9h4v1h-4zM6 9h1v1h-1zM10 9h5v1h-5z"/><path fill="#777" d="M0 15h15v1h-15z"/></svg>`,
+  end: `<svg width="1" height="16" viewBox="0 0 1 16" shape-rendering="crispEdges"><rect width="1" height="16" fill="#999"/><path fill="#777" d="M0 1h1v1h-1zM0 15h1v1h-1z"/><path fill="#888" d="M0 2h1v1h-1zM0 6h1v1h-1z"/><path fill="#aaa" d="M0 9h1v1h-1zM0 10h1v1h-1z"/><path fill="#bbb" d="M0 11h1v1h-1zM0 12h1v1h-1zM0 13h1v1h-1zM0 14h1v1h-1z"/></svg>`,
+  thumb: `<svg width="13" height="16" viewBox="0 0 13 16" shape-rendering="crispEdges"><rect width="13" height="16" fill="#bbb"/><path fill="#999" d="M0 0h13v1h-13zM4 1h1v1h-1zM8 1h1v1h-1zM3 2h1v1h-1zM9 2h1v1h-1zM2 6h1v1h-1zM10 6h1v1h-1zM1 7h1v1h-1zM11 7h1v1h-1zM1 10h1v1h-1zM11 10h1v1h-1zM4 13h1v1h-1zM8 13h1v1h-1zM5 14h1v1h-1zM7 14h1v1h-1z"/><path fill="#888" d="M5 1h1v1h-1zM7 1h1v1h-1zM2 3h2v1h-2zM10 3h1v1h-1zM1 4h2v1h-2zM11 4h1v1h-1zM2 5h1v1h-1zM10 5h1v1h-1zM0 9h1v1h-1zM12 9h1v1h-1zM1 11h1v1h-1zM11 11h1v1h-1zM3 13h1v1h-1zM9 13h1v1h-1z"/><path fill="#777" d="M6 1h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM9 3h1v1h-1zM10 4h1v1h-1zM1 6h1v1h-1zM11 6h1v1h-1zM0 8h1v1h-1zM12 8h1v1h-1zM2 12h1v1h-1zM10 12h1v1h-1zM6 14h1v1h-1zM0 15h13v1h-13z"/><path fill="#ddd" d="M0 2h2v1h-2zM11 2h2v1h-2zM0 3h1v1h-1zM6 3h1v1h-1zM12 3h1v1h-1zM0 4h1v1h-1zM4 4h5v1h-5zM12 4h1v1h-1zM5 5h2v1h-2zM5 8h3v1h-3zM2 9h3v1h-3zM8 9h3v1h-3zM2 10h1v1h-1zM10 10h1v1h-1z"/><path fill="#ccc" d="M2 2h1v1h-1zM10 2h1v1h-1zM1 3h1v1h-1zM5 3h1v1h-1zM7 3h1v1h-1zM11 3h1v1h-1zM4 5h1v1h-1zM7 5h2v1h-2zM5 6h3v1h-3zM5 7h3v1h-3zM3 8h2v1h-2zM8 8h2v1h-2zM1 12h1v1h-1zM11 12h1v1h-1zM2 13h1v1h-1zM6 13h1v1h-1zM10 13h1v1h-1z"/><path fill="#666" d="M5 2h1v1h-1zM7 2h1v1h-1zM0 7h1v1h-1zM12 7h1v1h-1z"/><path fill="#555" d="M0 5h2v1h-2zM11 5h2v1h-2zM0 6h1v1h-1zM12 6h1v1h-1z"/><path fill="#aaa" d="M3 6h1v1h-1zM9 6h1v1h-1zM2 7h1v1h-1zM10 7h1v1h-1zM1 8h1v1h-1zM11 8h1v1h-1zM1 9h1v1h-1zM11 9h1v1h-1zM2 11h1v1h-1zM10 11h1v1h-1zM3 12h1v1h-1zM9 12h1v1h-1z"/><path fill="#eee" d="M5 9h3v1h-3zM3 10h2v1h-2zM8 10h2v1h-2zM0 11h1v1h-1zM12 11h1v1h-1zM4 12h1v1h-1zM8 12h1v1h-1zM3 14h1v1h-1zM9 14h1v1h-1z"/><path fill="#fff" d="M5 10h3v1h-3zM3 11h7v1h-7zM0 12h1v1h-1zM5 12h3v1h-3zM12 12h1v1h-1zM0 13h2v1h-2zM11 13h2v1h-2zM0 14h3v1h-3zM10 14h3v1h-3z"/></svg>`,
 };
 function fmtClock(s) {
   s = Math.max(0, Math.floor(Number.isFinite(s) ? s : 0));
@@ -4953,11 +4960,16 @@ function openMovieWin(path, fromWin, name) {
         <div class="iv-info"><span class="iv-path"></span><span class="iv-dims">…</span></div>
         ${sound ? `<video hidden playsinline></video>` : `<div class="mv-box"><video playsinline></video></div>`}
         <div class="mv-ctl${sound ? "" : " mv-grown"}">
-          <button class="mv-btn mv-snd" title="Sound"></button>
-          <button class="mv-btn mv-play" title="Play"></button>
-          <div class="mv-track"><div class="mv-thumb">${MV_GLYPH.grip}</div></div>
-          <button class="mv-btn mv-back" title="Back One Frame"></button>
-          <button class="mv-btn mv-fwd" title="Forward One Frame"></button>
+          <span class="mv-edge">${MVQ.edge}</span>
+          <button class="mv-btn mv-snd" title="Sound">${MVQ.snd}</button>
+          <span class="mv-sep mv-snd-sep">${MVQ.sep}</span>
+          <button class="mv-btn mv-play" title="Play">${MVQ.play}</button>
+          <div class="mv-track"><span class="mv-capl">${MVQ.capl}</span><span class="mv-capr">${MVQ.capr}</span><div class="mv-thumb">${MVQ.thumb}</div></div>
+          <span class="mv-sep">${MVQ.sep}</span>
+          <button class="mv-btn mv-back" title="Back One Frame">${MVQ.back}</button>
+          <span class="mv-sep">${MVQ.sep}</span>
+          <button class="mv-btn mv-fwd" title="Forward One Frame">${MVQ.fwd}</button>
+          <span class="mv-end">${MVQ.end}</span>
         </div>
         ${sound ? "" : GROW_TILE}
       </div>`;
@@ -4977,13 +4989,26 @@ function wireMovie(w) {
     play = w.querySelector(".mv-play"), snd = w.querySelector(".mv-snd"),
     back = w.querySelector(".mv-back"), fwd = w.querySelector(".mv-fwd"),
     track = w.querySelector(".mv-track"), thumb = w.querySelector(".mv-thumb");
-  play.innerHTML = MV_GLYPH.play;
-  snd.innerHTML = MV_GLYPH.snd;
-  back.innerHTML = MV_GLYPH.back;
-  fwd.innerHTML = MV_GLYPH.fwd;
+  // as an image (unlike inline markup) the SVG needs its namespace said
+  track.style.background = `url('data:image/svg+xml;utf8,${encodeURIComponent(
+    MVQ.ch.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" '))}') repeat-x`;
+  // QuickTime showed the speaker only on movies that carry sound. The
+  // audio pipeline primes lazily (the decoded-bytes counter starts at 0),
+  // so the verdict waits past first data, and any later evidence of audio
+  // brings the speaker back.
+  const hasAudio = () => v.audioTracks ? v.audioTracks.length > 0
+    : v.webkitAudioDecodedByteCount !== undefined ? v.webkitAudioDecodedByteCount > 0
+    : v.mozHasAudio !== undefined ? !!v.mozHasAudio : true;
+  const ctl = w.querySelector(".mv-ctl");
+  if (!isSoundFile(w.dataset.path)) {
+    v.addEventListener("loadeddata", () => setTimeout(() =>
+      ctl.classList.toggle("mv-silent", !hasAudio()), 800));
+    v.addEventListener("timeupdate", () => { if (hasAudio()) ctl.classList.remove("mv-silent"); });
+  }
+  // the bead rides 2px inside either end of the channel, as sampled
   const setThumb = () => {
-    const run = track.clientWidth - thumb.offsetWidth;
-    thumb.style.left = (v.duration && run > 0 ? Math.round(v.currentTime / v.duration * run) : 0) + "px";
+    const run = track.clientWidth - thumb.offsetWidth - 4;
+    thumb.style.left = 2 + (v.duration && run > 0 ? Math.round(v.currentTime / v.duration * run) : 0) + "px";
   };
   const setTime = () => {
     dims.textContent = (v.videoWidth ? v.videoWidth + " × " + v.videoHeight + " · " : "")
@@ -4993,21 +5018,21 @@ function wireMovie(w) {
   w._mvTime = setTime;
   v.addEventListener("timeupdate", () => { setThumb(); setTime(); });
   v.addEventListener("durationchange", () => { setThumb(); setTime(); });
-  v.addEventListener("play", () => { play.innerHTML = MV_GLYPH.pause; play.title = "Pause"; });
-  v.addEventListener("pause", () => { play.innerHTML = MV_GLYPH.play; play.title = "Play"; });
+  v.addEventListener("play", () => { play.innerHTML = MVQ.pause; play.title = "Pause"; });
+  v.addEventListener("pause", () => { play.innerHTML = MVQ.play; play.title = "Play"; });
   v.addEventListener("error", () => { dims.textContent = "can’t play this movie"; });
   play.addEventListener("click", () => { if (v.paused) v.play().catch(e => toast(e.message)); else v.pause(); });
   snd.addEventListener("click", () => {
     v.muted = !v.muted;
-    snd.innerHTML = v.muted ? MV_GLYPH.mute : MV_GLYPH.snd;
+    snd.innerHTML = v.muted ? MVQ.sndmute : MVQ.snd;
   });
   // QuickTime's frame steps: pause, then a 30th of a second either way
   back.addEventListener("click", () => { v.pause(); v.currentTime = Math.max(0, v.currentTime - 1 / 30); });
   fwd.addEventListener("click", () => { v.pause(); if (v.duration) v.currentTime = Math.min(v.duration, v.currentTime + 1 / 30); });
   const seek = e => {
-    const r = track.getBoundingClientRect(), run = r.width - thumb.offsetWidth;
+    const r = track.getBoundingClientRect(), run = r.width - thumb.offsetWidth - 4;
     if (!v.duration || run <= 0) return;
-    v.currentTime = Math.min(Math.max((e.clientX - r.left - thumb.offsetWidth / 2) / run, 0), 1) * v.duration;
+    v.currentTime = Math.min(Math.max((e.clientX - r.left - 2 - thumb.offsetWidth / 2) / run, 0), 1) * v.duration;
   };
   track.addEventListener("pointerdown", e => {
     e.preventDefault();
