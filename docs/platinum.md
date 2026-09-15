@@ -133,7 +133,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   structure as placeholders and fill it in place.
 - A phone runs one fullscreen window under the 20px bar, keeps the safe
   areas and the home indicator clear, and shrinks a button row to glyphs
-  when words will not fit (the Hub's Find, Refresh, Profile).
+  when words will not fit (the Hub's Find, Refresh, Profile). A tapped
+  desktop icon launches its window the way a home screen does: the tile
+  scales to 1.35 and fades to nothing over 180ms ease-in, then the window
+  covers it and the tile resets unseen (`launchIcon`). That is the only
+  motion on the desktop; honour `prefers-reduced-motion`.
 - A list beside a terminal (the agent windows' session column): a 160px
   sunken white list of 18px rows, the selected row `--hl` with white
   text, its one seam with the terminal the 1px line on its right — a 6px

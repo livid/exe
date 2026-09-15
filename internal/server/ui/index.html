@@ -1926,8 +1926,22 @@ if (IS_MOBILE && window.visualViewport) {
   fitViewport();
 }
 // icons and list rows open on double-click on the desktop, single tap on
-// mobile — double-tap is the browser's zoom gesture and fires unreliably
-const tapOpen = (n, fn) => n.addEventListener(IS_MOBILE ? "click" : "dblclick", fn);
+// mobile — double-tap is the browser's zoom gesture and fires unreliably.
+// A phone's desktop icon launches like a home-screen app: the tapped tile
+// swells a little and fades out, and its window comes up as it goes. The
+// window fills the screen, so it waits for the tile (180ms); a second tap
+// during the launch is ignored, and reduced-motion opens at once.
+const tapOpen = (n, fn) => n.addEventListener(IS_MOBILE ? "click" : "dblclick",
+  IS_MOBILE && n.classList.contains("dicon") ? () => launchIcon(n, fn) : fn);
+function launchIcon(n, fn) {
+  if (n._launch) return;
+  if (!n.animate || matchMedia("(prefers-reduced-motion: reduce)").matches) return fn();
+  const a = n._launch = n.animate([{ transform: "scale(1)", opacity: 1 }, { transform: "scale(1.35)", opacity: 0 }],
+    { duration: 180, easing: "ease-in", fill: "forwards" });
+  // fn and the reset share one task, so the tile is back in place in the
+  // same frame the window covers it
+  a.finished.then(() => { try { fn(); } finally { a.cancel(); n._launch = null; } }, () => { n._launch = null; });
+}
 function el(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {

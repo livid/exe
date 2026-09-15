@@ -136,8 +136,9 @@ daemon and mirrored live to every browser looking at this desk, so dragging
 a window here moves it on your other screens too.
 
 On a phone the desktop becomes a home screen of icons and windows go
-fullscreen, one at a time; closing a window walks back through the stack
-like a phone's back button.
+fullscreen, one at a time; a tapped icon swells and fades as its window
+comes up, and closing a window walks back through the stack like a
+phone's back button.
 
 Every system icon is hand-plotted pixel art, and **Windows → Icon Editor**
 lets you repaint it: the gallery lists each one (the VM Mac, folders,
