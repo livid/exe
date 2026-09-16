@@ -108,11 +108,22 @@ body.mobile #clock { padding: 0 10px; }
 .dd-item.open { background: var(--hl); color: #fff; }
 .dd-item.sub:hover::after, .dd-item.open::after { border-left-color: #fff; }
 .dd-item.dis.sub::after, .dd-item.dis.sub:hover::after { border-left-color: #888; }
-/* a module menu's current choice wears OS 9's 5px dot, sampled from the
-   Monitors module: three pixels in from the menu's black border */
+/* a module menu's current choice wears OS 9's dot. Sampled from the
+   Monitors module in the QEMU Mac (9pt Geneva, text 17px in): a 5px
+   bullet 3px in from the menu's black border, 10px short of the text,
+   its top two rows below the digits' top and one row above the baseline.
+   Scaled to this menu's 12px type and 20px gutter that is a 6px dot 4px
+   in — the row sits 2px inside the border, so left: 2 — with its top
+   9px down the 24px row: two below the cap top, two above the baseline.
+   Integer scales draw it as pixels; at Windows' 150% the same pixels came
+   out 7 or 8 device pixels tall by turns with a fringe, so between 1x and
+   2x it is drawn as geometry instead */
 .dd-item.mark { position: relative; }
-.dd-mark { position: absolute; left: 1px; top: 10px; width: 5px; height: 5px; }
+.dd-mark { position: absolute; left: 2px; top: 9px; width: 6px; height: 6px; }
 .dd-mark svg { display: block; fill: #000; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .dd-mark svg { shape-rendering: geometricPrecision; }
+}
 .dd-item:hover .dd-mark svg { fill: #fff; }
 .dd-item.dis .dd-mark svg { fill: #888; }
 /* the price module's rows line up in columns: symbol, dollars, day change,
@@ -4492,7 +4503,7 @@ document.addEventListener("mousemove", e => {
 // for touch) to the right of the parent, overlapping it by 3px with the
 // first item level with the parent item, or to the left when there's no room.
 // the dot a module menu puts before its current choice (OS 9's, 5px)
-const DD_MARK = `<svg width="5" height="5" viewBox="0 0 5 5" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h5v3H0zM1 4h3v1H1z"/></svg>`;
+const DD_MARK = `<svg width="6" height="6" viewBox="0 0 6 6" shape-rendering="crispEdges"><path d="M1 0h4v1H1zM0 1h6v4H0zM1 5h4v1H1z"/></svg>`;
 function ctxFill(panel, items, depth) {
   panel.replaceChildren();
   panel.classList.toggle("icons", items.some(it => it && it.icon));

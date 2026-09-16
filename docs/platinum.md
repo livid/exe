@@ -136,8 +136,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   was wider) keeps the frame and bevel around a longer face and shows its
   11px figure right-aligned in a slot of fixed width. A module's menu is a
   contextual menu whose left edge sits on the tile's separator and whose
-  bottom line runs two rows into the strip; its current choice wears the
-  5px dot 3px in from the border (`mark` on the item), not a check mark.
+  bottom line runs two rows into the strip; its current choice wears OS
+  9's dot (`mark` on the item), not a check mark: the real module menu
+  (9pt Geneva, text 17px in) puts a 5px bullet 3px in from the border and
+  10px short of the text, two rows below the cap top and one above the
+  baseline; scaled to the 12px menu that is a 6px dot 4px in, its top 9px
+  down the 24px row. A crispEdges sprite at integer scales, drawn
+  `geometricPrecision` between 1x and 2x so 150% shows a round dot and
+  not 7-then-8 device rows with a fringe.
   A module whose icon shows state (the Cloudflare lamp, the Tailscale
   panel's lit lamps) keeps reserved colours in its art that the code
   repaints per state — the icon stays one editable drawing. A pair of
