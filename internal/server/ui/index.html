@@ -4501,6 +4501,7 @@ function ctxFill(panel, items, depth) {
     const sub = !it.dis && Array.isArray(it.items);
     const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") + (it.mark ? " mark" : "") });
     if (it.mark) { const m = el("span", { class: "dd-mark" }); m.innerHTML = DD_MARK; d.append(m); }
+    if (it.title) d.title = it.title; // a plain-words tooltip for a setting whose name alone does not say what it does
     if (it.icon) { const i = el("span", { class: "dd-ico" }); i.innerHTML = it.icon; d.append(i); }
     d.append(it.label);
     const act = sub ? () => ctxOpenSub(d, panel, it.items, depth + 1) : () => ctxCloseSubs(depth);
@@ -8550,7 +8551,14 @@ function tsServeItems() {
   return [{ label: "Pick one to copy its address", dis: true }, "-",
     ...rows.map(r => ({ label: r.url + " → " + r.target + (r.public ? " · public (Funnel)" : ""), act: () => tsCopy(r.url, "served") }))];
 }
-const tsToggle = (label, key) => ({ label, mark: !!tsPrefs()[key],
+// the four preference toggles say in a tooltip what they are for
+const TS_TIPS = {
+  accept_routes: "Use the subnet routes other Tailscale devices advertise, so this machine can reach the networks behind them (an office or home LAN, say) through the tailnet.",
+  accept_dns: "Let Tailscale handle this machine's DNS: MagicDNS names such as spark-7c78 resolve, and the tailnet's DNS settings from the admin console apply here.",
+  shields_up: "Refuse every incoming connection from other Tailscale devices. This machine still reaches them; nothing reaches it — this desktop included, when you come in through Tailscale.",
+  ssh: "Run Tailscale's own SSH server on this machine: devices the tailnet's access policy allows can ssh in with their Tailscale identity, with no keys to hand out.",
+};
+const tsToggle = (label, key) => ({ label, mark: !!tsPrefs()[key], title: TS_TIPS[key],
   act: () => tsSet({ action: "set", key, value: !tsPrefs()[key] }, () => label + (tsPrefs()[key] ? " is on." : " is off.")) });
 function tsStripMenu() {
   if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
@@ -8573,7 +8581,7 @@ function tsStripMenu() {
       if (tsLast.prefs) items.push("-",
         tsToggle("Accept Routes", "accept_routes"),
         tsToggle("Use Tailscale DNS", "accept_dns"),
-        { label: "Shields Up", mark: !!tsPrefs().shields_up, act: () => tsShields(!tsPrefs().shields_up) },
+        { label: "Shields Up", mark: !!tsPrefs().shields_up, title: TS_TIPS.shields_up, act: () => tsShields(!tsPrefs().shields_up) },
         tsToggle("Tailscale SSH", "ssh"));
       items.push("-", { label: "Copy This Machine's Address", act: () => tsCopy(self.dns_name || self.ip, "this machine") });
     }

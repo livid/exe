@@ -70,7 +70,8 @@ devices are online; **Tailscale Active** and **Inactive** turn it on and off;
 **Exit Node** picks one of the devices offering one (and Allow LAN Access);
 **Devices** lists the online ones and **Serve** the Tailscale Serve rules —
 pick a row to copy its address; then Accept Routes, Use Tailscale DNS,
-Shields Up and Tailscale SSH toggle, and Admin Console… opens Tailscale's.
+Shields Up and Tailscale SSH toggle (rest the pointer on one for what it
+does), and Admin Console… opens Tailscale's.
 Turning it off or raising shields while the desktop is itself reached
 through Tailscale asks first, because the desktop would go with it. The
 daemon asks the `tailscale` CLI on the machine and changes only those
