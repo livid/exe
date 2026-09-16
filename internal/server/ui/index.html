@@ -2070,9 +2070,21 @@ async function api(path, opts = {}) {
 const j = (p, o) => api(p, o).then(r => r.json());
 
 // ---- window manager ----
+// Windows stack from 10 up and the Control Strip floats at 1000, above them
+// all. zTop only ever grows, so before it reaches the strip the stack is
+// numbered again from 10 in the same order — recency, which the z order
+// doubles as, is untouched; only the figures shrink.
 let zTop = 10;
+const Z_CEIL = 900;
+function zCompact() {
+  const wins = [...document.querySelectorAll("#desktop .window")];
+  wins.sort((a, b) => (+a.style.zIndex || 0) - (+b.style.zIndex || 0));
+  zTop = 10;
+  for (const x of wins) x.style.zIndex = ++zTop;
+}
 let showAllOn = false; // Show All Windows is up: the windows sit in the grid
 function focusWin(w) {
+  if (zTop >= Z_CEIL) zCompact();
   zTop++;
   w.style.zIndex = zTop;
   // modals keep their hardcoded .front — only desktop windows trade focus
@@ -2574,6 +2586,7 @@ function applyWinState(st) {
       }
     }
     zTop = Math.max(zTop, maxZ);
+    if (zTop >= Z_CEIL) zCompact(); // a saved stack from before the ceiling
     const wins = [...document.querySelectorAll("#desktop .window")].filter(x => !x.hidden);
     wins.sort((a, b) => (+b.style.zIndex || 0) - (+a.style.zIndex || 0));
     document.querySelectorAll("#desktop .window").forEach(x => x.classList.toggle("front", x === wins[0]));
