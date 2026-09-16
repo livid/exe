@@ -62,8 +62,8 @@ module is the Cloudflare heartbeat: the lamp on the cloud is green while
 the tunnel is healthy, yellow when it needs attention, grey while it is
 still checking; click it for Cloudflare Status, the Setup Wizard and Check
 Now. Beside it, the **Solana ticker** shows a coin and the dollar price of
-SOL (or of PUMP or MET — pick the one the tile shows from its menu). Its
-menu lists all three with their day change, and the two ecosystem tokens
+SOL (or of PUMP, MET or SKR — pick the one the tile shows from its menu).
+Its menu lists them all with their day change, and the ecosystem tokens
 with their price in SOL as well; the figures are Coinbase's public spot
 prices, fetched once a minute by the daemon and shared by every desktop on
 the node. The tab at the right hides the strip down to the tab alone.

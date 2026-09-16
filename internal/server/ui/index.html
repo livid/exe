@@ -8194,13 +8194,13 @@ cfStripPaint();
 
 // ---- Control Strip: Solana prices ----
 // The price ticker is a wide module, the way OS 9's battery module was: the
-// coin, the chosen token's dollar price, and a menu with all three — SOL,
-// and the ecosystem tokens PUMP and MET with their prices in SOL as well.
+// coin, the chosen token's dollar price, and a menu with them all — SOL, and
+// the ecosystem tokens PUMP, MET and SKR with their prices in SOL as well.
 // The figures are Coinbase's public spot prices by way of the daemon
 // (/v1/prices caches them a minute for every desktop on the node). Picking
 // a row puts that token on the tile, remembered per browser like the strip.
-const PX_TOKENS = ["SOL", "PUMP", "MET"];
-const PX_PAIRS = ["SOL-USD", "PUMP-USD", "MET-USD", "PUMP-SOL", "MET-SOL"];
+const PX_TOKENS = ["SOL", "PUMP", "MET", "SKR"];
+const PX_PAIRS = ["SOL-USD", "PUMP-USD", "MET-USD", "SKR-USD", "PUMP-SOL", "MET-SOL", "SKR-SOL"];
 const csSol = $("#cs-sol");
 let pxShown = "SOL";
 try { const t = localStorage.getItem("exe_cstrip_token"); if (PX_TOKENS.includes(t)) pxShown = t; } catch (e) {}
