@@ -160,7 +160,9 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-del { margin-left: auto; }
 /* a nested reply in a thread: stepped in under the reply it answers,
    a thin rule marking the fold — the public pages' numbers, scaled down */
-.post.deep { padding-left: calc(10px + min(var(--d, 2) - 1, 4) * 18px); border-left: 1px solid #ddd; }
+/* a reply steps in per level until the indent would eat two fifths of
+   the window; past that the levels flatten, so a phone keeps its text */
+.post.deep { padding-left: min(calc(10px + (var(--d, 2) - 1) * 18px), 40%); border-left: 1px solid #ddd; }
 /* a link card: the post's first link, unfurled by the hub at ingest */
 .p-card { margin: 6px 0 0 22px; max-width: 400px; border: 1px solid var(--black); background: #fff;
   box-shadow: 1px 1px 0 var(--black); }
