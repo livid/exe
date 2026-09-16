@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,13 +52,69 @@ func handleDocs(w http.ResponseWriter, r *http.Request) {
 //go:embed all:ui
 var uiFS embed.FS
 
+//go:embed ui/sw.js
+var uiSWSrc []byte
+
+// uiBuild and uiETags come from the bytes the binary ships: an ETag per
+// /ui/ file (index.html included) so a reload revalidates with a 304
+// instead of downloading the vendor scripts again, and one hash over all
+// of them that stamps the service worker — a deploy that changes any UI
+// byte hands the browser a byte-different sw.js, which installs afresh and
+// retires the old offline cache.
+var uiBuild, uiETags = func() (string, map[string]string) {
+	tags := map[string]string{}
+	var names []string
+	err := fs.WalkDir(uiFS, "ui", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := uiFS.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(b)
+		rel := strings.TrimPrefix(p, "ui/")
+		tags[rel] = `"` + hex.EncodeToString(sum[:8]) + `"`
+		names = append(names, rel)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, n := range names {
+		io.WriteString(h, n+" "+tags[n]+"\n")
+	}
+	return hex.EncodeToString(h.Sum(nil))[:12], tags
+}()
+
+// uiSW is the service worker with the UI build stamped in.
+var uiSW = bytes.ReplaceAll(uiSWSrc, []byte("__EXE_BUILD__"), []byte(uiBuild))
+
 // uiStatic serves the vendored UI assets (xterm.js etc.) at /ui/.
 var uiStatic = func() http.Handler {
 	sub, err := fs.Sub(uiFS, "ui")
 	if err != nil {
 		panic(err)
 	}
-	return http.StripPrefix("/ui/", http.FileServerFS(sub))
+	files := http.StripPrefix("/ui/", http.FileServerFS(sub))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rel := strings.TrimPrefix(r.URL.Path, "/ui/")
+		if rel == "sw.js" {
+			// the worker is served stamped, from the root (handleServiceWorker)
+			http.NotFound(w, r)
+			return
+		}
+		if tag, ok := uiETags[rel]; ok {
+			// embedded files carry no modtime, so the ETag is what lets
+			// ServeContent answer If-None-Match with a 304; no-cache makes
+			// every use revalidate — the files change with a deploy
+			w.Header().Set("ETag", tag)
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		files.ServeHTTP(w, r)
+	})
 }()
 
 func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
@@ -64,10 +123,22 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// the UI ships embedded in the binary and changes with every deploy;
-	// no-cache makes a plain reload always revalidate to the new build
+	// no-cache makes a plain reload always revalidate to the new build, and
+	// the ETag lets that revalidation come back as a 304
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(uiHTML)
+	w.Header().Set("ETag", uiETags["index.html"])
+	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(uiHTML))
+}
+
+// handleServiceWorker serves the desktop's service worker from the root so
+// its scope is the whole origin. Browsers only register one on a secure
+// origin, so the plain-HTTP address never asks for it.
+func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("ETag", `"sw-`+uiBuild+`"`)
+	http.ServeContent(w, r, "sw.js", time.Time{}, bytes.NewReader(uiSW))
 }
 
 var ssProcessRE = regexp.MustCompile(`users:\(\("([^"]+)"`)

@@ -148,6 +148,13 @@ comes up, and closing a window walks back through the stack like a
 phone's back button. In a Claude Code or Codex window a finger drag
 scrolls back through the session's history, and a flick keeps it going.
 
+Over HTTPS — a Tailscale Serve address, say — the desktop installs as an
+app: **Add to Home Screen** on an iPhone or iPad, the install button in
+Chrome's or Edge's address bar. It then opens in a window of its own with
+the menu bar right under the status bar. When the daemon is not answering —
+restarting, or the device offline — the desktop shows an alert in place of
+the browser's error page and comes back by itself once the daemon does.
+
 Every system icon is hand-plotted pixel art, and **Windows → Icon Editor**
 lets you repaint it: the gallery lists each one (the VM Mac, folders,
 documents, the Trash, built-in apps such as Mac OS 9, the minis in search

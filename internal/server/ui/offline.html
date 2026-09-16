@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#dddddd">
+<title>exe</title>
+<style>
+/* The page the service worker shows when the daemon does not answer: one
+   Platinum alert on the desktop pattern. The window, alert-bar and button
+   blocks are the desktop's own (index.html), copied verbatim. */
+:root {
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+  --black: #262626; --g300: #ddd; --g400: #ccc; --g600: #999; --lav: #ccf;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden; font: 12px/1.45 var(--font); color: var(--black);
+  background: var(--lav) url(data:image/png;base64,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) repeat;
+  user-select: none; cursor: default;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sat) calc(16px + var(--sar)) var(--sab) calc(16px + var(--sal));
+}
+.window {
+  position: relative; z-index: 10; min-width: 220px; width: 100%; max-width: 380px;
+  background: var(--g400); border: 1px solid var(--black);
+  box-shadow: 2px 2px 0 var(--black);
+}
+.window::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 4; box-sizing: border-box;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.5), inset -1px -1px 0 var(--g600), inset 1px 1px 0 #fff; }
+.titlebar { display: flex; align-items: center; gap: 4px; padding: 2px 4px;
+  background: var(--g400); user-select: none; }
+.titlebar .stripe { flex: 1; height: 12px; min-width: 8px; position: relative;
+  background-color: var(--g300);
+  background-image: linear-gradient(#fff, #fff 50%, #777 50%, #777);
+  background-size: 100% 2px; background-repeat: repeat; }
+.titlebar .stripe::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 1px; box-sizing: border-box;
+  background-image: linear-gradient(#fff, #fff 50%, #ccc 50%, #ccc);
+  background-size: 100% 2px; background-repeat: repeat; border-bottom: 1px solid #ccc; }
+.titlebar .stripe::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; box-sizing: border-box;
+  background-image: linear-gradient(#ccc, #ccc 50%, #777 50%, #777);
+  background-size: 100% 2px; background-repeat: repeat; }
+/* Movable alert box title bar (HIG OS 8 fig. 3-4): nothing but red
+   stripes — no title, no boxes. */
+.titlebar.alert-bar { background: #fcc; }
+.titlebar.alert-bar .stripe { background-color: #fcc;
+  background-image: linear-gradient(#fff, #fff 50%, #f66 50%, #f66); }
+.titlebar.alert-bar .stripe::before {
+  background-image: linear-gradient(#fff, #fff 50%, #f99 50%, #f99);
+  border-bottom-color: #f99; }
+.titlebar.alert-bar .stripe::after {
+  background-image: linear-gradient(#f99, #f99 50%, #f66 50%, #f66); }
+.win-body { padding: 14px 14px 12px; }
+.row { display: flex; align-items: center; }
+button.ghost {
+  background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold;
+  font-family: var(--font); height: 20px; min-width: 58px; cursor: default;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa;
+}
+button.ghost:active {
+  background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+/* the Return default wears the ring */
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar alert-bar"><div class="stripe"></div></div>
+  <div class="win-body">
+    <div class="row" style="gap:20px; align-items:flex-start; margin-bottom:24px">
+      <!-- the exe Mac with its screen dark -->
+      <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges" style="flex:none" aria-hidden="true">
+        <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+        <rect x="10.5" y="5.5" width="11" height="8" fill="#55524B" stroke="#000"/>
+        <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+        <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
+      </svg>
+      <div style="flex:1; min-width:0">
+        <div style="font-weight:bold; font-size:12px; line-height:1.35">exe is not answering.</div>
+        <div style="font-size:11px; line-height:1.45; margin-top:7px">The desktop could not reach its daemon at <span id="host"></span>. It may be restarting, or this device may be offline. This page keeps trying and the desktop returns on its own.</div>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-end; margin:0 0 2px">
+      <button class="ghost default" id="retry" type="button">Try Again</button>
+    </div>
+  </div>
+</div>
+<script>
+document.getElementById("host").textContent = location.host;
+document.getElementById("retry").addEventListener("click", () => location.reload());
+addEventListener("keydown", e => { if (e.key === "Enter") location.reload(); });
+// a HEAD of the desktop is not a navigation, so the worker lets it reach
+// the network; the moment the daemon answers, the desktop comes back
+const probe = async () => {
+  try { const r = await fetch("/", { method: "HEAD", cache: "no-store" }); if (r.ok) location.reload(); } catch (e) {}
+};
+addEventListener("online", probe);
+setInterval(probe, 3000);
+</script>
+</body>
+</html>

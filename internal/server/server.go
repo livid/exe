@@ -242,6 +242,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/peer/file/{app}/{path...}", s.handlePeerFilePut)
 	mux.Handle("GET /apps/", s.appStatic())
 	mux.Handle("GET /ui/", uiStatic)
+	mux.HandleFunc("GET /sw.js", handleServiceWorker)
 	mux.HandleFunc("GET /", s.handleUI)
 	return s.auth(mux)
 }

@@ -115,6 +115,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   12px title on a `#ccc` field. An alert has a red-striped bar (`#fcc`
   field, `#fff / #f66` rows, `#f99` bevels), no title and no close box, and
   holds only an icon, a bold label beside it, a plain narrative and buttons.
+  `ui/offline.html`, the alert the service worker shows when the daemon does
+  not answer, carries its own copy of the window, alert-bar and button
+  blocks (it must render with nothing else reachable): change them in both.
 - Menu bar: 20px `#ddd`, inset white top and left, `#999` bottom and right,
   1px black bottom line; bold titles with 10px side padding; an open title
   inverts to `#333399`. Menus: `#eee`, 1px black, hard shadow `2px 2px 0
