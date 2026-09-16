@@ -4414,6 +4414,15 @@ const ctxMenu = $("#ctx-menu");
 // panel at depth k+1, the root #ctx-menu being depth 0. ctxGuardUntil: see
 // the mousedown closer below.
 let ctxPanels = [], ctxGuardUntil = 0;
+// A finger's tap on a submenu item fires mouseenter — which opens the
+// panel at once — and then the click the browser synthesizes from the
+// same tap, which lands on whatever the fresh panel put under the finger:
+// with a long panel clamped upward that is a live row, not the parent. So
+// a click within half a second of both a touch and a panel opening is
+// the tap that opened the panel, and does nothing more.
+let ctxSubAt = 0, lastTouchEnd = 0;
+document.addEventListener("touchend", () => { lastTouchEnd = Date.now(); }, { capture: true, passive: true });
+const ctxTapOpened = () => Date.now() - lastTouchEnd < 500 && Date.now() - ctxSubAt < 500;
 function ctxCloseSubs(depth) { // close every panel deeper than depth
   while (ctxPanels.length > depth) {
     const p = ctxPanels.pop();
@@ -4497,7 +4506,7 @@ function ctxFill(panel, items, depth) {
     const act = sub ? () => ctxOpenSub(d, panel, it.items, depth + 1) : () => ctxCloseSubs(depth);
     d.addEventListener("mouseenter", e => ctxHover(e, depth, act));
     if (sub) d.addEventListener("click", e => { e.stopPropagation(); ctxHoldClear(); act(); });
-    else if (!it.dis) d.addEventListener("click", () => { hideCtxMenu(); it.act(); });
+    else if (!it.dis) d.addEventListener("click", () => { if (ctxTapOpened()) return; hideCtxMenu(); it.act(); });
     panel.append(d);
   }
 }
@@ -4506,6 +4515,7 @@ function ctxOpenSub(item, parent, items, depth) {
   ctxCloseSubs(depth - 1);
   const p = el("div", { class: "dropdown ctx-panel" });
   p._owner = item;
+  ctxSubAt = Date.now();
   p.style.zIndex = 5000 + depth;
   ctxFill(p, items, depth);
   document.body.append(p);
