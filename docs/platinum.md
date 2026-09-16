@@ -59,7 +59,8 @@ restyling: `internal/server/ui/index.html` (the desktop),
   secondary meta. Never 13px, never a system font stack.
 - Chrome is `user-select: none; cursor: default`. OS 9 had no pointing
   hand and no hover states: a control changes only while pressed (`:active`),
-  menus alone highlight under the pointer.
+  menus alone highlight under the pointer (and, asked for by name, the
+  Show All Windows tile under it).
 
 ## Controls, with the HIG's numbers
 
@@ -126,15 +127,17 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - Show All Windows (the menubar button left of the magnifier, inverted
   like an open menu title while it is up): every open window flies into a
   grid on a field inset 24px from the desktop, 24px between tiles, 40px
-  kept clear above the Control Strip, and a 20px title row under each
-  tile in the desktop icons' label style. The column count is the one
-  whose worst-fitted window comes out largest (a window never grows past
-  scale 1; ties go to the larger mean); tiles keep their spatial order,
-  top row first, and a short last row sits centred. Windows move by
-  `transform` alone, origin at their corner, so the saved geometry is
-  untouched; the desktop icons step aside (`#rail` hidden), a shield over
-  the desktop takes the pointer, and a pick, the desk, the button or
-  Escape puts everything back.
+  kept clear above the Control Strip. The column count is the one whose
+  worst-fitted window comes out largest (a window never grows past scale
+  1; ties go to the larger mean); tiles keep their spatial order, top row
+  first, and a short last row sits centred. Windows move by `transform`
+  alone, origin at their corner, so the saved geometry is untouched; the
+  desktop icons step aside (`#rail` hidden) and a shield over the desktop
+  takes the pointer. The tile under the pointer wears the wash
+  (`.sa-hover`): `--hl` at 30 percent with a 1px `--hl` border and the
+  window's name centred in bold 12px white with the icon labels' 1px
+  black shadow. A pick, the desk, the button or Escape puts everything
+  back.
 
 ## Seams, stability, phones
 

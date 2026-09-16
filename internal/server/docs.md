@@ -20,9 +20,10 @@ The menu bar works like the classic Mac it resembles:
 - **Help** — this page, and the Agent Skill Guide for handing exe to a
   coding agent.
 - **Show All Windows** — the button at the right, left of the magnifier:
-  every open window shrinks into a grid with its title underneath. Click one
-  to bring it forward; click the desk, the button again, or press Escape to
-  put them all back. The desktop menu reaches it as `showall`.
+  every open window shrinks into a grid. The one under the pointer turns
+  blue and shows its name; click it to bring it forward, or click the desk,
+  the button again, or press Escape to put them all back. The desktop menu
+  reaches it as `showall`.
 - **Search** — the magnifier: one box finds VMs, chat sessions, notes and
   todos.
 

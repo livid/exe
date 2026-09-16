@@ -151,8 +151,7 @@ body.mobile #clock { padding: 0 10px; }
    corner, so the geometry the layout saved never changes; the flight there
    and back takes 200ms. A shield over the desktop takes the pointer for
    the duration — a click on a tile picks that window, anywhere else puts
-   them all back — and carries each tile's title in the desktop icons'
-   label style */
+   them all back — and carries the hover wash */
 body.showall #desktop .window, body.showall-out #desktop .window {
   transform-origin: 0 0; transition: transform .2s ease-out; }
 @media (prefers-reduced-motion: reduce) {
@@ -161,9 +160,14 @@ body.showall #desktop .window, body.showall-out #desktop .window {
 #sa-shield { position: fixed; inset: calc(20px + var(--sat)) 0 0 0; z-index: 2999; }
 /* the desktop icons step aside for the grid, the way Mission Control clears the desk */
 body.showall #rail { visibility: hidden; }
-.sa-label { position: absolute; text-align: center; pointer-events: none;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: #fff; text-shadow: 1px 1px 1px #000; padding: 0 4px; font-size: 11px; line-height: 16px; }
+/* the tile under the pointer wears a translucent highlight-blue wash with
+   a 1px highlight border and the window's name in white over it, the way
+   Mission Control names the window you are about to pick — the desktop's
+   one hover state, asked for by name */
+.sa-hover { position: absolute; display: flex; align-items: center; justify-content: center;
+  background: rgba(51,51,153,.3); border: 1px solid var(--hl); pointer-events: none; }
+.sa-hover span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #fff; text-shadow: 1px 1px 1px #000; font-weight: bold; font-size: 12px; line-height: 16px; padding: 0 6px; }
 
 /* ---------- desktop icons ---------- */
 #desktop { position: fixed; inset: calc(20px + var(--sat)) 0 0 0; }
@@ -3083,11 +3087,13 @@ $("#search-input").addEventListener("keydown", e => {
 // forward and the rest fly back. Windows travel by a CSS transform from
 // their own corner, so left/top/width stay what the layout saved and the
 // snapshot never hears about it. A shield over the desktop takes the
-// pointer for the duration: a click on a tile picks it, anywhere else —
-// the desk, the Control Strip — ends the view, as do Escape, the button,
-// and anything that opens, closes or re-lays a window meanwhile.
-const SA_PAD = 24, SA_GAP = 24, SA_LABEL = 20, SA_STRIP = 40; // the field's inset, between tiles, the title row, clear of the Control Strip
+// pointer for the duration: the tile under the pointer wears a blue wash
+// with the window's name, a click on it picks it, anywhere else — the
+// desk, the Control Strip — ends the view, as do Escape, the button, and
+// anything that opens, closes or re-lays a window meanwhile.
+const SA_PAD = 24, SA_GAP = 24, SA_STRIP = 40; // the field's inset, between tiles, clear of the Control Strip
 let saTiles = []; // the laid-out tiles in desktop coordinates, for the shield's hit test
+const saTileAt = (x, y) => saTiles.find(t => x >= t.x && x < t.x + t.tw && y >= t.y && y < t.y + t.th);
 function showAllLayout() {
   const wins = [...document.querySelectorAll("#desktop .window")].filter(w => !w.hidden);
   if (!wins.length) return false;
@@ -3102,8 +3108,9 @@ function showAllLayout() {
   let best = null;
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
-    const cw = Math.max(1, (fw - SA_GAP * (cols - 1)) / cols);
-    const ch = Math.max(1, (fh - SA_GAP * (rows - 1)) / rows - SA_LABEL);
+    // whole-pixel cells: a fractional cell would let a tile's bottom edge round past the field
+    const cw = Math.max(1, Math.floor((fw - SA_GAP * (cols - 1)) / cols));
+    const ch = Math.max(1, Math.floor((fh - SA_GAP * (rows - 1)) / rows));
     const sc = geo.map(g => Math.min(1, cw / g.W, ch / g.H));
     const min = Math.min(...sc), mean = sc.reduce((s, x) => s + x, 0) / n;
     if (!best || min > best.min + 1e-6 || (min > best.min - 1e-6 && mean > best.mean)) best = { cols, rows, cw, ch, min, mean };
@@ -3112,22 +3119,18 @@ function showAllLayout() {
   const order = [];
   for (let r = 0; r < rows; r++)
     order.push(...geo.slice(r * cols, (r + 1) * cols).sort((a, b) => (a.l + a.W / 2) - (b.l + b.W / 2)));
-  const shield = $("#sa-shield");
-  shield.replaceChildren();
+  saHover(null);
   saTiles = [];
   order.forEach((g, i) => {
     const r = Math.floor(i / cols), c = i % cols;
     const inRow = Math.min(cols, n - r * cols);
     // a short last row sits centred under the full ones
     const cx = SA_PAD + (cols - inRow) * (cw + SA_GAP) / 2 + c * (cw + SA_GAP);
-    const cy = SA_PAD + r * (ch + SA_LABEL + SA_GAP);
+    const cy = SA_PAD + r * (ch + SA_GAP);
     const s = Math.min(1, cw / g.W, ch / g.H);
     const tw = g.W * s, th = g.H * s;
-    const x = Math.round(cx + (cw - tw) / 2), y = Math.round(cy + (ch - th) / 2);
+    const x = Math.floor(cx + (cw - tw) / 2), y = Math.floor(cy + (ch - th) / 2);
     g.w.style.transform = `translate(${x - g.l}px, ${y - g.t}px) scale(${s})`;
-    const lbl = el("div", { class: "sa-label" }, winLabel(g.w));
-    Object.assign(lbl.style, { left: Math.round(cx) + "px", width: Math.round(cw) + "px", top: Math.round(y + th + 4) + "px" });
-    shield.append(lbl);
     saTiles.push({ w: g.w, x, y, tw, th });
   });
   return true;
@@ -3150,6 +3153,7 @@ function showAllExit() {
   if (!showAllOn) return;
   showAllOn = false;
   $("#sa-shield").hidden = true;
+  saHover(null);
   $("#showall-btn").classList.remove("on");
   // the windows fly back; the transition rule stays on for the trip
   document.body.classList.replace("showall", "showall-out");
@@ -3160,10 +3164,24 @@ function showAllExit() {
 }
 function showAllToggle() { if (showAllOn) showAllExit(); else showAllEnter(); }
 $("#showall-btn").onclick = showAllToggle;
+// the wash over the tile under the pointer, one element moved from tile to
+// tile; the wash takes no pointer, so every event's offsets are the shield's own
+const saHoverEl = el("div", { class: "sa-hover" }, el("span"));
+saHoverEl.hidden = true;
+$("#sa-shield").append(saHoverEl);
+let saHoverTile = null;
+function saHover(t) {
+  if (t === saHoverTile) return;
+  saHoverTile = t;
+  saHoverEl.hidden = !t;
+  if (!t) return;
+  Object.assign(saHoverEl.style, { left: t.x + "px", top: t.y + "px", width: t.tw + "px", height: t.th + "px" });
+  saHoverEl.firstChild.textContent = winLabel(t.w);
+}
+$("#sa-shield").addEventListener("mousemove", e => saHover(saTileAt(e.offsetX, e.offsetY) || null));
+$("#sa-shield").addEventListener("mouseleave", () => saHover(null));
 $("#sa-shield").addEventListener("click", e => {
-  // the labels take no pointer, so the click's offsets are the shield's own
-  const x = e.offsetX, y = e.offsetY;
-  const hit = saTiles.find(t => x >= t.x && x < t.x + t.tw && y >= t.y && y < t.y + t.th);
+  const hit = saTileAt(e.offsetX, e.offsetY);
   showAllExit();
   if (hit) openWin(hit.w);
 });
