@@ -2982,7 +2982,8 @@ const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="$
 //             the Control Strip repaints exactly these per heartbeat),
 //             solana-purple #9945ff / #c9a3ff / #6b2fc4 with solana-green
 //             #14f195, pump-green #19c37d / #8ff0c0 / #0e7a4d,
-//             meteora-orange #f0562a / #ffa37a / #b0361a, seeker-teal
+//             meteora-orange #f54b00 / #ff9a6e / #b03600 (with the logo's
+//             yellow #f5bd00 and violet #6e45ff on its face), seeker-teal
 //             #14b8a6 / #8ee8dc / #0b7a6e (the price module's coins)
 // Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
 // they darken whatever sits beneath. Write chromatic colors as 6-digit hex
@@ -3002,7 +3003,7 @@ let CF_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="
 let cfLast = null; // the last Cloudflare heartbeat; declared here so an icon override can repaint before the strip code runs
 // the Control Strip's price module: one coin per token — the same struck
 // coin (an object) in the token's colour, the mark on its face saying
-// which: Solana's three bars, pump.fun's pill, a meteor for Meteora, the
+// which: Solana's three bars, pump.fun's pill, Meteora's streaks, the
 // Seeker phone. coinIcon strikes them; each is its own `let` so the Icon
 // Editor can repaint any one
 const coinIcon = (face, hi, lo, mark) => `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
@@ -3019,10 +3020,10 @@ let PUMP_ICON = coinIcon("#19c37d", "#8ff0c0", "#0e7a4d", // the pill, white hal
   `<path fill="#000" d="M5 5h6v1H5zM4 6h1v1H4zM11 6h1v1H11zM3 7h1v2H3zM12 7h1v2H12zM4 9h1v1H4zM11 9h1v1H11zM5 10h6v1H5z"/>
   <path fill="#fff" d="M5 6h3v1H5zM4 7h4v2H4zM5 9h3v1H5z"/>
   <path fill="#8ff0c0" d="M8 6h3v1H8zM8 7h4v2H8zM8 9h3v1H8z"/>`);
-let MET_ICON = coinIcon("#f0562a", "#ffa37a", "#b0361a", // a meteor: white head, yellow tail to the upper right
-  `<path fill="#ffff33" d="M11 4h1v1H11zM10 5h2v1H10zM9 6h2v1H9zM8 7h2v1H8zM7 8h2v1H7z"/>
-  <path fill="#000" d="M4 8h3v1H4zM3 9h1v2H3zM7 9h1v2H7zM4 11h3v1H4z"/>
-  <path fill="#fff" d="M4 9h3v2H4z"/>`);
+let MET_ICON = coinIcon("#f54b00", "#ff9a6e", "#b03600", // Meteora's streaks: four diagonal strokes, tips on a dome at the upper right, tails trailing lower left, yellow into violet
+  `<path fill="#f5bd00" d="M7 3h2v1H7zM10 3h2v1H10zM6 4h2v1H6zM9 4h2v1H9zM12 4h1v1H12zM5 5h2v1H5zM8 5h2v1H8zM11 5h2v1H11zM7 6h2v1H7zM10 6h2v1H10zM7 7h1v1H7zM9 7h2v1H9zM12 7h1v1H12zM8 8h2v1H8zM11 8h2v1H11zM10 9h2v1H10zM10 10h1v1H10z"/>
+  <path fill="#6e45ff" d="M4 6h2v1H4zM4 7h1v1H4zM6 7h1v1H6zM5 8h2v1H5zM4 9h2v1H4zM7 9h2v1H7zM3 10h2v1H3zM6 10h2v1H6zM9 10h1v1H9zM3 11h1v1H3zM5 11h2v1H5zM8 11h2v1H8zM4 12h2v1H4zM8 12h1v1H8zM4 13h1v1H4z"/>
+  <path fill="#000" d="M9 3h1v1H9zM8 4h1v1H8zM11 4h1v1H11zM7 5h1v1H7zM10 5h1v1H10zM6 6h1v1H6zM9 6h1v1H9zM12 6h1v1H12zM5 7h1v1H5zM8 7h1v1H8zM11 7h1v1H11zM7 8h1v1H7zM10 8h1v1H10zM6 9h1v1H6zM9 9h1v1H9zM5 10h1v1H5zM8 10h1v1H8zM4 11h1v1H4z"/>`);
 let SKR_ICON = coinIcon("#14b8a6", "#8ee8dc", "#0b7a6e", // the Seeker phone, screen lit
   `<path fill="#000" d="M5 3h6v10H5z"/>
   <path fill="#fff" d="M6 5h4v6H6z"/>`);
