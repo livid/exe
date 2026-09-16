@@ -61,9 +61,9 @@ The **Control Strip** in the bottom-left corner is OS 9's tray. Its first
 module is the Cloudflare heartbeat: the lamp on the cloud is green while
 the tunnel is healthy, yellow when it needs attention, grey while it is
 still checking; click it for Cloudflare Status, the Setup Wizard and Check
-Now. Beside it, the **Solana ticker** shows a coin and the dollar price of
-SOL (or of PUMP, MET or SKR — pick the one the tile shows from its menu).
-Its menu lists them all with their day change, and the ecosystem tokens
+Now. Beside it, the **Solana ticker** shows a token's coin and its dollar
+price: SOL, or PUMP, MET or SKR — pick the one the tile wears from its menu.
+The menu lists them all with their day change, and the ecosystem tokens
 with their price in SOL as well; the figures are Coinbase's public spot
 prices, fetched once a minute by the daemon and shared by every desktop on
 the node. The tab at the right hides the strip down to the tab alone.

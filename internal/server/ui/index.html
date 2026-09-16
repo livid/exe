@@ -2981,7 +2981,9 @@ const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="$
 //             #ffb060 / #c8600a, lamp-green #33cc33 / #99ee99 (reserved —
 //             the Control Strip repaints exactly these per heartbeat),
 //             solana-purple #9945ff / #c9a3ff / #6b2fc4 with solana-green
-//             #14f195 (the price module's coin)
+//             #14f195, pump-green #19c37d / #8ff0c0 / #0e7a4d,
+//             meteora-orange #f0562a / #ffa37a / #b0361a, seeker-teal
+//             #14b8a6 / #8ee8dc / #0b7a6e (the price module's coins)
 // Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
 // they darken whatever sits beneath. Write chromatic colors as 6-digit hex
 // (pure grays may shorthand). ICX_PALETTE in the Icon Editor carries the
@@ -2998,16 +3000,32 @@ let CF_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="
   <path fill="#99ee99" d="M11 11h2v1H11zM11 12h1v1H11z"/>
 </svg>`;
 let cfLast = null; // the last Cloudflare heartbeat; declared here so an icon override can repaint before the strip code runs
-// the Control Strip's price module: a purple coin struck with Solana's
-// three bars — an object (a coin), the mark is what says which coin
-let SOL_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <path fill="#9945ff" d="M5 1h6v1H5zM3 2h10v1H3zM2 3h12v2H2zM1 5h14v6H1zM2 11h12v2H2zM3 13h10v1H3zM5 14h6v1H5z"/>
-  <path fill="#c9a3ff" d="M5 1h5v1H5zM3 2h2v1H3zM2 3h1v2H2zM1 5h1v4H1z"/>
+// the Control Strip's price module: one coin per token — the same struck
+// coin (an object) in the token's colour, the mark on its face saying
+// which: Solana's three bars, pump.fun's pill, a meteor for Meteora, the
+// Seeker phone. coinIcon strikes them; each is its own `let` so the Icon
+// Editor can repaint any one
+const coinIcon = (face, hi, lo, mark) => `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="${face}" d="M5 1h6v1H5zM3 2h10v1H3zM2 3h12v2H2zM1 5h14v6H1zM2 11h12v2H2zM3 13h10v1H3zM5 14h6v1H5z"/>
+  <path fill="${hi}" d="M5 1h5v1H5zM3 2h2v1H3zM2 3h1v2H2zM1 5h1v4H1z"/>
   <path fill="#fff" d="M5 2h2v1H5zM4 3h1v1H4z"/>
-  <path fill="#6b2fc4" d="M6 14h5v1H6zM11 13h2v1H11zM13 11h1v2H13zM14 7h1v4H14z"/>
-  <path fill="#14f195" d="M5 4h6v1H5zM4 5h6v1H4zM4 7h6v1H4zM5 8h6v1H5zM5 10h6v1H5zM4 11h6v1H4z"/>
+  <path fill="${lo}" d="M6 14h5v1H6zM11 13h2v1H11zM13 11h1v2H13zM14 7h1v4H14z"/>
+  ${mark}
   <path fill="#000" d="M5 0h6v1H5zM3 1h2v1H3zM11 1h2v1H11zM2 2h1v1H2zM13 2h1v1H13zM1 3h1v2H1zM14 3h1v2H14zM0 5h1v6H0zM15 5h1v6H15zM1 11h1v2H1zM14 11h1v2H14zM2 13h1v1H2zM13 13h1v1H13zM3 14h2v1H3zM11 14h2v1H11zM5 15h6v1H5z"/>
 </svg>`;
+let SOL_ICON = coinIcon("#9945ff", "#c9a3ff", "#6b2fc4",
+  `<path fill="#14f195" d="M5 4h6v1H5zM4 5h6v1H4zM4 7h6v1H4zM5 8h6v1H5zM5 10h6v1H5zM4 11h6v1H4z"/>`);
+let PUMP_ICON = coinIcon("#19c37d", "#8ff0c0", "#0e7a4d", // the pill, white half and green half
+  `<path fill="#000" d="M5 5h6v1H5zM4 6h1v1H4zM11 6h1v1H11zM3 7h1v2H3zM12 7h1v2H12zM4 9h1v1H4zM11 9h1v1H11zM5 10h6v1H5z"/>
+  <path fill="#fff" d="M5 6h3v1H5zM4 7h4v2H4zM5 9h3v1H5z"/>
+  <path fill="#8ff0c0" d="M8 6h3v1H8zM8 7h4v2H8zM8 9h3v1H8z"/>`);
+let MET_ICON = coinIcon("#f0562a", "#ffa37a", "#b0361a", // a meteor: white head, yellow tail to the upper right
+  `<path fill="#ffff33" d="M11 4h1v1H11zM10 5h2v1H10zM9 6h2v1H9zM8 7h2v1H8zM7 8h2v1H7z"/>
+  <path fill="#000" d="M4 8h3v1H4zM3 9h1v2H3zM7 9h1v2H7zM4 11h3v1H4z"/>
+  <path fill="#fff" d="M4 9h3v2H4z"/>`);
+let SKR_ICON = coinIcon("#14b8a6", "#8ee8dc", "#0b7a6e", // the Seeker phone, screen lit
+  `<path fill="#000" d="M5 3h6v10H5z"/>
+  <path fill="#fff" d="M6 5h4v6H6z"/>`);
 let pxLast = null; // the last Coinbase answer, for the same reason
 let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
@@ -3867,8 +3885,11 @@ const ICON_DEFS = [
   { key: "todo-mini", label: "Todo (mini)", size: 16, get: () => MINI_TODO_ICON, set: s => MINI_TODO_ICON = s },
   { key: "cloudflare", label: "Cloudflare", size: 16, get: () => CF_ICON, set: s => CF_ICON = s,
     note: "the lamp's greens follow the Cloudflare heartbeat" },
-  { key: "solana", label: "Solana", size: 16, get: () => SOL_ICON, set: s => SOL_ICON = s,
-    note: "the Control Strip's price ticker" },
+  { key: "solana", label: "SOL coin", size: 16, get: () => SOL_ICON, set: s => SOL_ICON = s,
+    note: "the Control Strip's price ticker wears the chosen token's coin" },
+  { key: "pump", label: "PUMP coin", size: 16, get: () => PUMP_ICON, set: s => PUMP_ICON = s },
+  { key: "meteora", label: "MET coin", size: 16, get: () => MET_ICON, set: s => MET_ICON = s },
+  { key: "seeker", label: "SKR coin", size: 16, get: () => SKR_ICON, set: s => SKR_ICON = s },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -8194,13 +8215,15 @@ cfStripPaint();
 
 // ---- Control Strip: Solana prices ----
 // The price ticker is a wide module, the way OS 9's battery module was: the
-// coin, the chosen token's dollar price, and a menu with them all — SOL, and
-// the ecosystem tokens PUMP, MET and SKR with their prices in SOL as well.
+// chosen token's coin and dollar price, and a menu with them all — SOL, and
+// the ecosystem tokens PUMP, MET and SKR with their prices in SOL as well,
+// each row beside its coin the way the Application menu showed programs.
 // The figures are Coinbase's public spot prices by way of the daemon
 // (/v1/prices caches them a minute for every desktop on the node). Picking
 // a row puts that token on the tile, remembered per browser like the strip.
 const PX_TOKENS = ["SOL", "PUMP", "MET", "SKR"];
 const PX_PAIRS = ["SOL-USD", "PUMP-USD", "MET-USD", "SKR-USD", "PUMP-SOL", "MET-SOL", "SKR-SOL"];
+const PX_ICON = { SOL: "solana", PUMP: "pump", MET: "meteora", SKR: "seeker" }; // ICON_DEFS keys
 const csSol = $("#cs-sol");
 let pxShown = "SOL";
 try { const t = localStorage.getItem("exe_cstrip_token"); if (PX_TOKENS.includes(t)) pxShown = t; } catch (e) {}
@@ -8232,7 +8255,7 @@ function pxLine(tok) {
   return tok + " " + pxUSD(q.spot) + (c ? " (" + c + ")" : "") + (k ? " = " + pxSOL(k.spot) : "");
 }
 function pxStripPaint() {
-  $("#cs-sol .cs-ico").innerHTML = iconCurrent("solana");
+  $("#cs-sol .cs-ico").innerHTML = iconCurrent(PX_ICON[pxShown]);
   const q = pxQuote(pxShown + "-USD");
   $("#cs-sol .cs-txt").textContent = q ? pxUSD(q.spot) : "—";
   csSol.title = pxLast ? PX_TOKENS.map(pxLine).join("\n") + "\n" + pxHead() : "Solana prices — checking…";
@@ -8256,7 +8279,7 @@ function pxStripMenu() {
   showCtxMenu(0, 0, [
     { label: pxHead(), dis: true },
     "-",
-    ...PX_TOKENS.map(tok => ({ label: pxRow(tok), mark: tok === pxShown, act: () => {
+    ...PX_TOKENS.map(tok => ({ label: pxRow(tok), icon: iconCurrent(PX_ICON[tok]), mark: tok === pxShown, act: () => {
       pxShown = tok;
       try { localStorage.setItem("exe_cstrip_token", tok); } catch (e) {}
       pxStripPaint();
