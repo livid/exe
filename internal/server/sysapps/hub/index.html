@@ -152,8 +152,11 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-page::before { content: ""; position: absolute; left: 7px; top: 3px; width: 10px; height: 12px; box-sizing: border-box;
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="12" shape-rendering="crispEdges"><path fill="%23fff" d="M1 1h8v10h-8z"/><path fill="black" d="M0 0h10v1h-10z M0 11h10v1h-10z M0 1h1v10h-1z M9 1h1v10h-1z M1 3h8v1h-8z M1 6h8v1h-8z M1 9h8v1h-8z"/></svg>') no-repeat; }
 .p-pagedl { flex: none; font-size: 10px; color: var(--hl); cursor: default; }
-.p-foot { margin: 5px 0 0 22px; display: flex; gap: 10px; align-items: center; }
-.p-replies { font-size: 10px; color: var(--hl); }
+.p-foot { margin: 5px 0 0 22px; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.p-replies { font-size: 10px; color: var(--hl); white-space: nowrap; }
+/* the thread's newest reply, one quiet ellipsized line on the foot */
+.p-latest { font-size: 10px; color: #777; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-latest b { color: var(--black); }
 .p-del { margin-left: auto; }
 /* a nested reply in a thread: stepped in under the reply it answers,
    a thin rule marking the fold — the public pages' numbers, scaled down */
@@ -670,6 +673,15 @@ function renderPost(p, opts = {}) {
     const rep = el("span", { class: "p-replies", "data-count": p.replies || 0 },
       p.replies ? p.replies + (p.replies === 1 ? " reply" : " replies") : "reply");
     foot.append(rep);
+    // the thread's newest reply on the foot line: who spoke last and
+    // the first words, so a follow-up shows without opening the thread
+    if (p.last_reply && !p.reply_to) {
+      const cut = (p.last_reply.text || "").replace(/\s+/g, " ").trim();
+      const lat = el("span", { class: "p-latest" },
+        el("b", {}, p.last_reply.author_name || p.last_reply.author), cut ? " " + cut : "");
+      lat.onclick = e => { e.stopPropagation(); openThread(p.id); };
+      foot.append(lat);
+    }
     node.style.cursor = "default";
     node.onclick = e => { if (!e.target.closest("a, button, .p-text, .p-card, .p-vid, .p-aud")) openThread(p.id); };
     rep.onclick = () => openThread(p.id);
@@ -952,13 +964,23 @@ function connectEvents() {
       return;
     }
     if (view.kind === "search") return; // a snapshot; Refresh re-runs it
-    if (m.reply_to) { // not shown in the feed, but its parent's count is
-      const c = seen(m.reply_to)?.querySelector("[data-count]");
-      if (c) {
-        const n = +c.dataset.count + 1;
-        c.dataset.count = n;
-        c.textContent = n + (n === 1 ? " reply" : " replies");
-      }
+    if (m.reply_to) { // a reply bumps its thread: walk up to the root,
+      // then redraw it at the top with the fresh count and last reply
+      try {
+        let cur = m.reply_to, root = null;
+        for (let i = 0; i < 20; i++) {
+          const out = await hget("/v1/post/" + cur);
+          if (!out.post.reply_to) { root = out.post; break; }
+          cur = out.post.reply_to;
+        }
+        if (!root || view.kind !== "feed") return;
+        const old = seen(root.id);
+        const fresh = renderPost(root);
+        const stick = feedEl.scrollTop;
+        if (old) old.remove();
+        feedEl.prepend(fresh);
+        if (stick > 0) feedEl.scrollTop = stick + (old ? 0 : fresh.offsetHeight);
+      } catch (e) { /* the next Refresh reorders anyway */ }
       return;
     }
     const out = await hget("/v1/post/" + m.id);
