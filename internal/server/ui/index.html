@@ -1253,12 +1253,14 @@ body.mobile th.sorted {
 
 <div id="desktop">
   <!-- Control Strip: OS 9's tray in the bottom-left corner. The Cloudflare
-       heartbeat lives here as a module; the #cstrip CSS has the sampling -->
+       heartbeat, the Tailscale panel and the price ticker live here as
+       modules; the #cstrip CSS has the sampling -->
   <div id="cstrip">
     <div class="cs-body">
       <div class="cs-well cs-l" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
       <div class="cs-mods">
         <div class="cs-mod" id="cs-cf" title="Cloudflare status — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
+        <div class="cs-mod" id="cs-ts" title="Tailscale — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod wide" id="cs-sol" title="Solana prices — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
       </div>
       <div class="cs-well cs-r" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
@@ -2984,7 +2986,9 @@ const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="$
 //             #14f195, pump-green #19c37d / #8ff0c0 / #0e7a4d,
 //             meteora-orange #f54b00 / #ff9a6e / #b03600 (with the logo's
 //             yellow #f5bd00 and violet #6e45ff on its face), seeker-teal
-//             #14b8a6 / #8ee8dc / #0b7a6e (the price module's coins)
+//             #14b8a6 / #8ee8dc / #0b7a6e (the price module's coins),
+//             tailscale-lit #c8dcf8 / #f0f6ff (reserved — the Control
+//             Strip repaints exactly these per tailnet state)
 // Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
 // they darken whatever sits beneath. Write chromatic colors as 6-digit hex
 // (pure grays may shorthand). ICX_PALETTE in the Icon Editor carries the
@@ -3001,6 +3005,20 @@ let CF_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="
   <path fill="#99ee99" d="M11 11h2v1H11zM11 12h1v1H11z"/>
 </svg>`;
 let cfLast = null; // the last Cloudflare heartbeat; declared here so an icon override can repaint before the strip code runs
+// the Control Strip's Tailscale module: an indicator panel of nine lamps
+// on a dark plate, the four of Tailscale's mark lit — the lit lamps' two
+// blues are reserved, tsStripPaint repaints exactly them per tailnet state
+// (pale while connected, blue through an exit node, yellow when something
+// needs attention, dim like the other five when Tailscale is off)
+let TS_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#444" d="M1 1h1v1H1zM4 1h3v1H4zM9 1h3v1H9zM14 1h1v1H14zM5 2h1v1H5zM10 2h1v1H10zM5 3h1v1H5zM10 3h1v1H10zM1 4h1v1H1zM4 4h3v1H4zM9 4h3v1H9zM14 4h1v1H14zM1 5h14v1H1zM1 6h1v1H1zM4 6h3v1H4zM9 6h3v1H9zM14 6h1v1H14zM5 7h1v1H5zM10 7h1v1H10zM5 8h1v1H5zM10 8h1v1H10zM1 9h1v1H1zM4 9h3v1H4zM9 9h3v1H9zM14 9h1v1H14zM1 10h14v1H1zM1 11h1v1H1zM4 11h3v1H4zM9 11h3v1H9zM14 11h1v1H14zM5 12h1v1H5zM10 12h1v1H10zM5 13h1v1H5zM10 13h1v1H10zM1 14h1v1H1zM4 14h3v1H4zM9 14h3v1H9zM14 14h1v1H14z"/>
+  <path fill="#777" d="M3 1h1v1H3zM8 1h1v1H8zM13 1h1v1H13zM2 2h3v1H2zM7 2h3v1H7zM12 2h3v1H12zM1 3h4v1H1zM6 3h4v1H6zM11 3h4v1H11zM2 4h2v1H2zM7 4h2v1H7zM12 4h2v1H12zM3 6h1v1H3zM13 6h1v1H13zM2 7h3v1H2zM12 7h3v1H12zM1 8h4v1H1zM11 8h4v1H11zM2 9h2v1H2zM12 9h2v1H12z"/>
+  <path fill="#888" d="M2 1h1v1H2zM7 1h1v1H7zM12 1h1v1H12zM1 2h1v1H1zM6 2h1v1H6zM11 2h1v1H11zM2 6h1v1H2zM12 6h1v1H12zM1 7h1v1H1zM11 7h1v1H11z"/>
+  <path fill="#c8dcf8" d="M8 6h1v1H8zM7 7h3v1H7zM6 8h4v1H6zM7 9h2v1H7zM3 11h1v1H3zM8 11h1v1H8zM13 11h1v1H13zM2 12h3v1H2zM7 12h3v1H7zM12 12h3v1H12zM1 13h4v1H1zM6 13h4v1H6zM11 13h4v1H11zM2 14h2v1H2zM7 14h2v1H7zM12 14h2v1H12z"/>
+  <path fill="#f0f6ff" d="M7 6h1v1H7zM6 7h1v1H6zM2 11h1v1H2zM7 11h1v1H7zM12 11h1v1H12zM1 12h1v1H1zM6 12h1v1H6zM11 12h1v1H11z"/>
+  <path fill="#000" d="M1 0h14v1H1zM0 1h1v1H0zM15 1h1v1H15zM0 2h1v1H0zM15 2h1v1H15zM0 3h1v1H0zM15 3h1v1H15zM0 4h1v1H0zM15 4h1v1H15zM0 5h1v1H0zM15 5h1v1H15zM0 6h1v1H0zM15 6h1v1H15zM0 7h1v1H0zM15 7h1v1H15zM0 8h1v1H0zM15 8h1v1H15zM0 9h1v1H0zM15 9h1v1H15zM0 10h1v1H0zM15 10h1v1H15zM0 11h1v1H0zM15 11h1v1H15zM0 12h1v1H0zM15 12h1v1H15zM0 13h1v1H0zM15 13h1v1H15zM0 14h1v1H0zM15 14h1v1H15zM1 15h14v1H1z"/>
+</svg>`;
+let tsLast = null; // the last /v1/tailscale answer, for the same reason
 // the Control Strip's price module: one coin per token — the same struck
 // coin (an object) in the token's colour, the mark on its face saying
 // which: Solana's three bars, pump.fun's pill, Meteora's streaks, the
@@ -3886,6 +3904,8 @@ const ICON_DEFS = [
   { key: "todo-mini", label: "Todo (mini)", size: 16, get: () => MINI_TODO_ICON, set: s => MINI_TODO_ICON = s },
   { key: "cloudflare", label: "Cloudflare", size: 16, get: () => CF_ICON, set: s => CF_ICON = s,
     note: "the lamp's greens follow the Cloudflare heartbeat" },
+  { key: "tailscale", label: "Tailscale", size: 16, get: () => TS_ICON, set: s => TS_ICON = s,
+    note: "the lit lamps' blues follow the tailnet's state" },
   { key: "solana", label: "SOL coin", size: 16, get: () => SOL_ICON, set: s => SOL_ICON = s,
     note: "the Control Strip's price ticker wears the chosen token's coin" },
   { key: "pump", label: "PUMP coin", size: 16, get: () => PUMP_ICON, set: s => PUMP_ICON = s },
@@ -3934,6 +3954,7 @@ function applyIconOverrides(ovs, custom) {
   }
   renderIcons(lastVMs);
   cfStripPaint();
+  tsStripPaint();
   pxStripPaint();
   tickClock();
   $("#about-icon").innerHTML = macIcon("running", 48);
@@ -8158,7 +8179,8 @@ async function cfHeartbeat(force) {
 }
 
 // ---- Control Strip ----
-// Two modules: the Cloudflare heartbeat and the Solana price ticker below.
+// Three modules: the Cloudflare heartbeat, then the Tailscale panel and the
+// Solana price ticker below.
 // The heartbeat's lamp is the icon's reserved greens repainted per status;
 // a module's menu pops up from its tile the way an OS 9 module's does; the
 // tab hides the strip down to the tab alone, remembered per browser the way
@@ -8372,6 +8394,192 @@ pxRefresh(false);
 pxPushInit();
 setInterval(() => { if (!document.hidden) pxRefresh(false); }, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pxRefresh(false); });
+
+// ---- Control Strip: Tailscale ----
+// The tailnet module, shown only on a machine with the tailscale CLI: an
+// indicator panel whose lamps light Tailscale's four while the tailnet is
+// connected — blue when the machine's traffic leaves through an exit node,
+// yellow when something needs attention, all dim when Tailscale is off —
+// and a menu that says which machine this is and how many devices are
+// online, turns Tailscale on and off (the AppleTalk Switch module's pair
+// of marked lines), picks an exit node, lists the online devices and the
+// Serve table, and toggles the preferences. The daemon does the asking
+// (/v1/tailscale, cached ten seconds for every desktop on the node) and
+// the changing (/v1/tailscale/set, a fixed list of settings). Turning
+// Tailscale off or raising shields while the desktop itself hangs off the
+// tailnet — the daemon listens on the Tailscale IP, or this browser came
+// in through Tailscale Serve — asks first: the desktop would go with it.
+// Whether the tile shows at all is remembered per browser, so it is there
+// from the first paint on a machine with Tailscale and never flashes on
+// one without.
+const csTS = $("#cs-ts");
+const TS_LAMP = { on: ["#c8dcf8", "#f0f6ff"], exit: ["#5aa2ff", "#b8d8ff"], warn: ["#ffdd30", "#fff3a0"], off: ["#777777", "#888888"] };
+let tsBusy = false, tsSeen = "1";
+try { tsSeen = localStorage.getItem("exe_cstrip_ts") || "1"; } catch (e) {}
+const tsPrefs = () => (tsLast && tsLast.prefs) || {};
+const tsSelfName = () => (tsLast && tsLast.self && tsLast.self.name) || "this machine";
+const tsDevices = () => tsLast && tsLast.peers_total ? tsLast.peers_online + " of " + tsLast.peers_total + " devices online" : "";
+const tsShort = t => t.length > 70 ? t.slice(0, 69) + "…" : t;
+// the lamps: connected, through an exit node, needs attention, off
+function tsLampState() {
+  if (!tsLast || !tsLast.installed) return "off";
+  switch (tsLast.state) {
+    case "Running": return tsLast.health && tsLast.health.length ? "warn" : tsLast.exit_node ? "exit" : "on";
+    case "Stopped": case "Starting": case "NoState": return "off";
+    default: return "warn"; // NeedsLogin, NeedsMachineAuth, NoDaemon
+  }
+}
+// the menu's head and the tooltip's first line
+function tsHead() {
+  if (!tsLast) return "Tailscale: checking…";
+  if (!tsLast.installed) return "Tailscale: not installed";
+  switch (tsLast.state) {
+    case "Running": return "Tailscale: connected as " + tsSelfName() + (tsLast.exit_node ? " via " + (tsLast.exit_node.name || tsLast.exit_node.ip) : "");
+    case "Stopped": return "Tailscale: off";
+    case "Starting": return "Tailscale: starting…";
+    case "NeedsLogin": return "Tailscale: needs login";
+    case "NeedsMachineAuth": return "Tailscale: waiting for approval in the admin console";
+    case "NoDaemon": return "Tailscale: tailscaled is not running";
+    default: return "Tailscale: " + tsLast.state;
+  }
+}
+function tsStripPaint() {
+  csTS.hidden = !(tsLast ? tsLast.installed : tsSeen === "1");
+  const [lamp, glint] = TS_LAMP[tsLampState()];
+  $("#cs-ts .cs-ico").innerHTML = iconCurrent("tailscale").replace(/#c8dcf8/gi, lamp).replace(/#f0f6ff/gi, glint);
+  const lines = [tsHead()];
+  if (tsLast && tsLast.self) {
+    if (tsLast.self.ip) lines.push(tsLast.self.ip);
+    if (tsLast.self.dns_name) lines.push(tsLast.self.dns_name);
+  }
+  if (tsDevices()) lines.push(tsDevices());
+  for (const h of (tsLast && tsLast.health) || []) lines.push("⚠ " + h);
+  csTS.title = lines.join("\n");
+}
+async function tsRefresh(force) {
+  try {
+    tsLast = await j("/v1/tailscale" + (force ? "?force=1" : ""));
+    try { localStorage.setItem("exe_cstrip_ts", tsLast.installed ? "1" : "0"); } catch (e) {}
+    tsStripPaint();
+  } catch (e) { /* keep the last known lamps */ }
+}
+// one change through the daemon; its answer is the fresh status. done is
+// the toast — a function when the words depend on the outcome
+async function tsSet(body, done) {
+  if (tsBusy) return;
+  tsBusy = true;
+  try {
+    tsLast = await j("/v1/tailscale/set", { method: "POST", json: body });
+    tsStripPaint();
+    if (done) toast(typeof done === "function" ? done() : done);
+  } catch (e) {
+    toast("Tailscale: " + e.message);
+    tsRefresh(true);
+  }
+  tsBusy = false;
+}
+// the desktop hangs off the tailnet when the daemon listens on the
+// Tailscale IP or this browser came in through it
+const tsDesktopOnTailnet = () => !!tsLast && (tsLast.via === "tailscale" || tsLast.listen_on_tailscale);
+async function tsTurnOff() {
+  if (tsDesktopOnTailnet() && !await confirmDialog({
+    message: "Turn Tailscale off?",
+    detail: "This desktop is reached through Tailscale. With Tailscale off, exe stays out of reach until Tailscale is turned back on at the machine itself.",
+    action: "Turn Off", danger: true })) return;
+  tsSet({ action: "down" }, "Tailscale is off.");
+}
+async function tsShields(up) {
+  if (up && tsDesktopOnTailnet() && !await confirmDialog({
+    message: "Put the shields up?",
+    detail: "Shields Up refuses every incoming connection over Tailscale — this desktop's too. You would have to lower them at the machine itself.",
+    action: "Shields Up", danger: true })) return;
+  tsSet({ action: "set", key: "shields_up", value: up }, up ? "Shields are up." : "Shields are down.");
+}
+async function tsExit(ip, name) {
+  if (ip && tsLast.via === "lan" && !tsPrefs().exit_node_allow_lan_access && !await confirmDialog({
+    message: "Send traffic through " + name + "?",
+    detail: "You reach this desktop over the local network and Allow LAN Access is off: with its traffic leaving through " + name + ", the machine may stop answering on the LAN.",
+    action: "Use Exit Node", danger: true })) return;
+  tsSet({ action: "set", key: "exit_node", value: ip }, ip ? "Traffic now leaves through " + name + "." : "No exit node: traffic leaves on its own.");
+}
+// a login link from tailscaled: opened if the browser allows, else copied
+async function tsLogin() {
+  await tsSet({ action: "login" });
+  const url = tsLast && tsLast.auth_url;
+  if (!url) { toast("Tailscale offered no login link — run tailscale up at the machine."); return; }
+  if (!window.open(url, "_blank", "noopener")) tsCopy(url, "open it to log in");
+}
+// copies where the page may (a secure origin), else shows the text
+async function tsCopy(text, what) {
+  try { await navigator.clipboard.writeText(text); toast("Copied " + text + (what ? " — " + what : "")); }
+  catch (e) { toast(text); }
+}
+function tsExitItems() {
+  const cur = tsLast.exit_node ? tsLast.exit_node.ip : "";
+  const offers = (tsLast.peers || []).filter(p => p.exit_node_option).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
+  const items = [{ label: "None", mark: !cur, act: () => { if (cur) tsExit("", ""); } }, "-"];
+  if (!offers.length) items.push({ label: "No device offers an exit node", dis: true });
+  for (const p of offers) items.push({
+    label: p.name + (p.location ? " · " + p.location : "") + (p.online ? "" : " (offline)"),
+    mark: cur === p.ip, dis: !p.online, act: () => { if (cur !== p.ip) tsExit(p.ip, p.name); },
+  });
+  items.push("-", { label: "Allow LAN Access", mark: !!tsPrefs().exit_node_allow_lan_access,
+    act: () => tsSet({ action: "set", key: "exit_node_allow_lan_access", value: !tsPrefs().exit_node_allow_lan_access },
+      () => "LAN access " + (tsPrefs().exit_node_allow_lan_access ? "stays open" : "goes through the exit node too") + ".") });
+  return items;
+}
+function tsDeviceItems() {
+  const on = (tsLast.peers || []).filter(p => p.online);
+  if (!on.length) return [{ label: "No other device is online", dis: true }];
+  return [{ label: "Pick one to copy its address", dis: true }, "-",
+    ...on.map(p => ({ label: p.name + " · " + p.os + (p.exit_node ? " · exit node" : ""), act: () => tsCopy(p.ip, p.name) }))];
+}
+function tsServeItems() {
+  const rows = tsLast.serve || [];
+  if (!rows.length) return [{ label: "Nothing is served", dis: true }];
+  return [{ label: "Pick one to copy its address", dis: true }, "-",
+    ...rows.map(r => ({ label: r.url + " → " + r.target + (r.public ? " · public (Funnel)" : ""), act: () => tsCopy(r.url, "served") }))];
+}
+const tsToggle = (label, key) => ({ label, mark: !!tsPrefs()[key],
+  act: () => tsSet({ action: "set", key, value: !tsPrefs()[key] }, () => label + (tsPrefs()[key] ? " is on." : " is off.")) });
+function tsStripMenu() {
+  if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
+  const items = [{ label: tsHead(), dis: true }];
+  if (tsLast && tsLast.installed) {
+    const st = tsLast.state, self = tsLast.self || {};
+    if (self.ip) items.push({ label: self.ip + (tsDevices() ? " · " + tsDevices() : ""), dis: true });
+    for (const h of tsLast.health || []) items.push({ label: tsShort(h), dis: true });
+    if (st === "NoDaemon" && tsLast.error) items.push({ label: tsShort(tsLast.error), dis: true });
+    items.push("-");
+    if (st === "NeedsLogin" || st === "NeedsMachineAuth") items.push({ label: "Log In…", act: tsLogin });
+    else if (st !== "NoDaemon") items.push(
+      { label: "Tailscale Active", mark: st === "Running" || st === "Starting", act: () => { if (st !== "Running") tsSet({ action: "up" }, () => tsHead()); } },
+      { label: "Tailscale Inactive", mark: st === "Stopped", act: () => { if (st !== "Stopped") tsTurnOff(); } });
+    if (st === "Running") {
+      items.push("-",
+        { label: "Exit Node", items: tsExitItems() },
+        { label: "Devices", items: tsDeviceItems() },
+        { label: "Serve", items: tsServeItems() });
+      if (tsLast.prefs) items.push("-",
+        tsToggle("Accept Routes", "accept_routes"),
+        tsToggle("Use Tailscale DNS", "accept_dns"),
+        { label: "Shields Up", mark: !!tsPrefs().shields_up, act: () => tsShields(!tsPrefs().shields_up) },
+        tsToggle("Tailscale SSH", "ssh"));
+      items.push("-", { label: "Copy This Machine's Address", act: () => tsCopy(self.dns_name || self.ip, "this machine") });
+    }
+    items.push({ label: "Admin Console…", act: () => window.open("https://login.tailscale.com/admin/machines", "_blank", "noopener") });
+  }
+  items.push("-", { label: "Check Now", act: () => tsRefresh(true).then(() => toast(tsHead())) });
+  showCtxMenu(0, 0, items, () => { csTS.classList.remove("down"); csMenuClosedAt = Date.now(); });
+  csTS.classList.add("down");
+  csMenuAt(csTS);
+}
+csTS.addEventListener("click", tsStripMenu);
+csTS.addEventListener("contextmenu", e => { e.preventDefault(); tsStripMenu(); });
+tsStripPaint();
+tsRefresh(false);
+setInterval(() => { if (!document.hidden) tsRefresh(false); }, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) tsRefresh(false); });
 
 // ---- cloudflare status summary ----
 async function sumOpen() {

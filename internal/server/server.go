@@ -81,6 +81,12 @@ type Server struct {
 	pricesMu sync.Mutex
 	prices   map[string]pricesEntry
 
+	// Cached tailscale CLI answer for the Control Strip's Tailscale
+	// module (tailscale.go).
+	tsMu  sync.Mutex
+	tsAt  time.Time
+	tsRes map[string]any
+
 	// Price alerts (alerts.go): the sampler's state, and Web Push
 	// (webpush.go): the VAPID key pair and the subscription file.
 	alertMu  sync.Mutex
@@ -239,6 +245,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/config", s.handleConfigPut)
 	mux.HandleFunc("POST /v1/daemon/restart", s.handleDaemonRestart)
 	mux.HandleFunc("GET /v1/tailscale", s.handleTailscale)
+	mux.HandleFunc("POST /v1/tailscale/set", s.handleTailscaleSet)
 	mux.HandleFunc("GET /v1/hostinfo", s.handleHostInfo)
 	mux.HandleFunc("GET /v1/routes", s.handleRoutes)
 	mux.HandleFunc("DELETE /v1/routes/{host}", s.handleRouteDelete)
@@ -768,14 +775,6 @@ func restartStdio(stateDir string) (stdout, stderr *os.File) {
 
 // TailscaleIP is this host's Tailscale IPv4; see config.TailscaleIP.
 func TailscaleIP() string { return config.TailscaleIP() }
-
-func (s *Server) handleTailscale(w http.ResponseWriter, r *http.Request) {
-	if ip := TailscaleIP(); ip != "" {
-		writeJSON(w, http.StatusOK, map[string]any{"detected": true, "ip": ip})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"detected": false})
-}
 
 // handleHostInfo reports this host for the About This Computer window:
 // hostname, machine model, LAN IPv4 and the Tailscale IPv4 when on a

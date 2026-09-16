@@ -61,7 +61,22 @@ The **Control Strip** in the bottom-left corner is OS 9's tray. Its first
 module is the Cloudflare heartbeat: the lamp on the cloud is green while
 the tunnel is healthy, yellow when it needs attention, grey while it is
 still checking; click it for Cloudflare Status, the Setup Wizard and Check
-Now. Beside it, the **Solana ticker** shows a token's coin and its dollar
+Now. Right of it, on a machine with Tailscale installed, the **Tailscale**
+module: a panel of nine lamps that lights Tailscale's four while the tailnet
+is connected, blue while the machine's traffic leaves through an exit node,
+yellow when something needs attention (a health warning, a login due), all
+dim while Tailscale is off. Its menu says which machine this is and how many
+devices are online; **Tailscale Active** and **Inactive** turn it on and off;
+**Exit Node** picks one of the devices offering one (and Allow LAN Access);
+**Devices** lists the online ones and **Serve** the Tailscale Serve rules —
+pick a row to copy its address; then Accept Routes, Use Tailscale DNS,
+Shields Up and Tailscale SSH toggle, and Admin Console… opens Tailscale's.
+Turning it off or raising shields while the desktop is itself reached
+through Tailscale asks first, because the desktop would go with it. The
+daemon asks the `tailscale` CLI on the machine and changes only those
+settings (`GET /v1/tailscale`, `POST /v1/tailscale/set`); it runs as
+Tailscale's operator user, so no sudo. Beside it, the **Solana ticker**
+shows a token's coin and its dollar
 price: SOL, or PUMP, MET or SKR — pick the one the tile wears from its menu.
 The menu lists them all with their day change, and the ecosystem tokens
 with their price in SOL as well; the figures are Coinbase's public spot

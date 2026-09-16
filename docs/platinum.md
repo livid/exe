@@ -138,6 +138,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   contextual menu whose left edge sits on the tile's separator and whose
   bottom line runs two rows into the strip; its current choice wears the
   5px dot 3px in from the border (`mark` on the item), not a check mark.
+  A module whose icon shows state (the Cloudflare lamp, the Tailscale
+  panel's lit lamps) keeps reserved colours in its art that the code
+  repaints per state — the icon stays one editable drawing. A pair of
+  marked lines (Tailscale Active / Inactive, as OS 9's AppleTalk Switch
+  module had) is how a module offers an on/off switch, not one line that
+  changes its words. A module tied to something the machine may lack
+  (Tailscale) hides its tile when the daemon says so and remembers that
+  per browser, so the strip has its final width from the first paint.
 - Show All Windows (the menubar button left of the magnifier, inverted
   like an open menu title while it is up): every open window flies into a
   grid on a field inset 24px from the desktop, 24px between tiles, 40px
