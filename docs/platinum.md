@@ -136,8 +136,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   takes the pointer. The tile under the pointer wears the wash
   (`.sa-hover`): `--hl` at 30 percent with a 1px `--hl` border and the
   window's name centred in bold 12px white with the icon labels' 1px
-  black shadow. A pick, the desk, the button or Escape puts everything
-  back.
+  black shadow; its colours fade in and out over 150ms (the name with
+  them), off under `prefers-reduced-motion`. A pick, the desk, the
+  button or Escape puts everything back.
 
 ## Seams, stability, phones
 

@@ -165,9 +165,15 @@ body.showall #rail { visibility: hidden; }
    Mission Control names the window you are about to pick — the desktop's
    one hover state, asked for by name */
 .sa-hover { position: absolute; display: flex; align-items: center; justify-content: center;
-  background: rgba(51,51,153,.3); border: 1px solid var(--hl); pointer-events: none; }
+  background: rgba(51,51,153,0); border: 1px solid rgba(51,51,153,0); pointer-events: none;
+  /* the wash fades in and out over 150ms (asked for); off, it is a transparent box left on the last tile */
+  transition: background-color .15s, border-color .15s; }
+.sa-hover.on { background: rgba(51,51,153,.3); border-color: var(--hl); }
 .sa-hover span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: #fff; text-shadow: 1px 1px 1px #000; font-weight: bold; font-size: 12px; line-height: 16px; padding: 0 6px; }
+  color: #fff; text-shadow: 1px 1px 1px #000; font-weight: bold; font-size: 12px; line-height: 16px; padding: 0 6px;
+  opacity: 0; transition: opacity .15s; /* the name rides the wash's fade */ }
+.sa-hover.on span { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .sa-hover, .sa-hover span { transition: none; } }
 
 /* ---------- desktop icons ---------- */
 #desktop { position: fixed; inset: calc(20px + var(--sat)) 0 0 0; }
@@ -3165,15 +3171,15 @@ function showAllExit() {
 function showAllToggle() { if (showAllOn) showAllExit(); else showAllEnter(); }
 $("#showall-btn").onclick = showAllToggle;
 // the wash over the tile under the pointer, one element moved from tile to
-// tile; the wash takes no pointer, so every event's offsets are the shield's own
+// tile and faded by a class (never hidden, so the fade-out can play where it
+// was); the wash takes no pointer, so every event's offsets are the shield's own
 const saHoverEl = el("div", { class: "sa-hover" }, el("span"));
-saHoverEl.hidden = true;
 $("#sa-shield").append(saHoverEl);
 let saHoverTile = null;
 function saHover(t) {
   if (t === saHoverTile) return;
   saHoverTile = t;
-  saHoverEl.hidden = !t;
+  saHoverEl.classList.toggle("on", !!t);
   if (!t) return;
   Object.assign(saHoverEl.style, { left: t.x + "px", top: t.y + "px", width: t.tw + "px", height: t.th + "px" });
   saHoverEl.firstChild.textContent = winLabel(t.w);
