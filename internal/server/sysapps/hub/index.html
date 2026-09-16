@@ -1338,13 +1338,16 @@ async function doPost() {
       return e;
     });
   try {
-    await publish("post.create", body);
+    const out = await publish("post.create", body);
     $("#text").value = "";
     attachments = [];
     renderChips();
     clearReplyTarget();
     say("");
-    refreshView();
+    // a reply sent into a thread: reopen it landed on what you just
+    // said, tinted, instead of back at the head
+    if (view.kind === "thread" && out.id) openThread(view.id, out.id);
+    else refreshView();
   } catch (e) { say(e.message, true); }
   updatePostBtn();
 }
