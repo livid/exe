@@ -127,6 +127,17 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - Desktop icons: 32x32 pixel art at exactly 32 CSS px, 11px white labels
   with a 1px black text shadow; selected is a `#333399` label and a darkened
   icon. Window lists show the 32px art scaled to 16.
+- Control Strip (`#cstrip`, bottom-left, 24px, rebuilt pixel for pixel from
+  OS 9): black outline, 13px sunk scroll wells, module tiles behind 1px
+  separators (face `#c0c0c0`, white top/left L, `#a0a0a0` inner and
+  `#808080` outer bottom/right L, a 16px icon at x2 y3, the solid 4x8 menu
+  triangle 3px from the right edge), the 18px tab. A standard tile is 30px;
+  a wide module (`.cs-mod.wide`, the price ticker, as OS 9's battery gauge
+  was wider) keeps the frame and bevel around a longer face and shows its
+  11px figure right-aligned in a slot of fixed width. A module's menu is a
+  contextual menu whose left edge sits on the tile's separator and whose
+  bottom line runs two rows into the strip; its current choice wears the
+  5px dot 3px in from the border (`mark` on the item), not a check mark.
 - Show All Windows (the menubar button left of the magnifier, inverted
   like an open menu title while it is up): every open window flies into a
   grid on a field inset 24px from the desktop, 24px between tiles, 40px

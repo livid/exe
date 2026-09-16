@@ -75,6 +75,11 @@ type Server struct {
 	cfHealthKey string
 	cfHealthRes map[string]any
 
+	// Cached Coinbase quotes for the Control Strip's price module, by
+	// pair list (prices.go).
+	pricesMu sync.Mutex
+	prices   map[string]pricesEntry
+
 	// Cached chat-backend detection for the Chat window, plus the in-flight
 	// detached reply per chat session (chatrun.go) — one at most, so two
 	// sends can't interleave a session's history.
@@ -215,6 +220,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/openai/logout", s.handleOpenAILogout)
 	mux.HandleFunc("POST /v1/cloudflare/wizard", s.handleCFWizard)
 	mux.HandleFunc("GET /v1/cloudflare/health", s.handleCFHealth)
+	mux.HandleFunc("GET /v1/prices", s.handlePrices)
 	mux.HandleFunc("GET /v1/config", s.handleConfigGet)
 	mux.HandleFunc("PUT /v1/config", s.handleConfigPut)
 	mux.HandleFunc("POST /v1/daemon/restart", s.handleDaemonRestart)

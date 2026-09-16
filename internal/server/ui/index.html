@@ -108,6 +108,21 @@ body.mobile #clock { padding: 0 10px; }
 .dd-item.open { background: var(--hl); color: #fff; }
 .dd-item.sub:hover::after, .dd-item.open::after { border-left-color: #fff; }
 .dd-item.dis.sub::after, .dd-item.dis.sub:hover::after { border-left-color: #888; }
+/* a module menu's current choice wears OS 9's 5px dot, sampled from the
+   Monitors module: three pixels in from the menu's black border */
+.dd-item.mark { position: relative; }
+.dd-mark { position: absolute; left: 1px; top: 10px; width: 5px; height: 5px; }
+.dd-mark svg { display: block; fill: #000; }
+.dd-item:hover .dd-mark svg { fill: #fff; }
+.dd-item.dis .dd-mark svg { fill: #888; }
+/* the price module's rows line up in columns: symbol, dollars, day change,
+   and the SOL price of the ecosystem tokens */
+.px-row { display: inline-flex; gap: 12px; font-variant-numeric: tabular-nums; }
+.px-row span { display: inline-block; text-align: right; }
+.px-row .s { width: 36px; text-align: left; }
+.px-row .u { width: 66px; }
+.px-row .c { width: 44px; }
+.px-row .k { width: 128px; text-align: left; }
 /* a panel whose items carry small icons — the desk menu's Windows list, the
    way OS 9's Application menu shows each running program beside its small
    icon: every row leaves the 16px column so labels line up whether or not
@@ -249,15 +264,26 @@ body.showall #rail { visibility: hidden; }
    top and left, the raised bevel, then the #808080 outer shadow */
 .cs-mod { position: relative; width: 31px; flex: none; border-left: 1px solid #000;
   background: #c0c0c0; padding: 1px 0 0 1px; }
-.cs-mod > .f { display: block; width: 29px; height: 21px; position: relative; background: #c0c0c0;
+/* a wide module (the price ticker, the way OS 9's battery gauge was wider
+   than its neighbours) keeps the same frame and bevel around a longer
+   face: the face and bevel take their widths from the tile */
+.cs-mod.wide { width: 96px; }
+.cs-mod > .f { display: block; height: 21px; position: relative; background: #c0c0c0;
   border-right: 1px solid #808080; border-bottom: 1px solid #808080; }
-.cs-mod .b { display: block; width: 28px; height: 20px; position: relative; }
-.cs-mod .b::before, .cs-mod .b::after { content: ""; position: absolute; box-sizing: border-box; width: 27px; height: 19px; }
+.cs-mod .b { display: block; height: 20px; position: relative; }
+.cs-mod .b::before, .cs-mod .b::after { content: ""; position: absolute; box-sizing: border-box; width: calc(100% - 1px); height: 19px; }
 .cs-mod .b::before { left: 0; top: 0; border-top: 1px solid #fff; border-left: 1px solid #fff; }
 .cs-mod .b::after { right: 0; bottom: 0; border-right: 1px solid #a0a0a0; border-bottom: 1px solid #a0a0a0; }
 .cs-ico { position: absolute; left: 1px; top: 2px; width: 16px; height: 16px; }
 .cs-ico svg { display: block; width: 16px; height: 16px; }
 .cs-tri { position: absolute; left: 21px; top: 6px; display: block; fill: #000; }
+.cs-mod.wide .cs-tri { left: auto; right: 3px; }
+/* the ticker's figure: 11px black, right-aligned in a slot between the icon
+   and the triangle that already has its final width, so a price arriving
+   later moves nothing */
+.cs-txt { position: absolute; left: 20px; right: 11px; top: 0; height: 19px; line-height: 19px;
+  font-size: 11px; text-align: right; white-space: nowrap; overflow: hidden; color: #000;
+  font-variant-numeric: tabular-nums; }
 /* pressed, while its menu is up: the bevel turns in — #404040 top/left,
    #808080 face, the shadows go light */
 .cs-mod.down { background: #404040; }
@@ -1233,6 +1259,7 @@ body.mobile th.sorted {
       <div class="cs-well cs-l" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
       <div class="cs-mods">
         <div class="cs-mod" id="cs-cf" title="Cloudflare status — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
+        <div class="cs-mod wide" id="cs-sol" title="Solana prices — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
       </div>
       <div class="cs-well cs-r" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
     </div>
@@ -2952,7 +2979,9 @@ const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="$
 //             alert-yellow #ffdd30 / #fff3a0, chat-pink #ff8888,
 //             sky-blue #99ccff, sun #ffff33, cloudflare-orange #f38020 /
 //             #ffb060 / #c8600a, lamp-green #33cc33 / #99ee99 (reserved —
-//             the Control Strip repaints exactly these per heartbeat)
+//             the Control Strip repaints exactly these per heartbeat),
+//             solana-purple #9945ff / #c9a3ff / #6b2fc4 with solana-green
+//             #14f195 (the price module's coin)
 // Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
 // they darken whatever sits beneath. Write chromatic colors as 6-digit hex
 // (pure grays may shorthand). ICX_PALETTE in the Icon Editor carries the
@@ -2969,6 +2998,17 @@ let CF_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="
   <path fill="#99ee99" d="M11 11h2v1H11zM11 12h1v1H11z"/>
 </svg>`;
 let cfLast = null; // the last Cloudflare heartbeat; declared here so an icon override can repaint before the strip code runs
+// the Control Strip's price module: a purple coin struck with Solana's
+// three bars — an object (a coin), the mark is what says which coin
+let SOL_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#9945ff" d="M5 1h6v1H5zM3 2h10v1H3zM2 3h12v2H2zM1 5h14v6H1zM2 11h12v2H2zM3 13h10v1H3zM5 14h6v1H5z"/>
+  <path fill="#c9a3ff" d="M5 1h5v1H5zM3 2h2v1H3zM2 3h1v2H2zM1 5h1v4H1z"/>
+  <path fill="#fff" d="M5 2h2v1H5zM4 3h1v1H4z"/>
+  <path fill="#6b2fc4" d="M6 14h5v1H6zM11 13h2v1H11zM13 11h1v2H13zM14 7h1v4H14z"/>
+  <path fill="#14f195" d="M5 4h6v1H5zM4 5h6v1H4zM4 7h6v1H4zM5 8h6v1H5zM5 10h6v1H5zM4 11h6v1H4z"/>
+  <path fill="#000" d="M5 0h6v1H5zM3 1h2v1H3zM11 1h2v1H11zM2 2h1v1H2zM13 2h1v1H13zM1 3h1v2H1zM14 3h1v2H14zM0 5h1v6H0zM15 5h1v6H15zM1 11h1v2H1zM14 11h1v2H14zM2 13h1v1H2zM13 13h1v1H13zM3 14h2v1H3zM11 14h2v1H11zM5 15h6v1H5z"/>
+</svg>`;
+let pxLast = null; // the last Coinbase answer, for the same reason
 let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
   <path d="M4.5 10.5 v3 l3 -3 z" fill="#DAD5CA" stroke="#000"/>
@@ -3827,6 +3867,8 @@ const ICON_DEFS = [
   { key: "todo-mini", label: "Todo (mini)", size: 16, get: () => MINI_TODO_ICON, set: s => MINI_TODO_ICON = s },
   { key: "cloudflare", label: "Cloudflare", size: 16, get: () => CF_ICON, set: s => CF_ICON = s,
     note: "the lamp's greens follow the Cloudflare heartbeat" },
+  { key: "solana", label: "Solana", size: 16, get: () => SOL_ICON, set: s => SOL_ICON = s,
+    note: "the Control Strip's price ticker" },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -3870,6 +3912,7 @@ function applyIconOverrides(ovs, custom) {
   }
   renderIcons(lastVMs);
   cfStripPaint();
+  pxStripPaint();
   tickClock();
   $("#about-icon").innerHTML = macIcon("running", 48);
   document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
@@ -4396,13 +4439,16 @@ document.addEventListener("mousemove", e => {
 // with the icon column. Submenus open on hover (a click opens them too,
 // for touch) to the right of the parent, overlapping it by 3px with the
 // first item level with the parent item, or to the left when there's no room.
+// the dot a module menu puts before its current choice (OS 9's, 5px)
+const DD_MARK = `<svg width="5" height="5" viewBox="0 0 5 5" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h5v3H0zM1 4h3v1H1z"/></svg>`;
 function ctxFill(panel, items, depth) {
   panel.replaceChildren();
   panel.classList.toggle("icons", items.some(it => it && it.icon));
   for (const it of items) {
     if (it === "-" || it.sep) { panel.append(el("div", { class: "dd-sep" })); continue; }
     const sub = !it.dis && Array.isArray(it.items);
-    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") });
+    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") + (it.mark ? " mark" : "") });
+    if (it.mark) { const m = el("span", { class: "dd-mark" }); m.innerHTML = DD_MARK; d.append(m); }
     if (it.icon) { const i = el("span", { class: "dd-ico" }); i.innerHTML = it.icon; d.append(i); }
     d.append(it.label);
     const act = sub ? () => ctxOpenSub(d, panel, it.items, depth + 1) : () => ctxCloseSubs(depth);
@@ -8090,11 +8136,12 @@ async function cfHeartbeat(force) {
 }
 
 // ---- Control Strip ----
-// The one module so far is the Cloudflare heartbeat. Its lamp is the icon's
-// reserved greens repainted per status; its menu pops up from the tile the
-// way an OS 9 module's does; the tab hides the strip down to the tab alone,
-// remembered per browser the way OS 9 remembered it per machine. The scroll
-// wells page the module row by one tile once it holds more than it shows.
+// Two modules: the Cloudflare heartbeat and the Solana price ticker below.
+// The heartbeat's lamp is the icon's reserved greens repainted per status;
+// a module's menu pops up from its tile the way an OS 9 module's does; the
+// tab hides the strip down to the tab alone, remembered per browser the way
+// OS 9 remembered it per machine. The scroll wells page the module row by
+// one tile once it holds more than it shows.
 const cstrip = $("#cstrip"), csTab = $("#cs-tab"), csCF = $("#cs-cf");
 const CF_LAMP = { ok: ["#33cc33", "#99ee99"], warn: ["#ffdd30", "#fff3a0"], off: ["#aaaaaa", "#dddddd"] };
 function cfStripPaint() {
@@ -8118,10 +8165,14 @@ function cfStripMenu() {
       toast(cfLast ? (cfLast.message || "Cloudflare status: " + cfLast.status) : "The Cloudflare check did not answer.")) },
   ], () => { csCF.classList.remove("down"); csMenuClosedAt = Date.now(); });
   csCF.classList.add("down");
-  // a module's menu grows out of its tile: left edge on the tile's separator
-  // line, bottom line two rows into the strip (sampled from OS 9)
-  const t = csCF.getBoundingClientRect(), s = cstrip.getBoundingClientRect(), m = ctxMenu.getBoundingClientRect();
-  ctxMenu.style.left = t.left + "px";
+  csMenuAt(csCF);
+}
+// a module's menu grows out of its tile: left edge on the tile's separator
+// line, bottom line two rows into the strip (sampled from OS 9) — unless a
+// narrow screen would cut it off, when it shifts left to fit
+function csMenuAt(tile) {
+  const t = tile.getBoundingClientRect(), s = cstrip.getBoundingClientRect(), m = ctxMenu.getBoundingClientRect();
+  ctxMenu.style.left = Math.max(0, Math.min(t.left, window.innerWidth - m.width - 4)) + "px";
   ctxMenu.style.top = Math.max(0, s.top + 3 - m.height) + "px";
 }
 csCF.addEventListener("click", cfStripMenu);
@@ -8140,6 +8191,89 @@ csTab.addEventListener("click", () => csCollapse(!cstrip.classList.contains("col
 for (const [sel, dir] of [[".cs-l", -1], [".cs-r", 1]])
   cstrip.querySelector(sel).addEventListener("click", () => cstrip.querySelector(".cs-mods").scrollBy({ left: dir * 31 }));
 cfStripPaint();
+
+// ---- Control Strip: Solana prices ----
+// The price ticker is a wide module, the way OS 9's battery module was: the
+// coin, the chosen token's dollar price, and a menu with all three — SOL,
+// and the ecosystem tokens PUMP and MET with their prices in SOL as well.
+// The figures are Coinbase's public spot prices by way of the daemon
+// (/v1/prices caches them a minute for every desktop on the node). Picking
+// a row puts that token on the tile, remembered per browser like the strip.
+const PX_TOKENS = ["SOL", "PUMP", "MET"];
+const PX_PAIRS = ["SOL-USD", "PUMP-USD", "MET-USD", "PUMP-SOL", "MET-SOL"];
+const csSol = $("#cs-sol");
+let pxShown = "SOL";
+try { const t = localStorage.getItem("exe_cstrip_token"); if (PX_TOKENS.includes(t)) pxShown = t; } catch (e) {}
+const pxQuote = pair => pxLast && pxLast.prices && pxLast.prices[pair] && pxLast.prices[pair].spot > 0 ? pxLast.prices[pair] : null;
+// dollars to the cent above a dollar, four significant figures below it
+// (PUMP trades in tenths of a cent); a price in SOL is always four figures
+const pxUSD = v => "$" + (v >= 1 ? v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v.toPrecision(4));
+const pxSOL = v => v.toPrecision(4) + " SOL";
+const pxWhen = () => pxLast && pxLast.checked_at ? new Date(pxLast.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+// the menu's head and the tooltip's last line: checking, down, or the time
+const pxHead = () => !pxLast ? "Solana: checking…"
+  : Object.values(pxLast.prices || {}).every(q => q.error) ? "Solana: Coinbase did not answer"
+  : "Solana: Coinbase spot, " + pxWhen();
+function pxChange(spot, open) {
+  if (!(spot > 0 && open > 0)) return "";
+  const c = (spot / open - 1) * 100;
+  return (c < 0 ? "−" : "+") + Math.abs(c).toFixed(1) + "%";
+}
+// the day change of a token in SOL follows from the two dollar opens —
+// Coinbase keeps no order book for PUMP-SOL, only the cross rate
+function pxCrossChange(tok) {
+  const a = pxQuote(tok + "-USD"), b = pxQuote("SOL-USD");
+  return a && b && a.open && b.open ? pxChange(a.spot / b.spot, a.open / b.open) : "";
+}
+function pxLine(tok) {
+  const q = pxQuote(tok + "-USD");
+  if (!q) return tok + " —";
+  const c = pxChange(q.spot, q.open), k = tok !== "SOL" && pxQuote(tok + "-SOL");
+  return tok + " " + pxUSD(q.spot) + (c ? " (" + c + ")" : "") + (k ? " = " + pxSOL(k.spot) : "");
+}
+function pxStripPaint() {
+  $("#cs-sol .cs-ico").innerHTML = iconCurrent("solana");
+  const q = pxQuote(pxShown + "-USD");
+  $("#cs-sol .cs-txt").textContent = q ? pxUSD(q.spot) : "—";
+  csSol.title = pxLast ? PX_TOKENS.map(pxLine).join("\n") + "\n" + pxHead() : "Solana prices — checking…";
+}
+async function pxRefresh(force) {
+  try {
+    pxLast = await j("/v1/prices?pairs=" + PX_PAIRS.join(",") + (force ? "&force=1" : ""));
+    pxStripPaint();
+  } catch (e) { /* keep the last figures */ }
+}
+function pxRow(tok) {
+  const q = pxQuote(tok + "-USD"), k = tok !== "SOL" ? pxQuote(tok + "-SOL") : null, kc = k ? pxCrossChange(tok) : "";
+  return el("span", { class: "px-row" },
+    el("span", { class: "s" }, tok),
+    el("span", { class: "u" }, q ? pxUSD(q.spot) : "—"),
+    el("span", { class: "c" }, q ? pxChange(q.spot, q.open) : ""),
+    el("span", { class: "k" }, k ? pxSOL(k.spot) + (kc ? " (" + kc + ")" : "") : ""));
+}
+function pxStripMenu() {
+  if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
+  showCtxMenu(0, 0, [
+    { label: pxHead(), dis: true },
+    "-",
+    ...PX_TOKENS.map(tok => ({ label: pxRow(tok), mark: tok === pxShown, act: () => {
+      pxShown = tok;
+      try { localStorage.setItem("exe_cstrip_token", tok); } catch (e) {}
+      pxStripPaint();
+    } })),
+    "-",
+    { label: "Update Now", act: () => pxRefresh(true).then(() =>
+      toast(pxLast ? PX_TOKENS.map(pxLine).join(" · ") : "Coinbase did not answer.")) },
+  ], () => { csSol.classList.remove("down"); csMenuClosedAt = Date.now(); });
+  csSol.classList.add("down");
+  csMenuAt(csSol);
+}
+csSol.addEventListener("click", pxStripMenu);
+csSol.addEventListener("contextmenu", e => { e.preventDefault(); pxStripMenu(); });
+pxStripPaint();
+pxRefresh(false);
+setInterval(() => { if (!document.hidden) pxRefresh(false); }, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pxRefresh(false); });
 
 // ---- cloudflare status summary ----
 async function sumOpen() {

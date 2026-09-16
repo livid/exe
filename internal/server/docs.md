@@ -57,6 +57,17 @@ window and reopening it returns to the same conversation), one icon per VM,
 one per installed app, plus **Newsfeed**, **Chat** (appears when Ollama is
 reachable) and the **Trash**. Double-click opens things.
 
+The **Control Strip** in the bottom-left corner is OS 9's tray. Its first
+module is the Cloudflare heartbeat: the lamp on the cloud is green while
+the tunnel is healthy, yellow when it needs attention, grey while it is
+still checking; click it for Cloudflare Status, the Setup Wizard and Check
+Now. Beside it, the **Solana ticker** shows a coin and the dollar price of
+SOL (or of PUMP or MET — pick the one the tile shows from its menu). Its
+menu lists all three with their day change, and the two ecosystem tokens
+with their price in SOL as well; the figures are Coinbase's public spot
+prices, fetched once a minute by the daemon and shared by every desktop on
+the node. The tab at the right hides the strip down to the tab alone.
+
 A Claude Code window's status line shows the session's figures at its
 right — the model, context in use, tokens, cost and the plan's 5-hour and
 7-day usage windows — kept current after every reply by Claude Code's own
@@ -335,8 +346,8 @@ how to drive the API and the VMs.
 
 One-time setup: run **Special → Cloudflare Setup Wizard…** with a Cloudflare
 API token (Zone → DNS → Edit, Account → Cloudflare Tunnel → Edit) and a
-remotely-managed tunnel. The Cloudflare dot in the menu bar shows tunnel
-health at a glance.
+remotely-managed tunnel. The Cloudflare module in the Control Strip
+(bottom-left) shows tunnel health at a glance.
 
 Then, in a VM's **Expose** tab, pick a port and an optional subdomain (it
 defaults to the VM name). exe creates the DNS record, updates the tunnel
