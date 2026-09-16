@@ -140,8 +140,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   9's dot (`mark` on the item), not a check mark: the real module menu
   (9pt Geneva, text 17px in) puts a 5px bullet 3px in from the border and
   10px short of the text, two rows below the cap top and one above the
-  baseline; scaled to the 12px menu that is a 6px dot 4px in, its top 9px
-  down the 24px row. A crispEdges sprite at integer scales, drawn
+  baseline; scaled to the 12px menu that is a 6px dot with its top 9px
+  down the 24px row, centred sideways in its column (7px to the border
+  and 7px to the text's ink; 6px each side of the coin in a panel with
+  icons) rather than hugging the border as OS 9's does — Livid read the
+  OS 9 spacing as unbalanced. A crispEdges sprite at integer scales, drawn
   `geometricPrecision` between 1x and 2x so 150% shows a round dot and
   not 7-then-8 device rows with a fringe.
   A module whose icon shows state (the Cloudflare lamp, the Tailscale

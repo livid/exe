@@ -112,14 +112,20 @@ body.mobile #clock { padding: 0 10px; }
    Monitors module in the QEMU Mac (9pt Geneva, text 17px in): a 5px
    bullet 3px in from the menu's black border, 10px short of the text,
    its top two rows below the digits' top and one row above the baseline.
-   Scaled to this menu's 12px type and 20px gutter that is a 6px dot 4px
-   in — the row sits 2px inside the border, so left: 2 — with its top
-   9px down the 24px row: two below the cap top, two above the baseline.
-   Integer scales draw it as pixels; at Windows' 150% the same pixels came
-   out 7 or 8 device pixels tall by turns with a fringe, so between 1x and
-   2x it is drawn as geometry instead */
+   Scaled to this menu's 12px type that is a 6px dot with its top 9px
+   down the 24px row: two below the cap top, two above the baseline.
+   Sideways it is centred in its column, not 3px in as OS 9 had it
+   (Livid: the margins read unbalanced): the column runs 19px from the
+   border's inner edge to the text box (1px panel padding + 18px row
+   padding), so left: 6 leaves 7px to the border and 7px to a capital's
+   ink; in a panel with icons the column is the 18px before the icon, so
+   there the dot sits at 5 with 6px each side. Integer scales draw it as
+   pixels; at Windows' 150% the same pixels came out 7 or 8 device pixels
+   tall by turns with a fringe, so between 1x and 2x it is drawn as
+   geometry instead */
 .dd-item.mark { position: relative; }
-.dd-mark { position: absolute; left: 2px; top: 9px; width: 6px; height: 6px; }
+.dd-mark { position: absolute; left: 6px; top: 9px; width: 6px; height: 6px; }
+.dropdown.icons .dd-mark { left: 5px; }
 .dd-mark svg { display: block; fill: #000; }
 @media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
   .dd-mark svg { shape-rendering: geometricPrecision; }
