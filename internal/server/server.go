@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -79,6 +80,14 @@ type Server struct {
 	// pair list (prices.go).
 	pricesMu sync.Mutex
 	prices   map[string]pricesEntry
+
+	// Price alerts (alerts.go): the sampler's state, and Web Push
+	// (webpush.go): the VAPID key pair and the subscription file.
+	alertMu  sync.Mutex
+	alerts   *alertState
+	pushMu   sync.Mutex
+	vapidKey *ecdsa.PrivateKey
+	vapidPub string
 
 	// Cached chat-backend detection for the Chat window, plus the in-flight
 	// detached reply per chat session (chatrun.go) — one at most, so two
@@ -221,6 +230,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/cloudflare/wizard", s.handleCFWizard)
 	mux.HandleFunc("GET /v1/cloudflare/health", s.handleCFHealth)
 	mux.HandleFunc("GET /v1/prices", s.handlePrices)
+	mux.HandleFunc("GET /v1/alerts", s.handleAlerts)
+	mux.HandleFunc("GET /v1/push/key", s.handlePushKey)
+	mux.HandleFunc("POST /v1/push/subscribe", s.handlePushSubscribe)
+	mux.HandleFunc("DELETE /v1/push/subscribe", s.handlePushSubscribe)
+	mux.HandleFunc("POST /v1/push/test", s.handlePushTest)
 	mux.HandleFunc("GET /v1/config", s.handleConfigGet)
 	mux.HandleFunc("PUT /v1/config", s.handleConfigPut)
 	mux.HandleFunc("POST /v1/daemon/restart", s.handleDaemonRestart)

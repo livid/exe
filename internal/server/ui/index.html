@@ -8266,6 +8266,73 @@ async function pxRefresh(force) {
     pxLast = await j("/v1/prices?pairs=" + PX_PAIRS.join(",") + (force ? "&force=1" : ""));
     pxStripPaint();
   } catch (e) { /* keep the last figures */ }
+  pxAlertsRefresh();
+}
+// ---- price alerts ----
+// The daemon samples every minute and sends a notification when a token
+// makes a rare move (alerts.go, docs/price-alerts.md). "Notify Me of Big
+// Moves" subscribes this browser through the service worker and hands the
+// subscription to the daemon; a subscription found on load is sent again so
+// the daemon's list heals itself. An open desktop also hears about a new
+// move as a toast, from the same minute poll as the prices.
+let pxPushSub = null, pxAlerts = null, pxAlertSeen = 0, pxAlertsPrimed = false;
+const pxPushable = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const pxKeyBytes = k => Uint8Array.from(atob(k.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+async function pxPushInit() {
+  if (!pxPushable()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    pxPushSub = await reg.pushManager.getSubscription();
+    if (pxPushSub) await j("/v1/push/subscribe", { method: "POST", json: pxPushSub.toJSON() });
+  } catch (e) {}
+}
+async function pxPushToggle() {
+  try {
+    if (pxPushSub) {
+      await j("/v1/push/subscribe", { method: "DELETE", json: { endpoint: pxPushSub.endpoint } });
+      await pxPushSub.unsubscribe();
+      pxPushSub = null;
+      toast("Big-move notifications are off on this device.");
+      return;
+    }
+    if (!pxPushable()) {
+      toast(document.body.classList.contains("mobile")
+        ? "Add exe to the Home Screen first — notifications need the installed app."
+        : "This browser cannot receive push notifications.");
+      return;
+    }
+    if (await Notification.requestPermission() !== "granted") { toast("Notifications were not allowed."); return; }
+    const { key } = await j("/v1/push/key");
+    const reg = await navigator.serviceWorker.ready;
+    pxPushSub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pxKeyBytes(key) });
+    await j("/v1/push/subscribe", { method: "POST", json: pxPushSub.toJSON() });
+    toast("On: big moves of SOL, PUMP, MET and SKR will reach this device.");
+  } catch (e) { toast("Could not turn notifications on: " + e.message); }
+}
+async function pxAlertsRefresh() {
+  try {
+    pxAlerts = await j("/v1/alerts");
+    const ids = pxAlerts.alerts.map(a => a.id);
+    const fresh = pxAlerts.alerts.filter(a => !a.held_back && a.id > pxAlertSeen);
+    if (pxAlertsPrimed && fresh.length) toast(fresh[0].title + " — " + fresh[0].body);
+    pxAlertSeen = Math.max(pxAlertSeen, ...ids);
+    pxAlertsPrimed = true;
+  } catch (e) {}
+}
+// the Recent Moves submenu: the last eight, newest first, then the thresholds
+function pxRecentItems() {
+  const items = [];
+  const when = t => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  for (const a of (pxAlerts ? pxAlerts.alerts : []).slice(0, 8))
+    items.push({ label: a.title + (a.held_back ? " (held back)" : "") + " · " + when(a.t), dis: true });
+  if (!items.length) items.push({ label: pxAlerts ? "No big moves yet" : "Checking…", dis: true });
+  if (pxAlerts && pxAlerts.rules) { // short lines: this submenu opens on phones too
+    const r = t => t + " " + pxAlerts.rules[t].hour + "% / " + pxAlerts.rules[t].day + "%";
+    items.push("-", { label: "A move: in an hour / in a day", dis: true },
+      { label: r("SOL") + " · " + r("PUMP"), dis: true }, { label: r("MET") + " · " + r("SKR"), dis: true },
+      { label: "at most " + pxAlerts.cap + " a day per token", dis: true });
+  }
+  return items;
 }
 function pxRow(tok) {
   const q = pxQuote(tok + "-USD"), k = tok !== "SOL" ? pxQuote(tok + "-SOL") : null, kc = k ? pxCrossChange(tok) : "";
@@ -8286,6 +8353,12 @@ function pxStripMenu() {
       pxStripPaint();
     } })),
     "-",
+    { label: "Notify Me of Big Moves", mark: !!pxPushSub, act: pxPushToggle },
+    ...(pxPushSub ? [{ label: "Send a Test Notification", act: () => j("/v1/push/test", { method: "POST" })
+      .then(r => toast(r.sent ? "Sent to " + r.sent + " device" + (r.sent === 1 ? "" : "s") + "." : "Nothing sent: " + (r.errors || []).join("; ")))
+      .catch(e => toast("The test did not go out: " + e.message)) }] : []),
+    { label: "Recent Moves", items: pxRecentItems() },
+    "-",
     { label: "Update Now", act: () => pxRefresh(true).then(() =>
       toast(pxLast ? PX_TOKENS.map(pxLine).join(" · ") : "Coinbase did not answer.")) },
   ], () => { csSol.classList.remove("down"); csMenuClosedAt = Date.now(); });
@@ -8296,6 +8369,7 @@ csSol.addEventListener("click", pxStripMenu);
 csSol.addEventListener("contextmenu", e => { e.preventDefault(); pxStripMenu(); });
 pxStripPaint();
 pxRefresh(false);
+pxPushInit();
 setInterval(() => { if (!document.hidden) pxRefresh(false); }, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pxRefresh(false); });
 

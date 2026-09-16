@@ -219,6 +219,10 @@ func cmdServe() error {
 	// own; it idles until hub.url / hub.agent.* are configured.
 	go srv.RunHubAgent(context.Background())
 
+	// The ticker's price alerts: a minute-by-minute sampler that pushes a
+	// notification when a token makes a rare move (docs/price-alerts.md).
+	go srv.RunAlerts(context.Background())
+
 	apiHandler := srv.Handler()
 	proxyHandler := px.Handler()
 	errc := make(chan error, 4)

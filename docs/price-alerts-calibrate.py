@@ -16,8 +16,8 @@ ten minutes rather than two; it errs on the quiet side.
 import bisect, datetime as dt, json, os, statistics, sys, time, urllib.request
 from collections import defaultdict
 
-# token: (1h move %, 24h move %) that earns a notification — the picked values
-THRESHOLDS = {"SOL-USD": (3, 8), "PUMP-USD": (6, 15), "MET-USD": (8, 20), "SKR-USD": (10, 30)}
+# token: (1h move %, 24h move %) that earns a notification — what alerts.go uses
+THRESHOLDS = {"SOL-USD": (2.5, 6), "PUMP-USD": (5, 12), "MET-USD": (6, 15), "SKR-USD": (8, 25)}
 CAP, COOLDOWN, LADDER_MULTS = 4, 30 * 60, (1, 1.5, 2, 2)
 DAYS, GRANULARITY = 30, 300
 

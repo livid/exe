@@ -66,7 +66,15 @@ price: SOL, or PUMP, MET or SKR — pick the one the tile wears from its menu.
 The menu lists them all with their day change, and the ecosystem tokens
 with their price in SOL as well; the figures are Coinbase's public spot
 prices, fetched once a minute by the daemon and shared by every desktop on
-the node. The tab at the right hides the strip down to the tab alone.
+the node. **Notify Me of Big Moves** in that menu turns on push
+notifications for this device (on a phone, the app added to the Home
+Screen): you hear when a token moves more in an hour or a day than it
+rarely does — SOL 2.5% / 6%, PUMP 5% / 12%, MET 6% / 15%, SKR 8% / 25% —
+never more than four times per token in 24 hours; a move that qualifies
+while the four are spent is counted into the next one. **Recent Moves**
+lists the last ones, **Send a Test Notification** checks the road, and the
+menu item again turns it off. The tab at the right hides the strip down to
+the tab alone.
 
 A Claude Code window's status line shows the session's figures at its
 right — the model, context in use, tokens, cost and the plan's 5-hour and
