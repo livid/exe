@@ -66,6 +66,12 @@ textarea { resize: none; }
 /* composer: a shallow document field + actions row */
 #composer { display: flex; flex-direction: column; gap: 6px; }
 #composer.hidden { display: none; }
+/* the strip that names the reply the composer answers; hidden when the
+   target is the thread head, the default */
+#reply-to { display: none; align-items: center; gap: 8px; font-size: 11px; color: #777; }
+#reply-to.on { display: flex; }
+#reply-to .rt-q { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#reply-to b { color: var(--black); }
 #text { height: 56px; font: 12px/1.5 var(--font); }
 #c-row { display: flex; gap: 6px; align-items: center; }
 #c-status { flex: 1; font-size: 11px; color: #777;
@@ -269,6 +275,7 @@ canvas.ava-big { image-rendering: pixelated; }
     <span class="muted" style="padding:0" id="thread-title">Thread</span>
   </div>
   <div id="composer">
+    <div id="reply-to"><span class="rt-q" id="rt-label"></span><button class="ghost sm" id="rt-clear" aria-label="Answer the thread head instead">×</button></div>
     <textarea id="text" placeholder="What's happening?"></textarea>
     <div id="chips"></div>
     <div id="c-row">
@@ -344,6 +351,7 @@ let hubInfo = null;  // GET /v1/hub
 let who = null;      // {id, name, pubkey} from the daemon
 let myProfile = null;
 let view = { kind: "feed" }; // or {kind:"thread", id} or {kind:"search", q, oldest}
+let replyTarget = null;      // in a thread: the post the composer answers; null = the view's head
 let attachments = [];        // [{cid, mime, filename}], plus a converted file's facts; no cid while converting
 let oldestId = "";           // feed keyset cursor
 const feedEl = $("#feed"), cStatus = $("#c-status");
@@ -665,6 +673,12 @@ function renderPost(p, opts = {}) {
     node.style.cursor = "default";
     node.onclick = e => { if (!e.target.closest("a, button, .p-text, .p-card, .p-vid, .p-aud")) openThread(p.id); };
     rep.onclick = () => openThread(p.id);
+  } else {
+    // in a thread any post can be answered in place: Reply aims the
+    // composer at it (the head is the composer's target by default)
+    const rp = el("span", { class: "p-replies" }, "Reply");
+    rp.onclick = e => { e.stopPropagation(); setReplyTarget(p); };
+    foot.append(rp);
   }
   if (who && p.author === who.id) {
     const x = el("button", { class: "ghost sm danger p-del", title: "Delete this post" }, "×");
@@ -751,8 +765,27 @@ function threadNode(p, depth = p.depth || 1) {
   return n;
 }
 
+// setReplyTarget aims the composer at one post of the open thread; the
+// strip above the text names it and quotes its first words, and × (or
+// choosing the head) goes back to answering the head.
+function setReplyTarget(p) {
+  if (p.id === view.id) { clearReplyTarget(); $("#text").focus(); return; }
+  replyTarget = p;
+  const cut = (p.text || "").replace(/\s+/g, " ").trim();
+  $("#rt-label").replaceChildren("Replying to ", el("b", {}, p.author_name || p.author),
+    cut ? " — " + (cut.length > 80 ? cut.slice(0, 80) + "…" : cut) : "");
+  $("#reply-to").classList.add("on");
+  $("#text").focus();
+}
+function clearReplyTarget() {
+  replyTarget = null;
+  $("#reply-to").classList.remove("on");
+}
+$("#rt-clear").onclick = () => { clearReplyTarget(); $("#text").focus(); };
+
 async function openThread(id) {
   view = { kind: "thread", id };
+  clearReplyTarget();
   $("#thread-head").classList.add("on");
   $("#text").placeholder = "Write a reply…";
   feedEl.replaceChildren(placeholders(3));
@@ -773,6 +806,7 @@ async function openThread(id) {
 
 function showFeed() {
   view = { kind: "feed" };
+  clearReplyTarget();
   $("#thread-head").classList.remove("on");
   $("#text").placeholder = "What's happening?";
   loadFeed();
@@ -797,6 +831,7 @@ async function openSearch(q, more) {
     loadingMore = true;
   } else {
     view = { kind: "search", q, oldest: "" };
+    clearReplyTarget();
     lastQuery = q;
     $("#thread-head").classList.add("on");
     $("#thread-title").textContent = "Find \u201c" + q + "\u201d";
@@ -1265,7 +1300,7 @@ async function doPost() {
   $("#post").disabled = true;
   say("Posting…");
   const body = { text };
-  if (view.kind === "thread") body.reply_to = view.id;
+  if (view.kind === "thread") body.reply_to = replyTarget ? replyTarget.id : view.id;
   if (attachments.length)
     body.embeds = attachments.map(a => {
       const e = { cid: a.cid, mime: a.mime, filename: a.filename, alt: a.filename };
@@ -1279,6 +1314,7 @@ async function doPost() {
     $("#text").value = "";
     attachments = [];
     renderChips();
+    clearReplyTarget();
     say("");
     refreshView();
   } catch (e) { say(e.message, true); }

@@ -467,6 +467,10 @@ captured, so the link still reads after the page is gone.
 A link to a picture on IPFS, a gateway address such as ipfs.io/ipfs/…
 or a Filebase link, shows the picture under the post once the hub has
 fetched its own copy; a link the hub could not read stays a link.
+Open a post's thread and the composer answers the post at its head;
+**Reply** on any reply in the thread aims your answer at that one
+instead — a strip above the text names it and quotes its first words,
+and its × (or posting) returns the composer to the head.
 
 Attach a video, a sound or a GIF and, on a hub that converts media (it
 says so in Hub Info), the original goes to the hub's ffmpeg: the chip
