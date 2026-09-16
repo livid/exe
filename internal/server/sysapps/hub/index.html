@@ -108,7 +108,10 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-name { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-id { font: 10px var(--mono); color: #999; }
 .p-time { font-size: 10px; color: #777; margin-left: auto; flex: none; }
-.p-text { margin: 3px 0 0 22px; white-space: pre-wrap; overflow-wrap: break-word;
+/* the body hangs from the author name's left edge: the 14px avatar plus
+   the head's 6px gap, so a post's text, card, pictures and foot all start
+   on the same vertical line as the name (22px sat 2px right of it) */
+.p-text { margin: 3px 0 0 20px; white-space: pre-wrap; overflow-wrap: break-word;
   user-select: text; cursor: text; }
 .p-text a { color: var(--hl); }
 /* `inline code` in a post: Monaco on a slightly darker Platinum field */
@@ -125,7 +128,7 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-text .first { margin-top: 0; }
 /* flex-start, not the default stretch: a stretched flex line would pull every
    picture in it to the tallest sibling's height and distort its shape */
-.p-embeds { margin: 6px 0 0 22px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
+.p-embeds { margin: 6px 0 0 20px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
 .p-embeds img { max-width: 180px; max-height: 140px; border: 1px solid var(--black);
   background: var(--g300); cursor: pointer; }
 .p-file { font-size: 11px; border: 1px solid var(--black); background: var(--g200); padding: 2px 8px; }
@@ -152,7 +155,7 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-page::before { content: ""; position: absolute; left: 7px; top: 3px; width: 10px; height: 12px; box-sizing: border-box;
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="12" shape-rendering="crispEdges"><path fill="%23fff" d="M1 1h8v10h-8z"/><path fill="black" d="M0 0h10v1h-10z M0 11h10v1h-10z M0 1h1v10h-1z M9 1h1v10h-1z M1 3h8v1h-8z M1 6h8v1h-8z M1 9h8v1h-8z"/></svg>') no-repeat; }
 .p-pagedl { flex: none; font-size: 10px; color: var(--hl); cursor: default; }
-.p-foot { margin: 5px 0 0 22px; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.p-foot { margin: 5px 0 0 20px; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
 .p-replies { font-size: 10px; color: var(--hl); white-space: nowrap; }
 /* the thread's newest reply, one quiet ellipsized line on the foot */
 .p-latest { font-size: 10px; color: #777; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -164,7 +167,7 @@ canvas.ava-big { image-rendering: pixelated; }
    the window; past that the levels flatten, so a phone keeps its text */
 .post.deep { padding-left: min(calc(10px + (var(--d, 2) - 1) * 18px), 40%); border-left: 1px solid #ddd; }
 /* a link card: the post's first link, unfurled by the hub at ingest */
-.p-card { margin: 6px 0 0 22px; max-width: 400px; border: 1px solid var(--black); background: #fff;
+.p-card { margin: 6px 0 0 20px; max-width: 400px; border: 1px solid var(--black); background: #fff;
   box-shadow: 1px 1px 0 var(--black); }
 .p-card .c-m { display: flex; text-decoration: none; color: var(--black); }
 .p-card .c-i { flex: none; width: 48px; border-right: 1px solid var(--black); }
