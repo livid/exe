@@ -679,7 +679,7 @@ function renderPost(p, opts = {}) {
       const cut = (p.last_reply.text || "").replace(/\s+/g, " ").trim();
       const lat = el("span", { class: "p-latest" },
         el("b", {}, p.last_reply.author_name || p.last_reply.author), cut ? " " + cut : "");
-      lat.onclick = e => { e.stopPropagation(); openThread(p.id); };
+      lat.onclick = e => { e.stopPropagation(); openThread(p.id, p.last_reply.id); };
       foot.append(lat);
     }
     node.style.cursor = "default";
@@ -795,7 +795,7 @@ function clearReplyTarget() {
 }
 $("#rt-clear").onclick = () => { clearReplyTarget(); $("#text").focus(); };
 
-async function openThread(id) {
+async function openThread(id, jumpTo) {
   view = { kind: "thread", id };
   clearReplyTarget();
   $("#thread-head").classList.add("on");
@@ -803,7 +803,8 @@ async function openThread(id) {
   feedEl.replaceChildren(placeholders(3));
   try {
     const out = await hget("/v1/post/" + id);
-    const headNode = renderPost(out.post, { inThread: true, focus: true });
+    // jumping to one reply, that reply wears the tint, not the head
+    const headNode = renderPost(out.post, { inThread: true, focus: !jumpTo });
     headNode.dataset.depth = 0;
     feedEl.replaceChildren(headNode);
     // the whole tree in reading order, a reply under the reply it
@@ -811,6 +812,11 @@ async function openThread(id) {
     for (const p of out.thread || out.replies) feedEl.append(threadNode(p));
     $("#thread-title").textContent = "Thread — " +
       (out.post.author_name || out.post.author);
+    if (jumpTo) {
+      const n = feedEl.querySelector(`[data-id="${CSS.escape(jumpTo)}"]`);
+      if (n) { n.classList.add("focus"); n.scrollIntoView({ block: "center" }); }
+      else headNode.classList.add("focus"); // the reply is gone: land as usual
+    }
   } catch (e) {
     feedEl.replaceChildren(el("div", { class: "muted" }, "Load failed: " + e.message));
   }
