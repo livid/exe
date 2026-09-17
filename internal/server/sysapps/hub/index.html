@@ -251,6 +251,10 @@ canvas.ava-big { image-rendering: pixelated; }
   padding: 0 1px; } /* a comma alone still shows its field */
 .dd-head del { color: #b3413c; text-decoration: line-through; }
 .dd-head del + ins { margin-left: 4px; }
+/* the same line holding a whole rewritten sentence: wider, never wider
+   than a phone, and a very long one scrolls inside the layer instead of
+   growing it off the window */
+.dd-head.wide { max-width: min(360px, calc(100vw - 16px)); max-height: 162px; overflow-y: auto; }
 
 /* toast — the desktop's #status-bar pattern */
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -1501,13 +1505,15 @@ $("#text").addEventListener("input", e => {
 // contextual menu) opens a floating layer under it, a contextual menu
 // that starts with the correction in the pencil's marks: Accept makes
 // that one change, Ignore drops it for this post, Accept All makes every
-// change still marked. Changes go in as typing does, so Undo takes them
-// back. Nothing is added to the window and nothing in it moves: the rules
-// are laid over the field, the menu floats, and the count shows in the
-// composer's status slot while that has nothing else to say. With no
-// working Blue Pencil the composer is the plain field it always was, and
-// the browser's own spelling check stays on in it; with one, the pencil
-// is the only proofreader in the field.
+// change still marked, and Show Rewritten Sentence swaps the layer for
+// the whole sentence as it will read, to accept as one. Changes go in as
+// typing does, so Undo takes them back. Nothing is added to the window
+// and nothing in it moves: the rules are laid over the field, the menu
+// floats, and the count shows in the composer's status slot while that
+// has nothing else to say. With no working Blue Pencil the composer is
+// the plain field it always was, and the browser's own spelling check
+// stays on in it; with one, the pencil is the only proofreader in the
+// field.
 const textEl = $("#text"), marksEl = $("#marks"), ctxEl = $("#ctx");
 const PENCIL_CFG_URL = "/v1/apps/bluepencil/data/config.json";
 const PENCIL_DEBOUNCE = 700; // ms of quiet before a changed paragraph goes to the model (Blue Pencil's)
@@ -1936,7 +1942,7 @@ function showMenu(x, y, items) {
   hideMenu();
   ctxEl.replaceChildren(...items.map(it => {
     if (it === "-") return el("div", { class: "dd-sep" });
-    if (it.head) return el("div", { class: "dd-head" }, ...it.head);
+    if (it.head) return el("div", { class: "dd-head" + (it.wide ? " wide" : "") }, ...it.head);
     const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") }, it.label);
     if (!it.dis) d.onclick = () => { hideMenu(); it.act(); };
     return d;
@@ -1963,15 +1969,77 @@ function markAt(x, y) {
   return null;
 }
 // the menu hangs under the ruled word, from the line the click fell on
+const showBreaks = t => t.replace(/\n/g, "\u21b5");
 function markMenu(hit) {
   const m = hit.m;
   if (!m) return;
-  const show = t => t.replace(/\n/g, "↵");
-  showMenu(Math.round(hit.r.left) - 1, Math.round(hit.r.bottom) + 2, [
-    { head: m.parts.map(p => p.k ? el(p.k < 0 ? "del" : "ins", {}, show(p.t)) : show(p.t)) }, "-",
+  const x = Math.round(hit.r.left) - 1, y = Math.round(hit.r.bottom) + 2;
+  showMenu(x, y, [
+    { head: m.parts.map(p => p.k ? el(p.k < 0 ? "del" : "ins", {}, showBreaks(p.t)) : showBreaks(p.t)) }, "-",
     { label: "Accept", act: () => pencilApply([m]) },
     { label: "Ignore", act: () => { pIgnored.add(markKey(m)); pencilRender(); } }, "-",
+    { label: "Show Rewritten Sentence", act: () => sentenceMenu(m, x, y) },
     { label: "Accept All", act: () => pencilApply(pMarks), dis: pMarks.length < 2 },
+  ]);
+}
+
+// ---- the whole rewritten sentence ----
+// A word's menu shows one change; Show Rewritten Sentence puts a second
+// layer in its place, under the same word, with the sentence round it as
+// it will read with every change in it made — drawn as Blue Pencil's
+// checked pane draws it: the new words on the pale-blue field (hover one
+// for what it replaced), a word that simply goes struck out, so the line
+// reads as the rewrite and still shows where it differs. Accept Sentence
+// makes those changes and leaves the rest of the post marked.
+// Where a sentence ends: a full stop, question or exclamation mark (and
+// what closes a quotation after it) before a space or the end, their CJK
+// forms wherever they stand, or a line break. Rough on purpose — "e.g."
+// cuts one short and the view just shows less — because what is shown is
+// always the field's own words with the marks inside them made, never a
+// guess at the model's sentences. A mark that reaches across an end takes
+// the next sentence in, and so does any mark the range then cuts into.
+const SENT_END = /[.!?\u2026]+["'\u201d\u2019)\]]*(?=\s|$)|[\u3002\uff01\uff1f]+[\u201d\u2019\u300d\u300f\uff09]*|\n+/g;
+function sentenceOf(v, m) {
+  const ends = [...v.matchAll(SENT_END)].map(x => x.index + x[0].length);
+  ends.push(v.length);
+  const from = i => { let s = 0; for (const e of ends) { if (e > i) break; s = e; } return s; };
+  const to = i => ends.find(e => e > i);
+  let s = from(m.start), e = to(Math.max(m.start, m.end - 1));
+  for (;;) {
+    let s2 = s, e2 = e;
+    for (const x of pMarks) {
+      if (x.start < e && x.end > s) { s2 = Math.min(s2, from(x.start)); e2 = Math.max(e2, to(Math.max(x.start, x.end - 1))); }
+    }
+    if (s2 === s && e2 === e) break;
+    s = s2; e = e2;
+  }
+  const inside = pMarks.filter(x => x.start >= s && x.end <= e);
+  // the space between sentences is not part of one, unless a mark holds it
+  const lo = inside.length ? inside[0].start : e, hi = inside.length ? inside[inside.length - 1].end : s;
+  while (s < lo && /\s/.test(v[s])) s++;
+  while (e > hi && /\s/.test(v[e - 1])) e--;
+  return { s, e, inside };
+}
+function sentenceMenu(m, x, y) {
+  const v = textEl.value;
+  if (v.slice(m.start, m.end) !== m.was) return;
+  const { s, e, inside } = sentenceOf(v, m), head = [];
+  let at = s;
+  for (const k of inside) {
+    head.push(showBreaks(v.slice(at, k.start)));
+    for (let i = 0; i < k.parts.length; i++) {
+      const p = k.parts[i], q = k.parts[i + 1];
+      if (!p.k) head.push(showBreaks(p.t));
+      else if (p.k < 0 && q && q.k > 0) { head.push(el("ins", { title: "was: " + p.t }, showBreaks(q.t))); i++; }
+      else head.push(el(p.k < 0 ? "del" : "ins", { title: p.k < 0 ? "removed" : "added" }, showBreaks(p.t)));
+    }
+    at = k.end;
+  }
+  head.push(showBreaks(v.slice(at, e)));
+  showMenu(x, y, [
+    { head, wide: true }, "-",
+    { label: "Accept Sentence", act: () => pencilApply(inside) },
+    { label: "Accept All", act: () => pencilApply(pMarks), dis: pMarks.length <= inside.length },
   ]);
 }
 textEl.addEventListener("click", e => {
