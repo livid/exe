@@ -100,9 +100,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   the app contextual menu (Blue Pencil's `.dropdown` block) hung 2px under
   the word, opening with a `.dd-head` line that never inverts, and never
   taking the focus from the field. A menu line that shows more (Show
-  Rewritten Sentence) puts a second layer of the same kind in the same
-  place, its head `.dd-head.wide` (360px at most, never wider than a
-  phone, scrolling past nine lines). Nothing is added to the layout.
+  Rewritten Sentence) puts a second layer of the same kind at the same
+  left edge but under the field's bottom edge, so the text it is compared
+  with stays uncovered; its head is `.dd-head.wide` (360px at most, never
+  wider than a phone, scrolling past nine lines). Nothing is added to the
+  layout.
 - Status bar: 15px total, a 1px black top border and a 14px `#ddd` face,
   11px `#333` text, `inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px
   0 #aaa`. Text only. Buttons never sit on a status line; they get a row of

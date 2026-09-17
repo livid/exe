@@ -485,10 +485,10 @@ the correction in the pencil's marks — what goes struck out in red, what
 comes in on pale blue. **Accept** makes that change, **Ignore** drops it
 for this post, **Accept All** makes every change still marked; an
 accepted change is typing like any other, so Undo takes it back. **Show
-Rewritten Sentence** swaps the menu, under the same word, for the whole
-sentence as it will read with its changes made — the new words on pale
-blue (hover one for what it replaced), a word that simply goes struck
-out — so you can compare it with your own line above; **Accept
+Rewritten Sentence** swaps the menu for the whole sentence as it will
+read with its changes made — the new words on pale blue (hover one for
+what it replaced), a word that simply goes struck out — hung under the
+field, so your own lines stay whole above it to compare; **Accept
 Sentence** there makes that sentence's changes and leaves the rest of
 the post marked. A comma
 to add, or a missing word, rules the word it follows. The line beside

@@ -1978,15 +1978,18 @@ function markMenu(hit) {
     { head: m.parts.map(p => p.k ? el(p.k < 0 ? "del" : "ins", {}, showBreaks(p.t)) : showBreaks(p.t)) }, "-",
     { label: "Accept", act: () => pencilApply([m]) },
     { label: "Ignore", act: () => { pIgnored.add(markKey(m)); pencilRender(); } }, "-",
-    { label: "Show Rewritten Sentence", act: () => sentenceMenu(m, x, y) },
+    { label: "Show Rewritten Sentence", act: () => sentenceMenu(m, x) },
     { label: "Accept All", act: () => pencilApply(pMarks), dis: pMarks.length < 2 },
   ]);
 }
 
 // ---- the whole rewritten sentence ----
 // A word's menu shows one change; Show Rewritten Sentence puts a second
-// layer in its place, under the same word, with the sentence round it as
-// it will read with every change in it made — drawn as Blue Pencil's
+// layer in its place with the sentence round that word as it will read
+// with every change in it made. It keeps the word's left edge but hangs
+// from the field's bottom edge, not the word's line: a sentence runs over
+// lines, and the lines as typed must stay whole above it to compare (the
+// word menu may cover the next line; this may not). Drawn as Blue Pencil's
 // checked pane draws it: the new words on the pale-blue field (hover one
 // for what it replaced), a word that simply goes struck out, so the line
 // reads as the rewrite and still shows where it differs. Accept Sentence
@@ -2020,8 +2023,8 @@ function sentenceOf(v, m) {
   while (e > hi && /\s/.test(v[e - 1])) e--;
   return { s, e, inside };
 }
-function sentenceMenu(m, x, y) {
-  const v = textEl.value;
+function sentenceMenu(m, x) {
+  const v = textEl.value, y = Math.round(textEl.getBoundingClientRect().bottom) + 2;
   if (v.slice(m.start, m.end) !== m.was) return;
   const { s, e, inside } = sentenceOf(v, m), head = [];
   let at = s;
