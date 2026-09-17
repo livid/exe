@@ -288,6 +288,10 @@ canvas.ava-big { image-rendering: pixelated; }
 #st-hub { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
   touch-action: none; z-index: 6; }
+/* a phone's window fills the screen: no grow tile, so the status line
+   keeps its plain 8px edge instead of the room left for the tile */
+body.mobile #grow { display: none; }
+body.mobile #status { padding-right: 8px; }
 
 /* Mac OS 9 scrollbars — the desktop's pixel-sampled spec (same as Notes) */
 ::-webkit-scrollbar { width: 15px; height: 15px; }
