@@ -27,7 +27,7 @@ button.ghost { background: var(--g300); color: var(--black);
   padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
   box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
     inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
-button.ghost:active { background: #666; color: #fff;
+button.ghost:active, button.ghost.open { background: #666; color: #fff;
   box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
     inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
 button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
@@ -50,7 +50,13 @@ body.mobile button.ghost.icon .gl { display: block; }
 .gl { shape-rendering: crispEdges; }
 .gl .k { fill: currentColor; }
 .gl .w { fill: #fff; }
-button.ghost:active .gl .w { fill: #666; }
+button.ghost:active .gl .w, button.ghost.open .gl .w { fill: #666; }
+/* the pencil's count is a button (#sugg): "3 Suggestions" in words, a
+   pencil and the figure on a phone. It stays pressed (.open, the pressed
+   look) while its layer is up, as a pop-up's button does. The icon rule
+   above would show a hidden one on a phone, so hidden is said again. */
+#sugg[hidden] { display: none; }
+body.mobile #sugg .n { margin-left: 4px; }
 @media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .gl { shape-rendering: geometricPrecision; } }
 
 input[type=text], textarea { font: inherit; color: var(--black); background: #fff;
@@ -252,9 +258,13 @@ canvas.ava-big { image-rendering: pixelated; }
 .dd-head del { color: #b3413c; text-decoration: line-through; }
 .dd-head del + ins { margin-left: 4px; }
 /* the same line holding a whole rewritten sentence: wider, never wider
-   than a phone, and a very long one scrolls inside the layer instead of
-   growing it off the window */
-.dd-head.wide { max-width: min(360px, calc(100vw - 16px)); max-height: 162px; overflow-y: auto; }
+   than a phone, and set 10px left of the rows, so a sentence's choices
+   hang under it and it never reads as one of them */
+.dd-head.wide { max-width: min(360px, calc(100vw - 16px)); padding: 4px 12px 2px 8px; }
+/* a layer of sentences is pinned where it opens (under the field, under
+   its button) rather than slid up over the text it is compared with; past
+   the window's foot it scrolls inside itself */
+.dropdown.pin { overflow-y: auto; }
 
 /* toast — the desktop's #status-bar pattern */
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -332,6 +342,7 @@ canvas.ava-big { image-rendering: pixelated; }
     <div id="c-row">
       <button class="ghost" id="attach">Attach&#8230;</button>
       <input type="file" id="file" hidden multiple>
+      <button class="ghost icon" id="sugg" hidden aria-haspopup="true"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M10 0h1v1h-1zM9 1h1v1h-1zM11 1h1v1h-1zM8 2h1v1h-1zM12 2h1v1h-1zM7 3h1v1h-1zM11 3h1v1h-1zM6 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h1v1h-1zM8 6h1v1h-1zM3 7h1v1h-1zM7 7h1v1h-1zM2 8h1v1h-1zM6 8h1v1h-1zM1 9h1v1h-1zM3 9h1v1h-1zM5 9h1v1h-1zM1 10h1v1h-1zM4 10h1v1h-1zM0 11h2v1h-2zM3 11h1v1h-1zM0 12h3v1h-3z"/><path class="w" d="M10 1h1v1h-1zM9 2h3v1h-3zM8 3h3v1h-3zM7 4h3v1h-3zM6 5h3v1h-3zM5 6h3v1h-3zM4 7h3v1h-3zM3 8h3v1h-3zM2 9h1v1h-1zM4 9h1v1h-1zM2 10h2v1h-2zM2 11h1v1h-1z"/></svg><b class="n"></b><span> Suggestions</span></button>
       <span id="c-status"></span>
       <button class="ghost icon" id="find" aria-label="Find&#8230;"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M3 0h3v1h-3zM1 1h2v1h-2zM6 1h2v1h-2zM0 2h1v1h-1zM8 2h1v1h-1zM0 3h1v1h-1zM8 3h1v1h-1zM0 4h1v1h-1zM8 4h1v1h-1zM0 5h1v1h-1zM8 5h1v1h-1zM0 6h1v1h-1zM8 6h1v1h-1zM1 7h2v1h-2zM6 7h2v1h-2zM3 8h3v1h-3zM7 8h3v1h-3zM8 9h3v1h-3zM9 10h3v1h-3zM10 11h3v1h-3zM11 12h2v1h-2z"/><path class="w" d="M3 1h3v1h-3zM1 2h7v1h-7zM1 3h7v1h-7zM1 4h7v1h-7zM1 5h7v1h-7zM1 6h7v1h-7zM3 7h3v1h-3z"/></svg><span>Find&#8230;</span></button>
       <button class="ghost icon" id="refresh" aria-label="Refresh"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M8 0h1v1h-1zM8 1h2v1h-2zM5 2h6v1h-6zM3 3h2v1h-2zM8 3h2v1h-2zM2 4h1v1h-1zM8 4h1v1h-1zM2 5h1v1h-1zM1 6h1v1h-1zM11 6h1v1h-1zM1 7h1v1h-1zM11 7h1v1h-1zM1 8h1v1h-1zM11 8h1v1h-1zM2 9h1v1h-1zM10 9h1v1h-1zM2 10h1v1h-1zM10 10h1v1h-1zM3 11h2v1h-2zM8 11h2v1h-2zM5 12h3v1h-3z"/></svg><span>Refresh</span></button>
@@ -1509,12 +1520,13 @@ $("#text").addEventListener("input", e => {
 // the whole sentence as it will read, to accept as one. Changes go in as
 // typing does, so Undo takes them back. Nothing is added to the window
 // and nothing in it moves: the rules are laid over the field, the menu
-// floats, and the count shows in the composer's status slot while that
-// has nothing else to say. With no working Blue Pencil the composer is
-// the plain field it always was, and the browser's own spelling check
-// stays on in it; with one, the pencil is the only proofreader in the
-// field.
-const textEl = $("#text"), marksEl = $("#marks"), ctxEl = $("#ctx");
+// floats, and the count is a button in the composer's row that opens the
+// layer of whole sentences (the slot beside it says Proofreading… and the
+// like while it has nothing else to say). With no working Blue Pencil
+// the composer is the plain field it always was, and the browser's own
+// spelling check stays on in it; with one, the pencil is the only
+// proofreader in the field.
+const textEl = $("#text"), marksEl = $("#marks"), ctxEl = $("#ctx"), suggEl = $("#sugg");
 const PENCIL_CFG_URL = "/v1/apps/bluepencil/data/config.json";
 const PENCIL_DEBOUNCE = 700; // ms of quiet before a changed paragraph goes to the model (Blue Pencil's)
 const PENCIL_TTL = 60e3;     // how long a reading of Blue Pencil's settings stands
@@ -1745,6 +1757,7 @@ let pMarks = [];            // the marks showing, in the field's own offsets
 let pText = "";             // the text they were worked out against
 let pCurrent = null;        // the paragraph in flight: { text, ctrl }
 let pRunning = false, pWanted = false, pLastInput = 0, pTimer = 0, pErr = "";
+let reviewOpen = false, reviewSig = ""; // the button's layer of sentences is up; the marks it drew
 const markKey = m => m.was + "\0" + m.now;
 function pencilRemember(text, fixed) {
   pCache.set(text, { fixed, hunks: undefined });
@@ -1809,14 +1822,25 @@ function pencilRender() {
     kids.push(v.slice(at, m.start), el("u", { "data-i": i }, v.slice(m.start, m.end)));
     at = m.end;
   }
-  kids.push(v.slice(at) + "​");
+  kids.push(v.slice(at) + "\u200b");
   marksEl.replaceChildren(...kids);
   syncMarks();
+  // the count is the button's name; the slot beside it keeps the rest
+  const n = pMarks.length;
+  suggEl.hidden = !n;
+  if (n) {
+    suggEl.querySelector(".n").textContent = n;
+    suggEl.querySelector("span").textContent = n === 1 ? " Suggestion" : " Suggestions";
+    suggEl.setAttribute("aria-label", n + (n === 1 ? " suggestion" : " suggestions"));
+    suggEl.title = pencilTip;
+  }
   pencilMsg = pencilWhy ? "" : pErr ? "Blue Pencil: " + pErr
-    : pending ? "Proofreading…"
-    : pMarks.length ? pMarks.length + (pMarks.length === 1 ? " suggestion" : " suggestions")
-    : done ? "No suggestions" : "";
+    : pending ? "Proofreading\u2026"
+    : !n && done ? "No suggestions" : "";
   paintStatus();
+  // a check that lands while the button's layer is up redraws it, and
+  // only when it changed something: the layer is the marks, spliced
+  if (reviewOpen && marksSig() !== reviewSig) openReview();
 }
 // iOS Safari sets a textarea's text 3px further in on each side than its
 // padding says, and nothing turns that off; the mirror follows
@@ -1938,7 +1962,7 @@ function pencilApply(marks) {
 // separators and here a { head } line of nodes; closed by a click
 // anywhere, Escape, a pick, typing, or the field scrolling. It never takes
 // the focus from the field, so the caret (and a phone's keyboard) stays.
-function showMenu(x, y, items) {
+function showMenu(x, y, items, pin) {
   hideMenu();
   ctxEl.replaceChildren(...items.map(it => {
     if (it === "-") return el("div", { class: "dd-sep" });
@@ -1948,12 +1972,21 @@ function showMenu(x, y, items) {
     return d;
   }));
   ctxEl.style.left = ctxEl.style.top = "0";
+  ctxEl.style.maxHeight = "";
+  ctxEl.classList.toggle("pin", !!pin);
   ctxEl.hidden = false;
   const r = ctxEl.getBoundingClientRect();
   ctxEl.style.left = Math.max(0, Math.min(x, innerWidth - r.width - 4)) + "px";
-  ctxEl.style.top = Math.max(0, Math.min(y, innerHeight - r.height - 4)) + "px";
+  if (pin) { // it stays where it was hung, and scrolls inside past the window's foot
+    ctxEl.style.top = y + "px";
+    ctxEl.style.maxHeight = Math.max(90, innerHeight - y - 6) + "px";
+  } else ctxEl.style.top = Math.max(0, Math.min(y, innerHeight - r.height - 4)) + "px";
 }
-function hideMenu() { ctxEl.hidden = true; }
+function hideMenu() {
+  ctxEl.hidden = true;
+  reviewOpen = false;
+  suggEl.classList.remove("open");
+}
 ctxEl.addEventListener("mousedown", e => e.preventDefault());
 document.addEventListener("mousedown", e => { if (!e.target.closest("#ctx")) hideMenu(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") hideMenu(); });
@@ -2023,12 +2056,11 @@ function sentenceOf(v, m) {
   while (e > hi && /\s/.test(v[e - 1])) e--;
   return { s, e, inside };
 }
-function sentenceMenu(m, x) {
-  const v = textEl.value, y = Math.round(textEl.getBoundingClientRect().bottom) + 2;
-  if (v.slice(m.start, m.end) !== m.was) return;
-  const { s, e, inside } = sentenceOf(v, m), head = [];
-  let at = s;
-  for (const k of inside) {
+// one sentence's line: the field's words with its marks made
+function sentenceHead(v, st) {
+  const head = [];
+  let at = st.s;
+  for (const k of st.inside) {
     head.push(showBreaks(v.slice(at, k.start)));
     for (let i = 0; i < k.parts.length; i++) {
       const p = k.parts[i], q = k.parts[i + 1];
@@ -2038,13 +2070,69 @@ function sentenceMenu(m, x) {
     }
     at = k.end;
   }
-  head.push(showBreaks(v.slice(at, e)));
-  showMenu(x, y, [
-    { head, wide: true }, "-",
-    { label: "Accept Sentence", act: () => pencilApply(inside) },
-    { label: "Accept All", act: () => pencilApply(pMarks), dis: pMarks.length <= inside.length },
-  ]);
+  head.push(showBreaks(v.slice(at, st.e)));
+  return head;
 }
+// A layer of sentences: each as it will read, with its own two choices
+// under it — Accept Sentence makes its changes, Ignore Sentence passes
+// them over for this post — a groove between one sentence and the next,
+// and Accept All at the foot, grey when the one sentence shown is all
+// there is. `again` is what follows a choice: the button's layer comes
+// back with what is left, a word's sentence is done with.
+function sentenceItems(v, list, again) {
+  const items = [];
+  for (const st of list) {
+    items.push({ head: sentenceHead(v, st), wide: true },
+      { label: "Accept Sentence", act: () => { pencilApply(st.inside); again(); } },
+      { label: "Ignore Sentence", act: () => { for (const m of st.inside) pIgnored.add(markKey(m)); pencilRender(); again(); } },
+      "-");
+  }
+  items.push({ label: "Accept All", act: () => pencilApply(pMarks),
+    dis: list.length === 1 && pMarks.length <= list[0].inside.length });
+  return items;
+}
+function sentenceMenu(m, x) {
+  const v = textEl.value, y = Math.round(textEl.getBoundingClientRect().bottom) + 2;
+  if (v.slice(m.start, m.end) !== m.was) return;
+  showMenu(x, y, sentenceItems(v, [sentenceOf(v, m)], () => {}), true);
+}
+
+// ---- the count is a button ----
+// Livid's shape for reviewing a post once it is written: "3 Suggestions"
+// is a push button where the count stood, and pressing it hangs a layer
+// under it with every sentence the pencil would change, complete and as
+// it will read, each with its choices. The layer is the marks spliced
+// into the field's own words — what Accept All would write, Ignores left
+// out (Codex's point: never the model's stored rewrite, which still holds
+// them) — so it cannot differ from what the choices then do. A choice
+// leaves the layer up with what remains, the count on the button going
+// down with it; it closes when nothing is left, on Escape, a click
+// elsewhere, the button again, or typing. The button keeps its pressed
+// look while the layer is up and never takes the caret from the field.
+let suggWasOpen = false;
+const marksSig = () => pMarks.map(m => m.start + ":" + m.end + ":" + m.now).join("|");
+function sentencesOf(v) { // every sentence that holds a mark, in reading order
+  const out = [];
+  for (const m of pMarks) if (!out.length || m.start >= out[out.length - 1].e) out.push(sentenceOf(v, m));
+  return out;
+}
+function openReview() {
+  const v = textEl.value, list = sentencesOf(v);
+  if (!list.length) { hideMenu(); return; }
+  const r = suggEl.getBoundingClientRect();
+  showMenu(Math.round(r.left), Math.round(r.bottom) + 2, sentenceItems(v, list, openReview), true);
+  reviewOpen = true;
+  reviewSig = marksSig();
+  suggEl.classList.add("open");
+}
+// the document's mousedown has closed the layer by the time the click
+// comes, so whether this press opens or closes is noted first
+suggEl.addEventListener("mousedown", e => { suggWasOpen = reviewOpen; e.preventDefault(); });
+suggEl.addEventListener("click", () => {
+  const close = suggWasOpen;
+  suggWasOpen = false;
+  if (close) hideMenu(); else openReview();
+});
 textEl.addEventListener("click", e => {
   if (textEl.selectionStart !== textEl.selectionEnd) return; // a drag chose text
   const hit = markAt(e.clientX, e.clientY);

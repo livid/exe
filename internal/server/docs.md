@@ -489,11 +489,24 @@ Rewritten Sentence** swaps the menu for the whole sentence as it will
 read with its changes made — the new words on pale blue (hover one for
 what it replaced), a word that simply goes struck out — hung under the
 field, so your own lines stay whole above it to compare; **Accept
-Sentence** there makes that sentence's changes and leaves the rest of
-the post marked. A comma
-to add, or a missing word, rules the word it follows. The line beside
-**Attach…** counts the suggestions while it has nothing else to say, and
-hovering it names the model. The composer uses Blue Pencil's own
+Sentence** there makes that sentence's changes, **Ignore Sentence**
+passes them over, and the rest of the post stays marked. A comma to add,
+or a missing word, rules the word it follows.
+
+To go through a post once it is written, press the count: beside
+**Attach…** the suggestions are a button, **3 Suggestions** (a pencil and
+the figure on a phone; hover it for the model). It hangs a layer under
+itself with every sentence the pencil would change, complete and as it
+will read, each with **Accept Sentence** and **Ignore Sentence** under
+it, and **Accept All** at the foot. What it shows is exactly what those
+choices write — your own words with the remaining changes made, anything
+you ignored left as you typed it. A choice leaves the layer up with what
+remains and the count goes down; it closes when nothing is left, or on
+the button again, Escape, a click elsewhere, or typing. The line beside
+the button still says **Proofreading…** while a check is out, and a
+check that lands while the layer is up is drawn into it.
+
+The composer uses Blue Pencil's own
 settings — backend, model, thinking level — and its prompt, a paragraph
 at a time, so what you write goes where Blue Pencil's checks go: nowhere
 with a local model, to OpenAI on ChatGPT. While the pencil is at work the

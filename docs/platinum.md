@@ -103,8 +103,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   Rewritten Sentence) puts a second layer of the same kind at the same
   left edge but under the field's bottom edge, so the text it is compared
   with stays uncovered; its head is `.dd-head.wide` (360px at most, never
-  wider than a phone, scrolling past nine lines). Nothing is added to the
-  layout.
+  wider than a phone), set 10px left of the rows so a sentence's choices
+  hang under it; such a layer is pinned where it opens (`.dropdown.pin`)
+  and scrolls inside itself past the window's foot. A count that opens a
+  layer is a push button in the button row (the composer's `#sugg`, "3
+  Suggestions"; a glyph and the figure on a phone): it wears the pressed
+  look (`button.ghost.open`) while its layer is up, as a pop-up's button
+  does, toggles it, and never takes the caret. It comes and goes inside
+  the row's flexible text slot, so no other button moves.
 - Status bar: 15px total, a 1px black top border and a 14px `#ddd` face,
   11px `#333` text, `inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px
   0 #aaa`. Text only. Buttons never sit on a status line; they get a row of
