@@ -89,6 +89,19 @@ restyling: `internal/server/ui/index.html` (the desktop),
   rounded black outline, white top and left, `#aaa` bottom, a 21px arrow
   well on the right with its own bevel and two 7px triangles, and a
   transparent native `<select>` inside. Never a bare select.
+- A field that grows with its text (the Hub composer, `fitField`): it
+  opens at its shallow height and takes whole lines as the writing needs
+  them, up to a limit cut from the window (half its height, a whole number
+  of lines), where it scrolls as any field does; it gives the lines back
+  the same way, and whatever empties it from script fits it again. Read
+  the height from the field itself, laid out shallow with `overflow-y:
+  hidden` for the moment of the reading — a scroll bar there narrows the
+  lines and asks for one too many — and keep `hidden` while the text fits,
+  so no bar flashes as a line is added. Fit on the window's `resize` (a
+  narrower window rewraps; a phone's keyboard lowers the limit), never
+  from a ResizeObserver on the field itself. The writer's own keystrokes
+  moving the edge under the field is the thing asked for, not a layout
+  jump; nothing else may move.
 - Marks in a text field (the Hub composer's blue pencil): the textarea
   stays the field; a mirror div laid over it (`#marks`: the field's type,
   padding and `pre-wrap` wrapping, sized to the textarea's client box so a

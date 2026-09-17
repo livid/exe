@@ -1483,6 +1483,7 @@ async function doPost() {
   try {
     const out = await publish("post.create", body);
     $("#text").value = "";
+    fitField();
     pencilReset();
     attachments = [];
     renderChips();
@@ -1515,7 +1516,42 @@ $("#text").addEventListener("input", e => {
     say("Post text is capped at 8KB", true);
   }
   updatePostBtn();
+  fitField(); // before the pencil: what it hangs or scrolls next reads the field's new box
   pencilInput(e);
+});
+
+// ---- the field grows with the writing ----
+// The composer opens shallow, room for a remark. Writing past what it
+// shows makes it taller a line at a time, so a long post is read whole
+// while it is written; at half the window (a whole number of lines) it
+// stops and scrolls as any field does, and the feed under it never goes.
+// It comes down the same way, and a post sent leaves it shallow again.
+// The height the text asks for is read from the field itself, laid out
+// shallow and without a scroll bar for the moment of the reading — a bar
+// would narrow the lines and ask for one too many — and nothing is
+// painted in between. A field that fits shows no bar, so none flashes as
+// a line is added. The window's size sets the limit and the wrapping, so
+// a resize (a phone's keyboard is one) fits it again.
+const FIELD_MIN = 56;
+function fitField() {
+  const ta = $("#text"), cs = getComputedStyle(ta), at = ta.scrollTop;
+  const line = parseFloat(cs.lineHeight) || 18;
+  const edge = ta.offsetHeight - ta.clientHeight; // its two borders
+  const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const cap = Math.max(FIELD_MIN, edge + pad + Math.floor((innerHeight / 2 - edge - pad) / line) * line);
+  ta.style.overflowY = "hidden";
+  ta.style.height = FIELD_MIN + "px";
+  const need = ta.scrollHeight + edge;
+  ta.style.height = Math.max(FIELD_MIN, Math.min(need, cap)) + "px";
+  ta.style.overflowY = need > cap ? "" : "hidden";
+  ta.scrollTop = need > cap ? at : 0;
+  syncMarks();
+}
+addEventListener("resize", () => {
+  const was = $("#text").offsetHeight;
+  fitField();
+  // a layer hung from the field's old edge would lie over the wrong lines
+  if ($("#text").offsetHeight !== was) hideMenu();
 });
 
 // ---- the blue pencil in the composer ----

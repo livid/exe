@@ -475,6 +475,12 @@ Open a post's thread and the composer answers the post at its head;
 **Reply** on any reply in the thread aims your answer at that one
 instead — a strip above the text names it and quotes its first words,
 and its × (or posting) returns the composer to the head.
+The composer's field grows with what you write: from the third line on
+it takes a line more as you need one, so a long post is read whole while
+you write it, and gives the lines back as you delete. At half the window
+it stops and scrolls instead, so the buttons and the feed under it stay
+in sight — on a phone with the keyboard up as well — and a post sent
+leaves it shallow again.
 
 When **Blue Pencil** works on this node — its backend is set up and a
 model is named for it — the composer is proofread as you write, the way
