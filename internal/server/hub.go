@@ -1,7 +1,7 @@
 // exe-hub client: the browser app never holds a key, so the daemon signs
 // hub writes with this node's peer identity and forwards them. Reads go
-// straight from the app to the hub (its GETs are public + CORS-open); only
-// mutations and uploads pass through here.
+// straight from the app to the hub (its GETs are public + CORS-open) —
+// and through the relay below when the browser has no road to the hub.
 package server
 
 import (
@@ -13,7 +13,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"strconv"
@@ -52,6 +54,77 @@ func hubURL(raw string) (string, error) {
 		return "", errors.New("hub must be an http(s) URL")
 	}
 	return u.Scheme + "://" + u.Host, nil
+}
+
+// hubRelayTransport gives up on a hub that does not pick up well before
+// the app's own patience runs out, and puts no clock on the body: the
+// relay carries /v1/events, which never ends.
+var hubRelayTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+	TLSHandshakeTimeout:   5 * time.Second,
+	ResponseHeaderTimeout: 30 * time.Second,
+	IdleConnTimeout:       90 * time.Second,
+	ForceAttemptHTTP2:     true,
+}
+
+// handleHubRelay carries the Hub app's reads when the browser itself has
+// no road to the hub: the desktop opened by its Tailscale IP in a browser
+// that cannot resolve the hub's ts.net name, a proxy in the way, a plain
+// HTTP hub under the HTTPS desktop. The daemon can reach the hub — it
+// signs and forwards every write there — so the reads take the same road:
+//
+//	GET /v1/hub/relay/<the hub's path>?hub=<base>&<the hub's own query>
+//
+// Only the hub's read API (/v1/…) passes, streamed as it comes, so
+// /v1/events stays live and a video still seeks by Range. What comes
+// back is the hub's content under the desktop's origin, so it is boxed:
+// an HTML embed opened from here runs sandboxed, nothing is sniffed into
+// a document, and the hub's CORS grant stays behind — another site may
+// not read a hub (or anything else that answers under /v1/) through us.
+func (s *Server) handleHubRelay(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	hub, err := hubURL(q.Get("hub"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	path := "/" + r.PathValue("path")
+	if !strings.HasPrefix(path, "/v1/") {
+		writeErr(w, http.StatusBadRequest, errors.New("only the hub's /v1 reads are relayed"))
+		return
+	}
+	target, _ := url.Parse(hub)
+	q.Del("hub")
+	q.Del("token")
+	proxy := &httputil.ReverseProxy{
+		Transport:     hubRelayTransport,
+		FlushInterval: -1,
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme, pr.Out.URL.Host = target.Scheme, target.Host
+			pr.Out.URL.Path, pr.Out.URL.RawPath = path, ""
+			pr.Out.URL.RawQuery = q.Encode()
+			pr.Out.Host = target.Host
+			for _, h := range []string{"Authorization", "Cookie", "Origin", "Referer"} {
+				pr.Out.Header.Del(h)
+			}
+		},
+		ModifyResponse: func(resp *http.Response) error {
+			for h := range resp.Header {
+				if strings.HasPrefix(h, "Access-Control-") {
+					resp.Header.Del(h)
+				}
+			}
+			resp.Header.Del("Set-Cookie")
+			resp.Header.Set("Content-Security-Policy", "sandbox")
+			resp.Header.Set("X-Content-Type-Options", "nosniff")
+			return nil
+		},
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			writeErr(w, http.StatusBadGateway, fmt.Errorf("hub unreachable: %w", err))
+		},
+	}
+	proxy.ServeHTTP(w, r)
 }
 
 func (s *Server) handleHubWhoami(w http.ResponseWriter, r *http.Request) {

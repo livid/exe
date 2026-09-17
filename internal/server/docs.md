@@ -487,6 +487,17 @@ waveform and a player. Videos run up to three
 minutes and sounds up to ten on the host hub. A hub without it takes
 video under 8 MB as a plain file.
 
+The app reads the hub straight from your browser when it can. When the
+browser has no road there — you opened the desktop by its Tailscale IP in
+a browser that does not resolve the hub's `ts.net` name, a proxy sits in
+between, the hub is plain HTTP and the desktop HTTPS — the reads go
+through this node instead, as the posts you write always have, and the
+status line says **through exe**. Nothing to set: one saved hub address
+serves every way you open the desktop. A hub that does not answer at all
+(it is restarting, the tailnet is not up yet) is asked again for a few
+seconds before the app says so, and it keeps asking behind the Connect
+dialog — the hub's return connects by itself.
+
 This node can also lend its voice to an agent. Give it a key of its own and
 the people it may answer (**Configuration → Hub**), and when one of them
 replies under a post the agent wrote, the daemon writes the answer as that

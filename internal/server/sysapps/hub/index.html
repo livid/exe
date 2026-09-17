@@ -390,11 +390,39 @@ async function copyText(text, label) {
 }
 
 // ---- hub reads (public, CORS-open) ----
+// Reads go straight to the hub while this browser has a road to it. When
+// it has none — the desktop opened by its IP in a browser that cannot
+// resolve the hub's ts.net name, a proxy in the way, a plain-HTTP hub
+// under the HTTPS desktop — they ride the daemon's relay, as the writes
+// always have. hurl() is the one place that knows; what leaves the app
+// (the hub's public pages, its address in Hub Info) keeps the hub's own.
+let relayed = false;
+const hurl = (path, base = hub, via = relayed) => !via ? base + path
+  : location.origin + "/v1/hub/relay" + path + (path.includes("?") ? "&" : "?") +
+    "hub=" + encodeURIComponent(base) + (TOKEN ? "&token=" + encodeURIComponent(TOKEN) : "");
 const hget = async path => {
-  const r = await fetch(hub + path);
+  const r = await fetch(hurl(path));
   if (!r.ok) throw new Error("hub HTTP " + r.status);
   return r.json();
 };
+// Who is at this address? Asked both ways at once. The straight answer
+// wins when it comes — it gets a moment's grace — and the relay's stands
+// in when the browser's own road fails or hangs.
+async function askHub(base, ms = 8000) {
+  const ask = async via => {
+    const r = await fetch(hurl("/v1/hub", base, via), { signal: AbortSignal.timeout(ms) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const info = await r.json();
+    if (!info.id) throw new Error("not an exe-hub");
+    return { info, relayed: via };
+  };
+  const direct = ask(false), relay = ask(true);
+  direct.catch(() => {}); relay.catch(() => {});
+  const grace = new Promise((_, no) => setTimeout(no, 2500));
+  try { return await Promise.race([direct, grace]); } catch (e) {}
+  try { return await Promise.any([direct, relay]); }
+  catch (e) { throw e.errors ? e.errors[0] : e; }
+}
 
 // ---- writes go through the daemon, which holds the key ----
 async function publish(type, body) {
@@ -424,7 +452,7 @@ function identicon(id) {
 }
 
 function avatarEl(id, cid, cls) {
-  if (cid) return el("img", { class: cls || "p-ava", src: hub + "/v1/embed/" + cid, alt: "" });
+  if (cid) return el("img", { class: cls || "p-ava", src: hurl("/v1/embed/" + cid), alt: "" });
   const c = identicon(id);
   if (cls) c.className = cls;
   return c;
@@ -434,7 +462,7 @@ function avatarEl(id, cid, cls) {
 // in a sandboxed frame like a Workspace page; standalone, the hub's own
 // thread page opens it in its page window
 function viewPage(p, em) {
-  const url = hub + "/v1/embed/" + em.cid;
+  const url = hurl("/v1/embed/" + em.cid);
   if (window.parent !== window)
     parent.postMessage({ exe: "view-page", url, name: em.filename || "Page" }, location.origin);
   else window.open(hub + "/p/" + p.id + "#page=" + em.cid, "_blank", "noopener");
@@ -450,7 +478,7 @@ function pictureName(url) {
 // a clicked picture opens in the desktop's PictureViewer window (the same
 // viewer Finder uses) through the app bridge; standalone, a plain new tab
 function viewImage(em) {
-  const url = hub + "/v1/embed/" + em.cid;
+  const url = hurl("/v1/embed/" + em.cid);
   if (window.parent !== window)
     parent.postMessage({ exe: "view-image", url, name: em.filename || em.alt || "" }, location.origin);
   else window.open(url, "_blank");
@@ -588,8 +616,8 @@ function watchVideo(v, loop) {
   videoSeen.observe(v);
 }
 function videoEl(em) {
-  const v = el("video", { src: hub + "/v1/embed/" + em.cid, playsinline: "" });
-  if (em.poster) v.setAttribute("poster", hub + "/v1/embed/" + em.poster);
+  const v = el("video", { src: hurl("/v1/embed/" + em.cid), playsinline: "" });
+  if (em.poster) v.setAttribute("poster", hurl("/v1/embed/" + em.poster));
   // nothing downloads until it plays, which is when it comes into view
   v.preload = em.poster ? "none" : "metadata";
   if (em.alt) v.setAttribute("aria-label", em.alt);
@@ -601,8 +629,8 @@ function videoEl(em) {
 }
 function soundEl(em) {
   const box = el("div", { class: "p-aud" });
-  if (em.poster) box.append(el("img", { class: "wave", src: hub + "/v1/embed/" + em.poster, alt: "" }));
-  box.append(el("audio", { src: hub + "/v1/embed/" + em.cid, controls: "", preload: "none" }),
+  if (em.poster) box.append(el("img", { class: "wave", src: hurl("/v1/embed/" + em.poster), alt: "" }));
+  box.append(el("audio", { src: hurl("/v1/embed/" + em.cid), controls: "", preload: "none" }),
     el("span", { class: "a-f" }, (em.filename || "Sound") + (em.duration ? " · " + fmtLength(em.duration) : "")));
   return box;
 }
@@ -622,7 +650,7 @@ function renderPost(p, opts = {}) {
     const card = el("div", { class: "p-card" });
     const box = el("a", { class: "c-m", href: p.card.url, target: "_blank", rel: "noopener nofollow" });
     if (p.card.image) box.append(el("span", { class: "c-i" },
-      el("img", { src: hub + "/v1/embed/" + p.card.image, alt: "", loading: "lazy" })));
+      el("img", { src: hurl("/v1/embed/" + p.card.image), alt: "", loading: "lazy" })));
     const body = el("span", { class: "c-b" }, el("span", { class: "c-t" }, p.card.title));
     if (p.card.desc) body.append(el("span", { class: "c-d" }, p.card.desc));
     if (p.card.host) body.append(el("span", { class: "c-h" }, p.card.host));
@@ -639,7 +667,7 @@ function renderPost(p, opts = {}) {
     const box = el("div", { class: "p-embeds" });
     for (const em of p.embeds || []) {
       if ((em.mime || "").startsWith("image/")) {
-        const img = el("img", { src: hub + "/v1/embed/" + em.cid, alt: em.alt || "", loading: "lazy" });
+        const img = el("img", { src: hurl("/v1/embed/" + em.cid), alt: em.alt || "", loading: "lazy" });
         img.onclick = e => { e.stopPropagation(); viewImage(em); };
         box.append(img);
       } else if ((em.mime || "").startsWith("video/")) {
@@ -647,13 +675,13 @@ function renderPost(p, opts = {}) {
       } else if ((em.mime || "").startsWith("audio/")) {
         box.append(soundEl(em));
       } else if ((p.pages || []).includes(em.cid)) {
-        const url = hub + "/v1/embed/" + em.cid;
+        const url = hurl("/v1/embed/" + em.cid);
         const page = el("a", { class: "p-page", href: url }, em.filename || "Page");
         page.onclick = e => { e.preventDefault(); e.stopPropagation(); viewPage(p, em); };
         box.append(el("div", { class: "p-pagerow" }, page,
           el("a", { class: "p-pagedl", href: url, target: "_blank" }, "download")));
       } else {
-        const a = el("a", { class: "p-file", href: hub + "/v1/embed/" + em.cid, target: "_blank" },
+        const a = el("a", { class: "p-file", href: hurl("/v1/embed/" + em.cid), target: "_blank" },
           em.filename || em.mime);
         box.append(a);
       }
@@ -662,7 +690,7 @@ function renderPost(p, opts = {}) {
     // served from its own copy, drawn like attached pictures; the link
     // stays in the text
     for (const pc of p.pictures || []) {
-      const img = el("img", { src: hub + "/v1/embed/" + pc.cid, alt: "", loading: "lazy", title: pc.url });
+      const img = el("img", { src: hurl("/v1/embed/" + pc.cid), alt: "", loading: "lazy", title: pc.url });
       img.onclick = e => { e.stopPropagation(); viewImage({ cid: pc.cid, filename: pictureName(pc.url) }); };
       box.append(img);
     }
@@ -927,7 +955,7 @@ document.addEventListener("keydown", e => {
 let es = null, esDown = false;
 function connectEvents() {
   if (es) es.close();
-  es = new EventSource(hub + "/v1/events");
+  es = new EventSource(hurl("/v1/events"));
   es.onopen = () => { if (esDown) { esDown = false; refreshView(); } };
   es.onerror = () => { esDown = true; };
   es.onmessage = async ev => {
@@ -1022,7 +1050,7 @@ function renderChips() {
       chip.append(el("span", {}, a.filename), a.bar, x);
     } else {
       const thumb = a.poster || (a.mime.startsWith("image/") ? a.cid : "");
-      if (thumb) chip.append(el("img", { src: hub + "/v1/embed/" + thumb }));
+      if (thumb) chip.append(el("img", { src: hurl("/v1/embed/" + thumb) }));
       chip.append(el("span", {}, (a.filename || a.mime) + (a.duration ? " · " + fmtLength(a.duration) : "")), x);
     }
     box.append(chip);
@@ -1437,10 +1465,12 @@ $("#st-hub").onclick = hubInfoDialog;
 
 // firstRun: the onboarding form, no way out but connecting.
 // onCancel: what Cancel returns to (the Hub Info dialog), else just close.
-function hubDialog(firstRun, onCancel) {
+// The field opens on the hub we know — empty only before there is one —
+// so a saved hub that did not answer takes one Return to ask again.
+function hubDialog(firstRun, onCancel, note) {
   const input = el("input", { type: "text", placeholder: "http://hub.example:7788",
-    value: firstRun ? "" : hub });
-  const err = el("div", { class: "err" });
+    value: hub });
+  const err = el("div", { class: "err" }, note || "");
   const go = el("button", { class: "ghost default" }, "Connect");
   const cancel = el("button", { class: "ghost" }, "Cancel");
   const btns = firstRun ? [go] : [cancel, go];
@@ -1460,12 +1490,10 @@ function hubDialog(firstRun, onCancel) {
     go.disabled = true;
     err.textContent = "";
     try {
-      const r = await fetch(v.replace(/\/+$/, "") + "/v1/hub");
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const info = await r.json();
-      if (!info.id) throw new Error("not an exe-hub");
+      const at = await askHub(v.replace(/\/+$/, ""));
       hub = v.replace(/\/+$/, "");
-      hubInfo = info;
+      hubInfo = at.info;
+      relayed = at.relayed;
       await api(CONFIG_URL, { method: "PUT", body: JSON.stringify({ hub }) });
       close();
       await connected();
@@ -1477,6 +1505,7 @@ function hubDialog(firstRun, onCancel) {
   go.onclick = submit;
   input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   setTimeout(() => input.focus(), 50);
+  return { close, input, go };
 }
 
 function profileDialog(needName) {
@@ -1548,7 +1577,7 @@ $("#me").onclick = () => profileDialog(false);
 // ---- boot ----
 async function connected() {
   $("#st-hub").textContent = hub.replace(/^https?:\/\//, "") +
-    " — hub " + hubInfo.id;
+    " — hub " + hubInfo.id + (relayed ? ", through exe" : "");
   $("#st-gate").textContent = hubInfo.gate && hubInfo.gate.mode === "token"
     ? "token-gated" : "open";
   myProfile = null;
@@ -1570,18 +1599,43 @@ async function connected() {
     const r = await api(CONFIG_URL);
     if (r.ok) saved = await r.json();
   } catch (e) {}
+  // A saved hub that does not answer is usually on its way back: the hub
+  // restarting under a deploy, a machine awake before its tailnet is. So
+  // boot keeps asking for a few seconds before it says unreachable, the
+  // dialog then opens on the saved address, and the asking goes on behind
+  // it — the hub's return closes the dialog and connects. It stops once
+  // another address is being typed or Connect has done the job.
+  const reach = async ms => {
+    try { const at = await askHub(hub, ms); hubInfo = at.info; relayed = at.relayed; } catch (e) {}
+    return !!hubInfo;
+  };
+  const pause = ms => new Promise(done => setTimeout(done, ms));
   if (saved && saved.hub) {
     hub = saved.hub;
-    try {
-      hubInfo = await hget("/v1/hub");
-      await connected();
-      return;
-    } catch (e) {
-      $("#st-hub").textContent = "Hub unreachable: " + hub;
+    const until = Date.now() + 7000;
+    while (!await reach(Math.max(3000, until - Date.now())) && Date.now() + 1000 < until) {
+      $("#st-hub").textContent = "Connecting to " + hub.replace(/^https?:\/\//, "") + "\u2026";
+      await pause(1000);
     }
+    if (hubInfo) { await connected(); return; }
+    $("#st-hub").textContent = "Hub unreachable: " + hub;
   }
   feedEl.append(el("div", { class: "muted" }, "Not connected."));
-  hubDialog(true);
+  const dlg = hubDialog(true, null, hub ? "This hub is not answering. Still trying…" : "");
+  if (!hub) return;
+  const savedHub = hub;
+  const waiting = () => !hubInfo && dlg.input.value.trim() === savedHub;
+  while (waiting()) {
+    await pause(5000);
+    if (dlg.go.disabled) continue; // Connect is asking right now
+    let at = null;
+    try { at = await askHub(savedHub); } catch (e) {}
+    if (!at || !waiting() || dlg.go.disabled) continue;
+    hubInfo = at.info;
+    relayed = at.relayed;
+    dlg.close();
+    await connected();
+  }
 })();
 
 // ---- desktop window plumbing (same bridge as Notes) ----

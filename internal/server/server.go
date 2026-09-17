@@ -184,6 +184,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/hub/upload", s.handleHubUpload)
 	mux.HandleFunc("POST /v1/hub/avatar", s.handleHubUpload)
 	mux.HandleFunc("POST /v1/hub/media", s.handleHubMedia)
+	mux.HandleFunc("GET /v1/hub/relay/{path...}", s.handleHubRelay)
 	mux.HandleFunc("GET /v1/macos9", s.handleMacOS9Status)
 	mux.HandleFunc("POST /v1/macos9/start", s.handleMacOS9Start)
 	mux.HandleFunc("POST /v1/macos9/cancel", s.handleMacOS9Cancel)
