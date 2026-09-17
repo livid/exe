@@ -330,7 +330,10 @@ const TOMBSTONE_TTL = 30 * 864e5; // a deleted draft's stub outlives the sync th
 // wrong, keep everything else, and treat the passage as a document, never
 // as a message. The worked example matters more than any rule: without
 // one, a model run with thinking off will now and then decide there is
-// nothing to fix and echo the passage back untouched.
+// nothing to fix and echo the passage back untouched. The Hub app's
+// composer proofreads with a copy of this prompt, and of ask, splitParas,
+// tidy, the diff and complete (sysapps/hub/index.html, "the blue pencil
+// in the composer"): change them here and there together.
 const SYSTEM = [
   "You are a careful copy editor. The user gives you a passage; read it closely, find every error of spelling, grammar, punctuation and capitalization, and return the passage with all of them corrected.",
   "Keep the author's words, meaning, tone and voice: change only what is wrong. Do not rewrite sentences that are already correct, do not shorten, expand or reorder, and do not add commentary.",

@@ -476,6 +476,24 @@ Open a post's thread and the composer answers the post at its head;
 instead — a strip above the text names it and quotes its first words,
 and its × (or posting) returns the composer to the head.
 
+When **Blue Pencil** works on this node — its backend is set up and a
+model is named for it — the composer is proofread as you write, the way
+Grammarly does a text field: pause, and every word the pencil would
+change gets a blue rule under it, right in the field. Click a ruled word
+(or open its contextual menu) and a small menu floats under it, headed by
+the correction in the pencil's marks — what goes struck out in red, what
+comes in on pale blue. **Accept** makes that change, **Ignore** drops it
+for this post, **Accept All** makes every change still marked; an
+accepted change is typing like any other, so Undo takes it back. A comma
+to add, or a missing word, rules the word it follows. The line beside
+**Attach…** counts the suggestions while it has nothing else to say, and
+hovering it names the model. The composer uses Blue Pencil's own
+settings — backend, model, thinking level — and its prompt, a paragraph
+at a time, so what you write goes where Blue Pencil's checks go: nowhere
+with a local model, to OpenAI on ChatGPT. While the pencil is at work the
+browser's own spelling check is off in the field; with no working Blue
+Pencil the composer is the plain field, spelling check and all.
+
 Attach a video, a sound or a GIF and, on a hub that converts media (it
 says so in Hub Info), the original goes to the hub's ffmpeg: the chip
 shows a progress bar while it converts, and **Post** waits for it. A
@@ -554,6 +572,10 @@ ChatGPT, so with a local model nothing you write leaves this machine; on
 ChatGPT the passage goes to OpenAI. Text is checked a paragraph at a time
 and only the paragraph you touched is re-checked, which keeps long
 documents cheap.
+
+A working Blue Pencil also proofreads the **Hub** app's composer, in
+place: blue rules under what it would change and a floating menu to
+accept them (see The Hub). It runs on the settings chosen here.
 
 Any app can ask that model a question the same way: `POST
 /v1/chat/complete` with `{"system": …, "prompt": …}` streams the answer as

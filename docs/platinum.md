@@ -89,6 +89,17 @@ restyling: `internal/server/ui/index.html` (the desktop),
   rounded black outline, white top and left, `#aaa` bottom, a 21px arrow
   well on the right with its own bevel and two 7px triangles, and a
   transparent native `<select>` inside. Never a bare select.
+- Marks in a text field (the Hub composer's blue pencil): the textarea
+  stays the field; a mirror div laid over it (`#marks`: the field's type,
+  padding and `pre-wrap` wrapping, sized to the textarea's client box so a
+  scrollbar rewraps both alike, scrolled with it, `pointer-events: none`,
+  transparent words) shows only a 2px `--hl` `border-bottom` on an inline
+  box round each marked stretch: a border, so it is crisp at 150 percent
+  and sits in the line's leading without moving anything. A click is
+  matched to a mark by the marks' client rects. What a mark offers floats:
+  the app contextual menu (Blue Pencil's `.dropdown` block) hung 2px under
+  the word, opening with a `.dd-head` line that never inverts, and never
+  taking the focus from the field. Nothing is added to the layout.
 - Status bar: 15px total, a 1px black top border and a 14px `#ddd` face,
   11px `#333` text, `inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px
   0 #aaa`. Text only. Buttons never sit on a status line; they get a row of
