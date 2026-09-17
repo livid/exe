@@ -2125,7 +2125,7 @@ function sentenceMenu(m, x) {
 // down with it; it closes when nothing is left, on Escape, a click
 // elsewhere, the button again, or typing. The button keeps its pressed
 // look while the layer is up and never takes the caret from the field.
-let suggWasOpen = false;
+let suggWasOpen = null; // the layer's state at a pointer's mousedown; null when the click has none
 const marksSig = () => pMarks.map(m => m.start + ":" + m.end + ":" + m.now).join("|");
 function sentencesOf(v) { // every sentence that holds a mark, in reading order
   const out = [];
@@ -2141,12 +2141,15 @@ function openReview() {
   reviewSig = marksSig();
   suggEl.classList.add("open");
 }
-// the document's mousedown has closed the layer by the time the click
-// comes, so whether this press opens or closes is noted first
+// The document's mousedown has closed the layer by the time a pointer's
+// click comes, so whether that press opens or closes is noted first. A
+// click from the keyboard (Return or Space on the button) has no
+// mousedown before it and nothing has closed the layer: it goes by
+// whether the layer is up (Codex's catch — it used to open it again).
 suggEl.addEventListener("mousedown", e => { suggWasOpen = reviewOpen; e.preventDefault(); });
 suggEl.addEventListener("click", () => {
-  const close = suggWasOpen;
-  suggWasOpen = false;
+  const close = suggWasOpen === null ? reviewOpen : suggWasOpen;
+  suggWasOpen = null;
   if (close) hideMenu(); else openReview();
 });
 textEl.addEventListener("click", e => {
