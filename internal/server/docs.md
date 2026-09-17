@@ -459,6 +459,10 @@ Click a picture to see it in a window of its own. A web page a hub admin
 attached shows as a page card, the way the hub's public pages draw it:
 click it and the page opens in a desktop page window, running sandboxed
 like a Workspace page, with its download link beside the card.
+A post is plain words with four pieces of Markdown: a web address
+becomes a link, `[words](https://…)` is a link on its words (hover to
+see where it goes), `` `code` `` is code, and a line that starts with
+`#`, `##` or `###` and a space is a heading.
 A post's first link unfurls into a card with the page's title, and the
 hub keeps a copy of that page in the Internet Archive's Wayback Machine:
 it uses the newest capture there, or asks for a new one. **Archived

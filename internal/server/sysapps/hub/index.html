@@ -497,15 +497,25 @@ function viewImage(em) {
 // code` spans (one or two backticks, matched within a line, with
 // CommonMark's one-space trim) become <code> and their contents stay
 // literal: a URL inside backticks is not a link. URLs elsewhere become
-// links that open in a new tab: http(s) only; the punctuation that
-// usually trails a URL in prose stays text; and a URL is ASCII plus
-// accented Latin letters, so CJK prose and its fullwidth punctuation end
-// it — Chinese sits flush against a link with no space
+// links that open in a new tab, and [words](url) is a link on its
+// words: the address must be, whole, a URL the bare matcher takes (so
+// http(s) only, and the hub unfurls the same address into the card);
+// anything looser stays the text it was. A code span binds tighter, as
+// in Markdown — the form inside backticks stays literal — and a link's
+// words take code spans, never a link of their own; the address shows
+// on hover, since the words no longer say where the link goes. Where a
+// post's words show plain (the feed's latest line, the reply strip)
+// plainWords puts such a link back to its words. A bare URL is http(s)
+// only; the punctuation that usually trails a URL in prose stays text;
+// and a URL is ASCII plus accented Latin letters, so CJK prose and its
+// fullwidth punctuation end it — Chinese sits flush against a link with
+// no space
 // ("来自小虾平台（https://xiaoxia.app）的助手"). A raw CJK path loses its
 // tail; browsers paste those percent-encoded. The hub's public pages
 // (exe-hub web.go) carry the same pipeline.
 const URL_LATIN = "\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F";
 const URL_RE = new RegExp("https?:\\/\\/[\\w#$%&+,\\-./:;=?@\\[\\]~" + URL_LATIN + "]*[\\w#$%&+\\-/;=@" + URL_LATIN + "]", "g");
+const MDLINK_RE = new RegExp("\\[([^\\[\\]\\n]+)\\]\\((" + URL_RE.source + ")\\)", "g");
 const CODE_RE = /(`{1,2})(?!`)(.+?)(?<!`)\1(?!`)/g;
 const HEADING_RE = /^(#{1,3}) +(\S.*?) *$/;
 function formatText(text) {
@@ -526,17 +536,38 @@ function formatText(text) {
   return out;
 }
 function formatInline(text) {
+  const codes = [...text.matchAll(CODE_RE)].map(m => [m.index, m.index + m[0].length]);
+  const out = [];
+  let last = 0;
+  for (const m of text.matchAll(MDLINK_RE)) {
+    const from = m.index, to = from + m[0].length, w0 = from + 1, w1 = w0 + m[1].length;
+    // a code span that is not wholly inside the words claims the text
+    if (codes.some(([c0, c1]) => c0 < to && c1 > from && !(c0 >= w0 && c1 <= w1))) continue;
+    out.push(...formatCoded(text.slice(last, from), true));
+    out.push(el("a", { href: m[2], title: m[2], target: "_blank", rel: "noopener" }, ...formatCoded(m[1], false)));
+    last = to;
+  }
+  out.push(...formatCoded(text.slice(last), true));
+  return out;
+}
+// code spans, and the stretches between them plain or, with links,
+// with their bare URLs linked
+function formatCoded(text, links) {
+  const plain = s => links ? linkify(s) : [s];
   const out = [];
   let last = 0;
   for (const m of text.matchAll(CODE_RE)) {
-    if (m.index > last) out.push(...linkify(text.slice(last, m.index)));
+    if (m.index > last) out.push(...plain(text.slice(last, m.index)));
     let code = m[2];
     if (code.length > 2 && code.startsWith(" ") && code.endsWith(" ") && code.trim()) code = code.slice(1, -1);
     out.push(el("code", {}, code));
     last = m.index + m[0].length;
   }
-  if (last < text.length) out.push(...linkify(text.slice(last)));
+  if (last < text.length) out.push(...plain(text.slice(last)));
   return out;
+}
+function plainWords(text) {
+  return (text || "").replace(MDLINK_RE, "$1").replace(/\s+/g, " ").trim();
 }
 function linkify(text) {
   const out = [];
@@ -709,7 +740,7 @@ function renderPost(p, opts = {}) {
     // the thread's newest reply on the foot line: who spoke last and
     // the first words, so a follow-up shows without opening the thread
     if (p.last_reply && !p.reply_to) {
-      const cut = (p.last_reply.text || "").replace(/\s+/g, " ").trim();
+      const cut = plainWords(p.last_reply.text);
       const lat = el("span", { class: "p-latest" },
         el("b", {}, p.last_reply.author_name || p.last_reply.author), cut ? " " + cut : "");
       lat.onclick = e => { e.stopPropagation(); openThread(p.id, p.last_reply.id); };
@@ -816,7 +847,7 @@ function threadNode(p, depth = p.depth || 1) {
 function setReplyTarget(p) {
   if (p.id === view.id) { clearReplyTarget(); $("#text").focus(); return; }
   replyTarget = p;
-  const cut = (p.text || "").replace(/\s+/g, " ").trim();
+  const cut = plainWords(p.text);
   $("#rt-label").replaceChildren("Replying to ", el("b", {}, p.author_name || p.author),
     cut ? " — " + (cut.length > 80 ? cut.slice(0, 80) + "…" : cut) : "");
   $("#reply-to").classList.add("on");
