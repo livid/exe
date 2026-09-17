@@ -1837,9 +1837,17 @@ function pencilInput(e) {
   clearTimeout(pTimer);
   // an IME's unfinished syllables are not text yet: the check waits for
   // the composition to end
-  if (!(e && e.isComposing)) pTimer = setTimeout(pencilKick, PENCIL_DEBOUNCE);
+  if (!pComposing && !(e && e.isComposing)) pTimer = setTimeout(pencilKick, PENCIL_DEBOUNCE);
 }
-textEl.addEventListener("compositionend", () => pencilInput());
+// Choosing a candidate often takes longer than the pause a check waits
+// for, and a pass already running when the composition began counts only
+// the time since the last keystroke (Codex's catch): so an open
+// composition holds the pass as well as the timer — it gives up at its
+// next pick — and the composition's end, an edit like any other, starts
+// the wait again.
+let pComposing = false;
+textEl.addEventListener("compositionstart", () => { pComposing = true; clearTimeout(pTimer); });
+textEl.addEventListener("compositionend", () => { pComposing = false; pencilInput(); });
 function pencilKick() { pWanted = true; if (!pRunning) pencilRun(); }
 async function pencilRun() {
   pRunning = true;
@@ -1850,7 +1858,9 @@ async function pencilPass() {
   for (;;) {
     const wait = PENCIL_DEBOUNCE - (Date.now() - pLastInput);
     if (wait > 0) { await sleep(wait); continue; }
+    if (pComposing) return;
     await pencilLoad();
+    if (pComposing) return; // one may have begun while the settings were read
     const p = pencilWhy ? null : splitParas(textEl.value).find(p => checkable(p) && !pCache.has(p.text));
     if (!p) { pencilRender(); return; }
     const ctrl = new AbortController();
