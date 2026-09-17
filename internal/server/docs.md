@@ -503,8 +503,11 @@ choices write — your own words with the remaining changes made, anything
 you ignored left as you typed it. A choice leaves the layer up with what
 remains and the count goes down; it closes when nothing is left, or on
 the button again, Escape, a click elsewhere, or typing. The line beside
-the button still says **Proofreading…** while a check is out, and a
-check that lands while the layer is up is drawn into it.
+the button says **Proofreading…** while a check is out, and a check that
+lands while the layer is up is drawn into it. Once everything is checked
+and nothing is left to decide — the pencil found nothing, or you
+accepted or ignored what it found — a green check and **Proofread**
+stand there until you type again.
 
 The composer uses Blue Pencil's own
 settings — backend, model, thinking level — and its prompt, a paragraph

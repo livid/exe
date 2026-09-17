@@ -110,7 +110,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   Suggestions"; a glyph and the figure on a phone): it wears the pressed
   look (`button.ghost.open`) while its layer is up, as a pop-up's button
   does, toggles it, and never takes the caret. It comes and goes inside
-  the row's flexible text slot, so no other button moves.
+  the row's flexible text slot, so no other button moves. The pass mark
+  in that slot (`#c-status.ok`, "Proofread") is the check box's 10px
+  check in `--green #1f9e33` on the text's baseline, the word in
+  `#0f6b20`: the bright green is 3:1 on `#eee`, too faint for 11px type.
+  A grey "nothing found" reads as a shrug; say a pass as a pass.
 - Status bar: 15px total, a 1px black top border and a 14px `#ddd` face,
   11px `#333` text, `inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px
   0 #aaa`. Text only. Buttons never sit on a status line; they get a row of

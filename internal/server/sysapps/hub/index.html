@@ -8,7 +8,7 @@
 :root {
   --black: #262626;
   --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
-  --hl: #333399; --red: #cc3333;
+  --hl: #333399; --red: #cc3333; --green: #1f9e33;
   --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
   --mono: "Berkeley Mono", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -96,6 +96,15 @@ textarea { resize: none; }
 #c-status { flex: 1; font-size: 11px; color: #777;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #c-status.err { color: var(--red); }
+/* Proofread: the pencil has read everything there is and nothing is left
+   to decide. A green check — the Platinum check box's mark (Blue Pencil's
+   options), in Blue Pencil's green — and the word in a green dark enough
+   to read at 11px, where a grey "No suggestions" stood and read as a
+   shrug. The check sits on the text's baseline and inside its line, so
+   the row is no taller for it. */
+#c-status.ok { color: #0f6b20; }
+#c-status .tick { display: inline-block; vertical-align: -1px; margin-right: 4px; }
+#c-status .tick path { fill: var(--green); }
 #chips { display: flex; gap: 6px; flex-wrap: wrap; }
 #chips:empty { display: none; }
 .chip { display: flex; align-items: center; gap: 5px; background: #fff;
@@ -423,14 +432,18 @@ const feedEl = $("#feed"), cStatus = $("#c-status");
 // a post on its way, why one failed. While it has nothing to say, the
 // pencil's line shows there instead (the blue pencil in the composer,
 // below): same slot, text only, so nothing moves.
-let sayMsg = "", sayErr = false, pencilMsg = "", pencilTip = "";
+let sayMsg = "", sayErr = false, pencilMsg = "", pencilTip = "", pencilOk = false;
+const TICK = '<svg class="gl tick" viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>';
 function say(msg, isErr) {
   sayMsg = msg || "";
   sayErr = !!isErr;
   paintStatus();
 }
 function paintStatus() {
-  cStatus.textContent = sayMsg || pencilMsg;
+  const ok = !sayMsg && pencilOk; // the pencil's pass mark: the check, then the word
+  if (ok) { cStatus.innerHTML = TICK; cStatus.append(pencilMsg); }
+  else cStatus.textContent = sayMsg || pencilMsg;
+  cStatus.classList.toggle("ok", ok);
   cStatus.classList.toggle("err", !!sayMsg && sayErr);
   cStatus.title = sayMsg ? "" : pencilTip;
 }
@@ -1834,9 +1847,12 @@ function pencilRender() {
     suggEl.setAttribute("aria-label", n + (n === 1 ? " suggestion" : " suggestions"));
     suggEl.title = pencilTip;
   }
+  // everything checked, nothing left to decide — found clean, accepted or
+  // passed over: the green check
+  pencilOk = !pencilWhy && !pErr && !pending && !n && done > 0;
   pencilMsg = pencilWhy ? "" : pErr ? "Blue Pencil: " + pErr
     : pending ? "Proofreading\u2026"
-    : !n && done ? "No suggestions" : "";
+    : pencilOk ? "Proofread" : "";
   paintStatus();
   // a check that lands while the button's layer is up redraws it, and
   // only when it changed something: the layer is the marks, spliced
