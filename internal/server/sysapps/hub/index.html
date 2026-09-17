@@ -1868,7 +1868,10 @@ function syncMarks() {
   marksEl.scrollTop = textEl.scrollTop;
 }
 new ResizeObserver(syncMarks).observe(textEl);
-textEl.addEventListener("scroll", () => { syncMarks(); hideMenu(); });
+// a word's menu hangs from the word, so it goes when the field scrolls; a
+// pinned layer hangs from the field's edge or the button, and an accepted
+// sentence scrolling the field to its caret must not take it down
+textEl.addEventListener("scroll", () => { syncMarks(); if (!ctxEl.classList.contains("pin")) hideMenu(); });
 
 // ---- the check loop (Blue Pencil's, for one field) ----
 // One paragraph at a time, in document order, the text re-read before
@@ -1947,10 +1950,18 @@ function pencilReset() {
 // accepting one mark of three sends nothing back to the model, and the
 // other two stay ruled. Marks riding along from an earlier check carry no
 // such knowledge; their paragraph is simply checked again.
-function pencilApply(marks) {
+// Accepting a word leaves the caret after the word, as typing it would.
+// Accepting a sentence (or all of them) is typing the sentence: the caret
+// goes to the end of the last sentence that took a change, after its full
+// stop, the field scrolled to show it — ready to go on writing from there
+// (Livid's rule; the insert alone left it after the last changed word).
+function pencilApply(marks, toSentenceEnd) {
   const v = textEl.value;
   marks = marks.filter(m => v.slice(m.start, m.end) === m.was).sort((a, b) => a.start - b.start);
   if (!marks.length) return;
+  // every mark applied starts before that end, so it moves by all they add
+  const caret = !toSentenceEnd ? -1 : sentenceOf(v, marks[marks.length - 1]).e +
+    marks.reduce((d, m) => d + m.now.length - m.was.length, 0);
   let off = 0;
   for (const p of splitParas(v)) {
     const c = checkable(p) && pCache.get(p.text);
@@ -1971,13 +1982,38 @@ function pencilApply(marks) {
     textEl.setRangeText(mid, from, to, "end");
     textEl.dispatchEvent(new Event("input"));
   }
+  if (caret >= 0) {
+    textEl.setSelectionRange(caret, caret);
+    revealCaret(caret);
+  }
+}
+// A textarea does not scroll to a caret set from script. The mirror holds
+// the same text in the same lines (the input event has just redrawn it),
+// so the box of the character before the caret is read there, and the
+// field scrolled the least that brings its line inside the padding.
+function revealCaret(i) {
+  const walk = document.createTreeWalker(marksEl, NodeFilter.SHOW_TEXT);
+  let n, at = 0;
+  while ((n = walk.nextNode())) {
+    if (n.length && i <= at + n.length) break;
+    at += n.length;
+  }
+  if (!n) return;
+  const k = i - at, r = document.createRange();
+  r.setStart(n, Math.max(0, k - 1));
+  r.setEnd(n, Math.max(1, k));
+  const c = r.getBoundingClientRect(), f = marksEl.getBoundingClientRect();
+  if (c.bottom > f.bottom - 3) textEl.scrollTop += Math.ceil(c.bottom - (f.bottom - 3)) + 2;
+  else if (c.top < f.top + 3) textEl.scrollTop -= Math.ceil(f.top + 3 - c.top) + 2;
+  syncMarks();
 }
 
 // ---- the floating layer ----
 // the contextual menu, Blue Pencil's: items { label, act, dis }, "-"
 // separators and here a { head } line of nodes; closed by a click
-// anywhere, Escape, a pick, typing, or the field scrolling. It never takes
-// the focus from the field, so the caret (and a phone's keyboard) stays.
+// anywhere, Escape, a pick, typing, or (a word's menu) the field
+// scrolling. It never takes the focus from the field, so the caret (and a
+// phone's keyboard) stays.
 function showMenu(x, y, items, pin) {
   hideMenu();
   ctxEl.replaceChildren(...items.map(it => {
@@ -2028,7 +2064,7 @@ function markMenu(hit) {
     { label: "Accept", act: () => pencilApply([m]) },
     { label: "Ignore", act: () => { pIgnored.add(markKey(m)); pencilRender(); } }, "-",
     { label: "Show Rewritten Sentence", act: () => sentenceMenu(m, x) },
-    { label: "Accept All", act: () => pencilApply(pMarks), dis: pMarks.length < 2 },
+    { label: "Accept All", act: () => pencilApply(pMarks, true), dis: pMarks.length < 2 },
   ]);
 }
 
@@ -2099,11 +2135,11 @@ function sentenceItems(v, list, again) {
   const items = [];
   for (const st of list) {
     items.push({ head: sentenceHead(v, st), wide: true },
-      { label: "Accept Sentence", act: () => { pencilApply(st.inside); again(); } },
+      { label: "Accept Sentence", act: () => { pencilApply(st.inside, true); again(); } },
       { label: "Ignore Sentence", act: () => { for (const m of st.inside) pIgnored.add(markKey(m)); pencilRender(); again(); } },
       "-");
   }
-  items.push({ label: "Accept All", act: () => pencilApply(pMarks),
+  items.push({ label: "Accept All", act: () => pencilApply(pMarks, true),
     dis: list.length === 1 && pMarks.length <= list[0].inside.length });
   return items;
 }

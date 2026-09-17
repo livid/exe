@@ -502,7 +502,11 @@ it, and **Accept All** at the foot. What it shows is exactly what those
 choices write — your own words with the remaining changes made, anything
 you ignored left as you typed it. A choice leaves the layer up with what
 remains and the count goes down; it closes when nothing is left, or on
-the button again, Escape, a click elsewhere, or typing. The line beside
+the button again, Escape, a click elsewhere, or typing. Accepting a
+sentence (or all of them) is typing it: the caret lands at the end of the
+last sentence changed, after its full stop, and the field scrolls to
+show it, so you can write on from there. Accepting a single word leaves
+the caret after the word. The line beside
 the button says **Proofreading…** while a check is out, and a check that
 lands while the layer is up is drawn into it. Once everything is checked
 and nothing is left to decide — the pencil found nothing, or you
