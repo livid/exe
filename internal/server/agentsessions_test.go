@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -411,5 +412,65 @@ func TestAgentSessionPromptLive(t *testing.T) {
 			t.Fatalf("say and prompt never ran as one line; pane shows %q", pane)
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// Deliveries that overlap stay whole: tmux's paste buffers belong to the
+// server, not a session, so without a lock one request's paste carries
+// another's text, into another pane or under another's typed words.
+func TestAgentSessionPromptOverlap(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux on this host")
+	}
+	tmuxSocket = fmt.Sprintf("exe-test-overlap-%d", os.Getpid())
+	defer func() {
+		if c := tmuxCmd("kill-server"); c != nil {
+			c.Run()
+		}
+		tmuxSocket = ""
+	}()
+	dir := t.TempDir()
+	for _, name := range []string{"exe-claude-2", "exe-claude-3"} {
+		if out, err := tmuxCmd("new-session", "-d", "-s", name, "-x", "200", "-y", "24", "sh").CombinedOutput(); err != nil {
+			t.Fatalf("new-session: %v %s", err, out)
+		}
+	}
+	s := &Server{StateDir: dir}
+	// four at once: two to each pane, every one with words of its own
+	want := map[string][]string{}
+	var wg sync.WaitGroup
+	for i, name := range []string{"exe-claude-2", "exe-claude-3", "exe-claude-2", "exe-claude-3"} {
+		file := filepath.Join(dir, name)
+		mark := fmt.Sprintf("m%d", i)
+		want[file] = append(want[file], "typed-"+mark+" pasted-"+mark)
+		body, _ := json.Marshal(map[string]string{"say": "echo typed-" + mark, "prompt": "pasted-" + mark + " >> " + file})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r := httptest.NewRequest(http.MethodPost, "/v1/agents/claude/sessions/"+name+"/prompt", bytes.NewReader(body))
+			r.SetPathValue("app", "claude")
+			r.SetPathValue("name", name)
+			w := httptest.NewRecorder()
+			s.handleAgentSessionPrompt(w, r)
+			if w.Code != http.StatusNoContent {
+				t.Errorf("prompt %s to %s: %d %s", mark, name, w.Code, w.Body)
+			}
+		}()
+	}
+	wg.Wait()
+	for file, lines := range want {
+		sort.Strings(lines)
+		for i := 0; ; i++ {
+			b, _ := os.ReadFile(file)
+			got := strings.Fields(strings.ReplaceAll(strings.TrimSpace(string(b)), " ", "_"))
+			sort.Strings(got)
+			if strings.ReplaceAll(strings.Join(lines, "\n"), " ", "_") == strings.Join(got, "\n") {
+				break
+			}
+			if i == 60 {
+				t.Fatalf("%s holds %q, want the lines %q", filepath.Base(file), b, lines)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
 }

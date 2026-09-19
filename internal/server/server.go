@@ -66,6 +66,10 @@ type Server struct {
 	agentLastMu sync.Mutex
 	agentLast   map[string]string
 
+	// One message typed into a session at a time (handleAgentSessionPrompt):
+	// tmux's paste buffers belong to the server, not to a session.
+	agentPromptMu sync.Mutex
+
 	// Tickets for rendered Workspace pages (pages.go): ticket -> file, expiry.
 	pageMu      sync.Mutex
 	pageTickets map[string]pageTicket

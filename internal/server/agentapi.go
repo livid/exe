@@ -172,6 +172,10 @@ func (s *Server) handleAgentSessionPrompt(w http.ResponseWriter, r *http.Request
 		return
 	}
 	say := strings.Join(strings.Fields(req.Say), " ") // a newline typed as a key would send early
+	// say, paste and Return are one message: a second delivery in between
+	// would load its text over this one's buffer, or land inside its line
+	s.agentPromptMu.Lock()
+	defer s.agentPromptMu.Unlock()
 	load := tmuxCmd("load-buffer", "-b", "exe-prompt", "-")
 	if load == nil {
 		writeErr(w, http.StatusInternalServerError, errors.New("sessions need tmux on this host"))
