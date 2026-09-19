@@ -150,6 +150,9 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-text { margin: 3px 0 0 20px; white-space: pre-wrap; overflow-wrap: break-word;
   user-select: text; cursor: text; }
 .p-text a { color: var(--hl); }
+/* a mention: the person's name as it is today, in the links' ink; a
+   name, not an address, so no underline */
+.p-mention { color: var(--hl); }
 /* a found word in Find's results: highlighter yellow behind the type,
    which keeps its own colour (a link stays blue), weight and width — a
    background moves nothing, so a marked post sets as it does in the feed */
@@ -721,7 +724,8 @@ const CODE_RE = /(`{1,2})(?!`)(.+?)(?<!`)\1(?!`)/g;
 // writing ("2 ** 3", a lone "**") stay the characters they were.
 const BOLD_RE = /\*\*([^\s*](?:[^*\n]*[^\s*])?)\*\*/g;
 const HEADING_RE = /^(#{1,3}) +(\S.*?) *$/;
-function formatText(text) {
+function formatText(text, names) {
+  mentionNames = names || null; // for linkify, down the pipeline; the whole call is one turn
   const out = [];
   let plain = "";
   // block closes the words before a block: the break before it and one
@@ -914,8 +918,8 @@ function formatCoded(text, links) {
 // asterisks inside a code span stay); a bulleted item's marker becomes a
 // bullet (card.Unlist), since the lines are run together and "- one -
 // two" would not read
-function plainWords(text) {
-  text = text || "";
+function plainWords(text, names) {
+  text = nameMentions(text || "", names);
   if (text.includes("|")) {
     const lines = text.split("\n"), out = [];
     for (let i = 0; i < lines.length; i++) {
@@ -937,12 +941,63 @@ function linkify(text) {
   const out = [];
   let last = 0;
   for (const m of text.matchAll(URL_RE)) {
-    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m.index > last) out.push(...mentioned(text.slice(last, m.index)));
     out.push(el("a", { href: m[0], target: "_blank", rel: "noopener" }, m[0]));
     last = m.index + m[0].length;
   }
+  if (last < text.length) out.push(...mentioned(text.slice(last)));
+  return out;
+}
+// Mentions (the hub's PLAN.md, Mentions). A post names a person as "@"
+// and their profile id, the 16 hex characters that never change, and the
+// hub sends the name each id goes by now with the post (p.mentions), so
+// a rename shows in every post already written. mentionsAt reads a run
+// of words as the hub's mention.At does: no ASCII letter, digit or "_"
+// on either side, so an address or a longer run of hex is no mention and
+// Chinese may touch one. mentioned sets the ones with a name as
+// .p-mention, "@" and the name, the id on hover; it is handed only words
+// outside code spans, links and URLs, which is where a mention shows
+// (card.Mentions), and an id without a name stays as typed.
+// nameMentions is the same for plainWords, where the claims are worked
+// out here. The hub's card/testdata/mentions.json holds the cases both
+// are run against (~/tools/playwright/exe-hub-app-mention-test.js).
+let mentionNames = null;
+const MENTION_RE = /@[0-9a-f]{16}/g, WORD_RE = /[A-Za-z0-9_]/;
+function mentionsAt(text) {
+  const out = [];
+  for (const m of text.matchAll(MENTION_RE)) {
+    const to = m.index + m[0].length;
+    if ((m.index > 0 && WORD_RE.test(text[m.index - 1])) || (to < text.length && WORD_RE.test(text[to]))) continue;
+    out.push([m.index, to]);
+  }
+  return out;
+}
+function mentioned(text) {
+  if (!mentionNames || !text.includes("@")) return [text];
+  const out = [];
+  let last = 0;
+  for (const [from, to] of mentionsAt(text)) {
+    const id = text.slice(from + 1, to), name = mentionNames[id];
+    if (!name) continue;
+    if (from > last) out.push(text.slice(last, from));
+    out.push(el("span", { class: "p-mention", title: id }, "@" + name));
+    last = to;
+  }
   if (last < text.length) out.push(text.slice(last));
   return out;
+}
+function nameMentions(text, names) {
+  if (!names || !text.includes("@")) return text;
+  const claims = [...codeSpans(text), ...[...text.matchAll(MDLINK_RE)].map(m => [m.index, m.index + m[0].length]),
+    ...[...text.matchAll(URL_RE)].map(m => [m.index, m.index + m[0].length])];
+  let out = "", last = 0;
+  for (const [from, to] of mentionsAt(text)) {
+    const name = names[text.slice(from + 1, to)];
+    if (!name || claims.some(([c0, c1]) => c0 < to && c1 > from)) continue;
+    out += text.slice(last, from) + "@" + name;
+    last = to;
+  }
+  return out + text.slice(last);
 }
 
 // A video's box has its final size before the file loads: the embed's
@@ -1038,7 +1093,7 @@ function renderPost(p, opts = {}) {
     timeEl(p.received));
   const node = el("div", { class: "post" + (opts.focus ? " focus" : "") }, head);
   node.dataset.id = p.id;
-  if (p.text) node.append(el("div", { class: "p-text" }, ...formatText(p.text)));
+  if (p.text) node.append(el("div", { class: "p-text" }, ...formatText(p.text, p.mentions)));
   if (p.card) { // the first link, unfurled by the hub at ingest
     // a box holding two links, the page and its archived copy (a link
     // cannot sit inside another)
@@ -1104,7 +1159,7 @@ function renderPost(p, opts = {}) {
     // the thread's newest reply on the foot line: who spoke last and
     // the first words, so a follow-up shows without opening the thread
     if (p.last_reply && !p.reply_to) {
-      const cut = plainWords(p.last_reply.text);
+      const cut = plainWords(p.last_reply.text, p.mentions);
       const lat = el("span", { class: "p-latest" },
         el("b", {}, p.last_reply.author_name || p.last_reply.author), cut ? " " + cut : "");
       lat.onclick = e => { e.stopPropagation(); openThread(p.id, p.last_reply.id); };
@@ -1211,7 +1266,7 @@ function threadNode(p, depth = p.depth || 1) {
 function setReplyTarget(p) {
   if (p.id === view.id) { clearReplyTarget(); $("#text").focus(); return; }
   replyTarget = p;
-  const cut = plainWords(p.text);
+  const cut = plainWords(p.text, p.mentions);
   $("#rt-label").replaceChildren("Replying to ", el("b", {}, p.author_name || p.author),
     cut ? " — " + (cut.length > 80 ? cut.slice(0, 80) + "…" : cut) : "");
   $("#reply-to").classList.add("on");

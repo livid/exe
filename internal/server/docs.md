@@ -497,6 +497,12 @@ box, so the feed never does. Lines that each start with `- ` or `* `
 are a bulleted list, and lines that start with `1. `, `2. ` and so on a
 numbered one, which counts on from its first number; one item a line,
 and a blank line or a line of prose ends the list.
+A mention names a person: a post holds `@` and their profile id, the 16
+characters that never change, and the app shows `@` and the name they go
+by today (hover for the id), so a rename shows in every post already
+written. On the hub's public pages, typing `@` in the Post window lists
+the people to pick from; in this app's composer write the id form for
+now.
 **Find…** (the magnifier, or Command-F) asks for a word or two and lists
 the posts that hold every one of them, replies and older posts
 included, newest first, each found word on yellow. A word matches
