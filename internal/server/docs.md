@@ -96,8 +96,14 @@ With notifications on, the daemon also watches the sky over the first city
 in the Weather app — the row your drag put on top. When Open-Meteo's
 quarter-hour rows put rain in the next 60 minutes, a push says **Rain
 possible soon** — or **likely**, when the chance is high — and a second
-one says **Next hour looks dry** when a fresh forecast clears it, at most
-four rain warnings in 24 hours. Reorder the Weather list and the watcher
+one says **Next hour looks dry** when a fresh forecast clears it. Three
+more hazards ride the same watch, their lines the National Weather
+Service's own: **Dangerous heat** at a feels-like of 105°F, **High wind**
+at gusts of 35 mph, and **Fire weather** when humidity at or under 15%
+meets those gusts — a red-flag hour that then keeps the plain wind push
+quiet, so a Santa Ana taps once. Each hazard clears with its own easing
+push, at most four warnings per hazard in 24 hours, in °F and mph for a US
+city and °C and km/h elsewhere. Reorder the Weather list and the watcher
 follows; there is no setting to flip.
 
 A Claude Code window's status line shows the session's figures at its
