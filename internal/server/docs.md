@@ -179,7 +179,10 @@ watch: `GET /v1/agents/claude/sessions` lists the rows with their states,
 `POST /v1/agents/claude/sessions` opens a numbered session with a first
 message (and, for Claude Code, a session to resume or fork and a permission
 mode), `POST …/sessions/<name>/prompt` types a message into one, `DELETE
-…/sessions/<name>` ends it. The hub watcher builds this way: an instruction
+…/sessions/<name>` ends it. The message's `prompt` goes in as a paste, and
+Claude Code treats pasted text as material rather than as your words, so
+give the request a `say` as well: one line, typed ahead of the paste, that
+tells the session what to do with it. The hub watcher builds this way: an instruction
 you post in one of Claude's hub threads opens as a session in the Claude
 Code window's column, works there in view, reports in the thread when it
 is done and stays open in the window to be continued.

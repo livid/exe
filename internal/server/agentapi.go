@@ -24,7 +24,7 @@ import (
 //	                                                 "threads", the threads started elsewhere (codexthreads.go)
 //	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode} → {name, number}
 //	                                                 (Codex: prompt and resume, a thread id, alone)
-//	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt}: pasted into the session as one message
+//	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt, say}: one message, "say" typed and the prompt pasted after it
 //	DELETE /v1/agents/{app}/sessions/{name}          ends the session, as the column's Archive does
 
 var agentIDPattern = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
@@ -148,6 +148,11 @@ func (s *Server) handleAgentSessionCreate(w http.ResponseWriter, r *http.Request
 // handleAgentSessionPrompt types a message into a running session: the
 // text goes in as one bracketed paste, so the CLI keeps its newlines as
 // text and shows it as a pasted block, then Return sends it.
+//
+// Claude Code hands a paste to the model as <pasted_content>: data, whose
+// instructions count only where the typed part of the message asks for
+// them, so a paste alone is declined ("say so in your own words"). "say"
+// is that typed part: one line, sent as keystrokes ahead of the paste.
 func (s *Server) handleAgentSessionPrompt(w http.ResponseWriter, r *http.Request) {
 	a, ok := s.agentOf(w, r)
 	if !ok {
@@ -160,11 +165,13 @@ func (s *Server) handleAgentSessionPrompt(w http.ResponseWriter, r *http.Request
 	}
 	var req struct {
 		Prompt string `json:"prompt"`
+		Say    string `json:"say"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil || strings.TrimSpace(req.Prompt) == "" {
 		writeErr(w, http.StatusBadRequest, errors.New("prompt: text wanted"))
 		return
 	}
+	say := strings.Join(strings.Fields(req.Say), " ") // a newline typed as a key would send early
 	load := tmuxCmd("load-buffer", "-b", "exe-prompt", "-")
 	if load == nil {
 		writeErr(w, http.StatusInternalServerError, errors.New("sessions need tmux on this host"))
@@ -178,6 +185,13 @@ func (s *Server) handleAgentSessionPrompt(w http.ResponseWriter, r *http.Request
 	// paste-buffer and send-keys want a pane: "=name" names a session but
 	// not a pane ("can't find pane"), "=name:" is its current window's
 	pane := "=" + name + ":"
+	if say != "" {
+		if out, err := tmuxCmd("send-keys", "-t", pane, "-l", "--", say+" ").CombinedOutput(); err != nil {
+			writeErr(w, http.StatusNotFound, fmt.Errorf("tmux send-keys: %s", strings.TrimSpace(string(out))))
+			return
+		}
+		time.Sleep(300 * time.Millisecond) // the keys are read as typing before the paste begins
+	}
 	if out, err := tmuxCmd("paste-buffer", "-p", "-d", "-b", "exe-prompt", "-t", pane).CombinedOutput(); err != nil {
 		writeErr(w, http.StatusNotFound, fmt.Errorf("tmux paste-buffer: %s", strings.TrimSpace(string(out))))
 		return

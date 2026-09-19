@@ -395,4 +395,21 @@ func TestAgentSessionPromptLive(t *testing.T) {
 	if w := prompt("exe-claude-3"); w.Code != http.StatusNotFound {
 		t.Fatalf("prompt to a session that does not exist: %d %s, want 404", w.Code, w.Body)
 	}
+	// "say" goes in as keystrokes ahead of the paste, on one line: Claude
+	// Code reads a paste alone as data and declines what it asks
+	said := filepath.Join(dir, "said")
+	body, _ = json.Marshal(map[string]string{"say": "echo typed\nfirst", "prompt": "pasted > " + said})
+	if w := prompt("exe-claude-2"); w.Code != http.StatusNoContent {
+		t.Fatalf("prompt with say: %d %s", w.Code, w.Body)
+	}
+	for i := 0; ; i++ {
+		if b, _ := os.ReadFile(said); strings.TrimSpace(string(b)) == "typed first pasted" {
+			break
+		}
+		if i == 100 {
+			pane, _ := tmuxCmd("capture-pane", "-p", "-t", "=exe-claude-2:").Output()
+			t.Fatalf("say and prompt never ran as one line; pane shows %q", pane)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
