@@ -154,6 +154,30 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-text h2 { font-size: 14px; margin: 14px 0 3px; }
 .p-text h3 { font-size: 12px; margin: 12px 0 2px; }
 .p-text .first { margin-top: 0; }
+/* a table (Markdown's pipe table, formatText): a white box with one
+   black line round it, as wide as the table and never wider
+   than the post — past that it scrolls sideways under a Platinum bar,
+   since the feed itself never scrolls that way. Every inner line is one
+   border on one cell — right and bottom, none on the last column or
+   the last row, whose line is the box's (or the scroll bar's top line).
+   Cells break at words only; a right-aligned column is figures, and
+   under its head they stay on one line. .first opens the post and
+   .last ends it: no room on that side. The hub's public pages carry
+   the same numbers. */
+.p-tbl { margin: 8px 0; width: fit-content; max-width: 100%; box-sizing: border-box;
+  overflow-x: auto; overflow-y: hidden; border: 1px solid var(--black); background: #fff;
+  white-space: normal; overscroll-behavior-x: contain; }
+.p-tbl.last { margin-bottom: 2px; }
+.p-tbl table { border-collapse: separate; border-spacing: 0; overflow-wrap: normal; word-break: normal; }
+.p-tbl th, .p-tbl td { padding: 3px 8px; text-align: left; vertical-align: top; font-size: 12px; line-height: 1.4;
+  border-right: 1px solid var(--g300); border-bottom: 1px solid var(--g200); }
+.p-tbl th { font-weight: bold; vertical-align: bottom; background: var(--g200); border-bottom-color: var(--g600); }
+.p-tbl tr > :last-child { border-right: 0; }
+.p-tbl tbody tr:last-child td, .p-tbl thead:last-child th { border-bottom: 0; }
+.p-tbl .l { text-align: left; }
+.p-tbl .c { text-align: center; }
+.p-tbl .r { text-align: right; }
+.p-tbl td.r { white-space: nowrap; }
 /* flex-start, not the default stretch: a stretched flex line would pull every
    picture in it to the tallest sibling's height and distort its shape */
 .p-embeds { margin: 6px 0 0 20px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
@@ -313,12 +337,40 @@ body.mobile #status { padding-right: 8px; }
   border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
 .at-y-end::-webkit-scrollbar-thumb:vertical:active {
   border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+/* the horizontal bar, under a table wider than its post: the desktop's
+   spec in its .doc-scroll form — the box's own border is the bar's
+   bottom line, so the track, the thumb and the arrows draw none, and
+   the track's top line is the one seam with the table above */
+::-webkit-scrollbar-track:horizontal { border-top: 1px solid var(--black);
+  background: linear-gradient(to bottom, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:horizontal { border: 1px solid var(--black); border-bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="14" shape-rendering="crispEdges"><rect x="0" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="0" y="4" width="1" height="6" fill="%23ccccff"/><rect x="1" y="4" width="1" height="7" fill="%23333399"/><rect x="2" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="2" y="4" width="1" height="6" fill="%23ccccff"/><rect x="3" y="4" width="1" height="7" fill="%23333399"/><rect x="4" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="1" height="6" fill="%23ccccff"/><rect x="5" y="4" width="1" height="7" fill="%23333399"/><rect x="6" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="6" y="4" width="1" height="6" fill="%23ccccff"/><rect x="7" y="4" width="1" height="7" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to bottom, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 1px 0 0 #ccccff, inset -1px 0 0 #6666cc; }
+::-webkit-scrollbar-thumb:horizontal:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="14" shape-rendering="crispEdges"><rect x="0" y="3" width="1" height="1" fill="%23ccccff"/><rect x="0" y="4" width="1" height="6" fill="%239999ff"/><rect x="1" y="4" width="1" height="7" fill="%23000066"/><rect x="2" y="3" width="1" height="1" fill="%23ccccff"/><rect x="2" y="4" width="1" height="6" fill="%239999ff"/><rect x="3" y="4" width="1" height="7" fill="%23000066"/><rect x="4" y="3" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="1" height="6" fill="%239999ff"/><rect x="5" y="4" width="1" height="7" fill="%23000066"/><rect x="6" y="3" width="1" height="1" fill="%23ccccff"/><rect x="6" y="4" width="1" height="6" fill="%239999ff"/><rect x="7" y="4" width="1" height="7" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to bottom, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 1px 0 0 #9999ff, inset -1px 0 0 #333399; }
+:not(.scrolled-x)::-webkit-scrollbar-thumb:horizontal {
+  border-left-color: #ccccff; box-shadow: inset -1px 0 0 #6666cc; }
+:not(.scrolled-x)::-webkit-scrollbar-thumb:horizontal:active {
+  border-left-color: #9999ff; box-shadow: inset -1px 0 0 #333399; }
+.at-x-end::-webkit-scrollbar-thumb:horizontal {
+  border-right-color: #6666cc; box-shadow: inset 1px 0 0 #ccccff; }
+.at-x-end::-webkit-scrollbar-thumb:horizontal:active {
+  border-right-color: #333399; box-shadow: inset 1px 0 0 #9999ff; }
 ::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
   background: #ddd; border: 1px solid var(--black);
   box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
   background-position: center; background-repeat: no-repeat; }
 ::-webkit-scrollbar-button:vertical { border-right: 0; }
 ::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:horizontal { border-bottom: 0; }
+::-webkit-scrollbar-button:horizontal:end:increment:enabled { width: 14px; border-left: 0; border-right: 0; }
+::-webkit-scrollbar-button:horizontal:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="8" shape-rendering="crispEdges"><path fill="black" d="M0 3h1v2h-1z M1 2h1v4h-1z M2 1h1v6h-1z M3 0h1v8h-1z"/></svg>'); }
+::-webkit-scrollbar-button:horizontal:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="8" shape-rendering="crispEdges"><path fill="black" d="M0 0h1v8h-1z M1 1h1v6h-1z M2 2h1v4h-1z M3 3h1v2h-1z"/></svg>'); }
 ::-webkit-scrollbar-button:vertical:decrement {
   background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
 ::-webkit-scrollbar-button:vertical:increment {
@@ -570,8 +622,7 @@ function viewImage(em) {
 // Post text is rendered as DOM nodes — text, headings, anchors and code
 // elements, never markup — so a post cannot smuggle HTML in. A line that
 // is one to three #, a space and words is a heading (Markdown's ATX form,
-// three levels — the one piece of Markdown a post takes, nothing else of
-// it), set as an h1–h3 block whose words still take code spans and
+// three levels), set as an h1–h3 block whose words still take code spans and
 // links; the block breaks the line itself, so the line break before it
 // and the one that ends it go with it, and so does one blank line on
 // either side — the heading's own margins space it, as in Markdown, and
@@ -604,19 +655,79 @@ const HEADING_RE = /^(#{1,3}) +(\S.*?) *$/;
 function formatText(text) {
   const out = [];
   let plain = "";
-  const flush = () => { if (plain) out.push(...formatInline(plain)); plain = ""; };
+  // block closes the words before a block: the break before it and one
+  // blank line above it go with it
+  const block = () => {
+    if (plain.endsWith("\n")) plain = plain.slice(0, -1);
+    if (plain.endsWith("\n")) plain = plain.slice(0, -1);
+    if (plain) out.push(...formatInline(plain));
+    plain = "";
+  };
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const m = HEADING_RE.exec(lines[i]);
-    if (!m) { plain += lines[i] + (i < lines.length - 1 ? "\n" : ""); continue; }
-    if (plain.endsWith("\n")) plain = plain.slice(0, -1);  // the break before the heading
-    if (plain.endsWith("\n")) plain = plain.slice(0, -1);  // one blank line above it
-    flush();
-    out.push(el("h" + m[1].length, out.length ? {} : { class: "first" }, ...formatInline(m[2])));
-    if (lines[i + 1] === "") i++;                           // one blank line below it
+    const m = HEADING_RE.exec(lines[i]), t = m ? null : tableAt(lines, i);
+    if (m) {
+      block();
+      out.push(el("h" + m[1].length, out.length ? {} : { class: "first" }, ...formatInline(m[2])));
+    } else if (t) {
+      block();
+      i += t.n - 1;
+      const last = !lines.slice(i + 1).join("").trim();
+      out.push(formatTable(t, (out.length ? "" : " first") + (last ? " last" : "")));
+    } else { plain += lines[i] + (i < lines.length - 1 ? "\n" : ""); continue; }
+    if (lines[i + 1] === "") i++;                           // one blank line below the block
   }
-  flush();
+  if (plain) out.push(...formatInline(plain));
   return out;
+}
+// A table — Markdown's pipe table, GFM's form, read exactly as the hub
+// reads it (exe-hub internal/card/table.go; its testdata/tables.json
+// holds the cases both parsers are run against): a header row with a
+// pipe, a delimiter row with a pipe of its own and as many cells —
+// dashes, a colon at either end for left, right or centre — then one
+// row per line, a short row filled with empty cells and a long one
+// cut. It ends at the first line that is blank, has no pipe or is a
+// heading: prose set right under a table is not a row of it. \| is a
+// pipe inside a cell, in a code span too; the pipes that open and close
+// a line are the table's frame, not cells.
+const TABLE_RULE_RE = /^:?-+:?$/, TABLE_HEADING_RE = /^#{1,3} +\S/;
+function tableCells(line) {
+  const cells = [];
+  let cur = "", piped = false;
+  for (let k = 0; k < line.length; k++) {
+    if (line[k] === "\\" && line[k + 1] === "|") { cur += "|"; k++; }
+    else if (line[k] === "|") { piped = true; cells.push(cur); cur = ""; }
+    else cur += line[k];
+  }
+  cells.push(cur);
+  if (!piped) return null;
+  if (!cells[0].trim()) cells.shift();
+  if (cells.length && !cells[cells.length - 1].trim()) cells.pop();
+  return cells.length ? cells.map(c => c.trim()) : null;
+}
+function tableAt(lines, i) {
+  if (i + 1 >= lines.length || TABLE_HEADING_RE.test(lines[i])) return null;
+  const head = tableCells(lines[i]), rule = head && tableCells(lines[i + 1]);
+  if (!rule || rule.length !== head.length || !rule.every(c => TABLE_RULE_RE.test(c))) return null;
+  const align = rule.map(c => c.startsWith(":") ? (c.endsWith(":") ? "c" : "l") : c.endsWith(":") ? "r" : "");
+  const rows = [];
+  let j = i + 2;
+  for (; j < lines.length; j++) {
+    const cells = !TABLE_HEADING_RE.test(lines[j]) && tableCells(lines[j]);
+    if (!cells) break;
+    rows.push(head.map((_, k) => cells[k] || ""));
+  }
+  return { align, head, rows, n: j - i };
+}
+// the table as nodes: the box that scrolls sideways, a head row, the
+// rows under it, each cell through the inline pipeline and a column's
+// alignment a class on its cells
+function formatTable(t, marks) {
+  const row = (tag, cells) => el("tr", {}, ...cells.map((c, k) =>
+    el(tag, t.align[k] ? { class: t.align[k] } : {}, ...formatInline(c))));
+  const parts = [el("thead", {}, row("th", t.head))];
+  if (t.rows.length) parts.push(el("tbody", {}, ...t.rows.map(r => row("td", r))));
+  return el("div", { class: "p-tbl" + marks }, el("table", {}, ...parts));
 }
 function formatInline(text) {
   const codes = [...text.matchAll(CODE_RE)].map(m => [m.index, m.index + m[0].length]);
@@ -649,8 +760,22 @@ function formatCoded(text, links) {
   if (last < text.length) out.push(...plain(text.slice(last)));
   return out;
 }
+// a post's words plain: a table back to its cells' words, " · " between
+// them and the delimiter row gone (the hub's card.Untable), a Markdown
+// link back to its words
 function plainWords(text) {
-  return (text || "").replace(MDLINK_RE, "$1").replace(/\s+/g, " ").trim();
+  text = text || "";
+  if (text.includes("|")) {
+    const lines = text.split("\n"), out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const t = tableAt(lines, i);
+      if (!t) { out.push(lines[i]); continue; }
+      for (const r of [t.head, ...t.rows]) out.push(r.filter(Boolean).join(" · "));
+      i += t.n - 1;
+    }
+    text = out.join("\n");
+  }
+  return text.replace(MDLINK_RE, "$1").replace(/\s+/g, " ").trim();
 }
 function linkify(text) {
   const out = [];
@@ -2499,6 +2624,8 @@ document.addEventListener("scroll", e => {
   if (!(t instanceof Element)) return;
   t.classList.toggle("scrolled-y", t.scrollTop >= 1);
   t.classList.toggle("at-y-end", t.scrollTop >= 1 && t.scrollTop >= t.scrollHeight - t.clientHeight - 1);
+  t.classList.toggle("scrolled-x", t.scrollLeft >= 1);
+  t.classList.toggle("at-x-end", t.scrollLeft >= 1 && t.scrollLeft >= t.scrollWidth - t.clientWidth - 1);
 }, { capture: true, passive: true });
 </script>
 </body>
