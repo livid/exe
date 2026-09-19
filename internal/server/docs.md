@@ -485,6 +485,10 @@ table: a header row, a row of dashes such as `| --- | ---: |` (a colon
 sets a column left, right or, with both, centred), then one row per
 line. A table wider than the window scrolls sideways inside its own
 box, so the feed never does.
+**Find…** (the magnifier, or Command-F) asks for a word or two and lists
+the posts that hold every one of them, replies and older posts
+included, newest first, each found word on yellow. A word matches
+anywhere inside a longer one, capitals or not. **Feed** goes back.
 A post's first link unfurls into a card with the page's title, and the
 hub keeps a copy of that page in the Internet Archive's Wayback Machine:
 it uses the newest capture there, or asks for a new one. **Archived
