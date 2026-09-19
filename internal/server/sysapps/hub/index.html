@@ -1807,8 +1807,11 @@ $("#text").addEventListener("keydown", e => {
 // Return on a list line opens the next item: the same bullet, or the
 // number after this one with its own "." or ")", and the spaces the
 // line's marker had; what stood right of the caret goes down with it.
-// Return on an item with no words yet ends the list instead — the marker
-// goes and the line is left empty, the way every Markdown field does it.
+// Return on an item with no words yet ends the list instead: the marker
+// goes, and the Return still breaks the line — the emptied line stays as
+// the blank line under the list and the caret stands on a fresh one
+// below it, ready for prose (Livid's rule; leaving the caret on the
+// emptied line cost a second Return).
 // The lines are read as posts are (listAt: the marker at the start of the
 // line, up to three digits), but an item may still be empty here, since
 // it is being written. A plain Return is left alone wherever this does
@@ -1830,12 +1833,12 @@ function listReturn(ta) {
   const m = LIST_LINE_RE.exec(v.slice(ls, le));
   if (!m || from < ls + m[0].length - m[5].length) return false; // no item, or the caret in its marker
   let put, a = from, b = to;
-  if (!m[5].trim() && from === to) { put = ""; a = ls; b = le; } // an empty item: the list ends here
+  if (!m[5].trim() && from === to) { put = "\n"; a = ls; b = le; } // an empty item: its marker goes, the line break stays
   else if (m[1]) put = "\n" + m[1] + m[4];
   else if (+m[2] < 999) put = "\n" + (+m[2] + 1) + m[3] + m[4];
   else return false;
   ta.setSelectionRange(a, b);
-  if (!document.execCommand(put ? "insertText" : "delete", false, put)) {
+  if (!document.execCommand("insertText", false, put)) {
     ta.setRangeText(put, a, b, "end");
     ta.dispatchEvent(new Event("input"));
   }

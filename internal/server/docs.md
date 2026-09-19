@@ -513,8 +513,9 @@ leaves it shallow again.
 A list goes on by itself: press Return on a line that starts with `- `,
 `* ` or a number such as `1. ` and the next line opens with the same
 bullet, or the next number. Return on an item you have left empty ends
-the list. Shift-Return is always a plain new line, and Undo takes a new
-item back.
+the list: the marker goes and you land on a fresh line under a blank
+one. Shift-Return is always a plain new line, and Undo takes a new item
+back.
 
 When **Blue Pencil** works on this node — its backend is set up and a
 model is named for it — the composer is proofread as you write, the way
