@@ -38,9 +38,10 @@ button.ghost.sm { padding: 1px 8px; font-size: 10px; border-radius: 3px; height:
 /* a dialog's default button — Return presses it — wears the ring: outset
    3px from the button (HIG Fig. 2-3), drawn as the desktop draws it */
 button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
-/* Find… / Refresh / Profile… carry a 13px pixel glyph beside their label;
-   a phone (body.mobile) shows only the glyph so the composer row keeps
-   room for its status text. The glyph is currentColor, so a pressed
+/* Find… / Refresh / Profile… carry a 13px pixel glyph: a phone
+   (body.mobile) shows only the glyph so the composer row keeps room for
+   its status text, the desktop only the label — but for Find…, which
+   wears both there (#find, below). The glyph is currentColor, so a pressed
    button inverts it with the label; the magnifier's white lens goes
    pressed-gray so it never reads as a hole. */
 button.ghost.icon .gl { display: none; }
@@ -51,6 +52,13 @@ body.mobile button.ghost.icon .gl { display: block; }
 .gl .k { fill: currentColor; }
 .gl .w { fill: #fff; }
 button.ghost:active .gl .w, button.ghost.open .gl .w { fill: #666; }
+/* Find… wears its magnifier on the desktop too, left of the word with
+   the 5px the thread head's Feed gives its arrow; a phone keeps the
+   glyph alone (the id outranks the rule above, so its padding is said
+   again) */
+#find { display: inline-flex; align-items: center; gap: 5px; padding: 2px 12px 2px 9px; }
+#find .gl { display: block; }
+body.mobile #find { padding: 2px 8px; }
 /* the pencil's count is a button (#sugg): "3 Suggestions" in words, a
    pencil and the figure on a phone. It stays pressed (.open, the pressed
    look) while its layer is up, as a pop-up's button does. The icon rule
@@ -142,6 +150,10 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-text { margin: 3px 0 0 20px; white-space: pre-wrap; overflow-wrap: break-word;
   user-select: text; cursor: text; }
 .p-text a { color: var(--hl); }
+/* a found word in Find's results: highlighter yellow behind the type,
+   which keeps its own colour (a link stays blue), weight and width — a
+   background moves nothing, so a marked post sets as it does in the feed */
+.p-text mark { background: #ffff66; color: inherit; }
 /* `inline code` in a post: Monaco on a slightly darker Platinum field */
 .p-text code { font: 11px/1 var(--mono); background: #e4e4e4; border: 1px solid #ccc;
   border-radius: 2px; padding: 0 3px; }
@@ -1111,7 +1123,8 @@ $("#refresh").onclick = refreshView;
 // button; the hits are a view like a thread — the feed list under the
 // back bar, titled with the query and the hub's match count, older
 // pages loading themselves the same way. Every word must appear
-// (GET /v1/search: literal substrings, ASCII case folded, replies too).
+// (GET /v1/search: literal substrings, ASCII case folded, replies too),
+// and where it does in a result it stands on yellow (markHits).
 // A search is a snapshot: the live stream leaves it alone, Refresh
 // re-runs it.
 let lastQuery = "";
@@ -1139,7 +1152,11 @@ async function openSearch(q, more) {
         out.total + (out.total === 1 ? " post matches" : " posts match");
       if (!out.posts.length) feedEl.append(el("div", { class: "muted" }, "No post matches."));
     }
-    for (const p of out.posts) feedEl.append(renderPost(p));
+    for (const p of out.posts) {
+      const node = renderPost(p);
+      markHits(node.querySelector(".p-text"), q);
+      feedEl.append(node);
+    }
     if (out.posts.length) view.oldest = out.posts[out.posts.length - 1].id;
     if (out.posts.length === PAGE) watchMore();
   } catch (e) {
@@ -1147,6 +1164,43 @@ async function openSearch(q, more) {
     else setTimeout(() => { if (view.kind === "search" && moreEl.isConnected) watchMore(); }, 3000);
   } finally {
     if (more) loadingMore = false;
+  }
+}
+// markHits paints what Find found: every stretch of a result's words
+// that holds one of the query's words goes on yellow. It matches as the
+// hub does — literal substrings, only ASCII case folded, which also
+// keeps every index true (a full toLowerCase can change a string's
+// length) — over the text as drawn, a text node at a time, so a link or
+// `code` keeps its element and only its words are wrapped. Stretches
+// that touch or overlap join into one mark. A word found only where the
+// post does not show it (the address under a [worded](link)) marks
+// nothing.
+const foldAscii = s => s.replace(/[A-Z]+/g, c => c.toLowerCase());
+function markHits(root, q) {
+  const words = [...new Set(foldAscii(q).split(/\s+/).filter(Boolean))];
+  if (!root || !words.length) return;
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [];
+  while (walk.nextNode()) nodes.push(walk.currentNode);
+  for (const n of nodes) {
+    const low = foldAscii(n.data), runs = [];
+    for (const w of words)
+      for (let i = low.indexOf(w); i >= 0; i = low.indexOf(w, i + 1)) runs.push([i, i + w.length]);
+    if (!runs.length) continue;
+    runs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const frag = document.createDocumentFragment();
+    let at = 0, [from, to] = runs[0];
+    const flush = () => {
+      if (from > at) frag.append(n.data.slice(at, from));
+      frag.append(el("mark", {}, n.data.slice(from, to)));
+      at = to;
+    };
+    for (const [a, b] of runs.slice(1)) {
+      if (a <= to) to = Math.max(to, b);
+      else { flush(); from = a; to = b; }
+    }
+    flush();
+    if (at < n.data.length) frag.append(n.data.slice(at));
+    n.replaceWith(frag);
   }
 }
 function findDialog() {
