@@ -92,6 +92,14 @@ lists the last ones, **Send a Test Notification** checks the road, and the
 menu item again turns it off. The tab at the right hides the strip down to
 the tab alone.
 
+With notifications on, the daemon also watches the sky over the first city
+in the Weather app — the row your drag put on top. When Open-Meteo's
+quarter-hour rows put rain in the next 60 minutes, a push says **Rain
+possible soon** — or **likely**, when the chance is high — and a second
+one says **Next hour looks dry** when a fresh forecast clears it, at most
+four rain warnings in 24 hours. Reorder the Weather list and the watcher
+follows; there is no setting to flip.
+
 A Claude Code window's status line shows the session's figures at its
 right — the model, context in use, tokens, cost and the plan's 5-hour and
 7-day usage windows — kept current after every reply by Claude Code's own

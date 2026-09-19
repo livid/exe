@@ -223,6 +223,10 @@ func cmdServe() error {
 	// notification when a token makes a rare move (docs/price-alerts.md).
 	go srv.RunAlerts(context.Background())
 
+	// Rain alerts: Open-Meteo's quarter rows for the Weather app's first
+	// city, a push when rain reaches the next hour and one when it clears.
+	go srv.RunRain(context.Background())
+
 	apiHandler := srv.Handler()
 	proxyHandler := px.Handler()
 	errc := make(chan error, 4)

@@ -87,10 +87,13 @@ type Server struct {
 	tsAt  time.Time
 	tsRes map[string]any
 
-	// Price alerts (alerts.go): the sampler's state, and Web Push
-	// (webpush.go): the VAPID key pair and the subscription file.
+	// Price alerts (alerts.go) and rain alerts (rain.go): the samplers'
+	// state, and Web Push (webpush.go): the VAPID key pair and the
+	// subscription file.
 	alertMu  sync.Mutex
 	alerts   *alertState
+	rainMu   sync.Mutex
+	rain     *rainState
 	pushMu   sync.Mutex
 	vapidKey *ecdsa.PrivateKey
 	vapidPub string
