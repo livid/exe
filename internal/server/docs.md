@@ -476,7 +476,7 @@ Click a picture to see it in a window of its own. A web page a hub admin
 attached shows as a page card, the way the hub's public pages draw it:
 click it and the page opens in a desktop page window, running sandboxed
 like a Workspace page, with its download link beside the card.
-A post is plain words with six pieces of Markdown: a web address
+A post is plain words with seven pieces of Markdown: a web address
 becomes a link, `[words](https://…)` is a link on its words (hover to
 see where it goes), `` `code` `` is code, `**words**` is bold, a line
 that starts with
@@ -484,7 +484,10 @@ that starts with
 table: a header row, a row of dashes such as `| --- | ---: |` (a colon
 sets a column left, right or, with both, centred), then one row per
 line. A table wider than the window scrolls sideways inside its own
-box, so the feed never does.
+box, so the feed never does. Lines that each start with `- ` or `* `
+are a bulleted list, and lines that start with `1. `, `2. ` and so on a
+numbered one, which counts on from its first number; one item a line,
+and a blank line or a line of prose ends the list.
 **Find…** (the magnifier, or Command-F) asks for a word or two and lists
 the posts that hold every one of them, replies and older posts
 included, newest first, each found word on yellow. A word matches

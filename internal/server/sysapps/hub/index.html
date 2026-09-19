@@ -190,6 +190,27 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-tbl .c { text-align: center; }
 .p-tbl .r { text-align: right; }
 .p-tbl td.r { white-space: nowrap; }
+/* a list (formatText/listAt: "- " or "* " items, or numbered ones): a
+   block like a table — 8px above and below, none on the side that opens
+   (.first) or ends (.last) the post — its items hung: the marker stands
+   in the room left of the words, right-aligned 5px from them, and a
+   wrapped line comes back under the words, not under the marker. The
+   markers are drawn here, a bullet or a counter begun at --n (one under
+   the list's first number), so they sit to the pixel the same in every
+   browser; w2 and w3 make room for two and three digits. The hub's
+   public pages carry the same numbers. */
+.p-text ul, .p-text ol { margin: 8px 0; padding: 0; list-style: none; }
+.p-text ul.last, .p-text ol.last { margin-bottom: 0; }
+.p-text ol { counter-reset: item var(--n, 0); }
+.p-text li { position: relative; margin: 0; padding-left: 14px; }
+.p-text li + li { margin-top: 2px; }
+.p-text ol > li { padding-left: 18px; counter-increment: item; }
+.p-text ol.w2 > li { padding-left: 25px; }
+.p-text ol.w3 > li { padding-left: 32px; }
+.p-text li::before { box-sizing: border-box; position: absolute; left: 0; top: 0; width: 9px; text-align: right; content: "\2022"; }
+.p-text ol > li::before { width: 13px; content: counter(item) "."; }
+.p-text ol.w2 > li::before { width: 20px; }
+.p-text ol.w3 > li::before { width: 27px; }
 /* flex-start, not the default stretch: a stretched flex line would pull every
    picture in it to the tallest sibling's height and distort its shape */
 .p-embeds { margin: 6px 0 0 20px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
@@ -649,7 +670,9 @@ function viewImage(em) {
 // anything looser stays the text it was. A code span binds tighter, as
 // in Markdown — the form inside backticks stays literal — and a link's
 // words take code spans, never a link of their own; the address shows
-// on hover, since the words no longer say where the link goes. **words**
+// on hover, since the words no longer say where the link goes. A run of
+// "- " or "* " lines, or of numbered ones, is a list (listAt), a block
+// like a heading or a table. **words**
 // is bold (formatBold), outside the links and inside a link's words.
 // Where a post's words show plain (the feed's latest line, the reply
 // strip) plainWords puts such a link, and a bold stretch, back to its
@@ -686,7 +709,7 @@ function formatText(text) {
   };
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const m = HEADING_RE.exec(lines[i]), t = m ? null : tableAt(lines, i);
+    const m = HEADING_RE.exec(lines[i]), t = m ? null : tableAt(lines, i), l = m || t ? null : listAt(lines, i);
     if (m) {
       block();
       out.push(el("h" + m[1].length, out.length ? {} : { class: "first" }, ...formatInline(m[2])));
@@ -695,11 +718,59 @@ function formatText(text) {
       i += t.n - 1;
       const last = !lines.slice(i + 1).join("").trim();
       out.push(formatTable(t, (out.length ? "" : " first") + (last ? " last" : "")));
+    } else if (l) {
+      block();
+      i += l.n - 1;
+      const last = !lines.slice(i + 1).join("").trim();
+      out.push(formatList(l, (out.length ? "" : " first") + (last ? " last" : "")));
     } else { plain += lines[i] + (i < lines.length - 1 ? "\n" : ""); continue; }
     if (lines[i + 1] === "") i++;                           // one blank line below the block
   }
   if (plain) out.push(...formatInline(plain));
   return out;
+}
+// A list, read exactly as the hub reads it (exe-hub internal/card/list.go;
+// its testdata/lists.json holds the cases both parsers are run against):
+// a run of item lines, one item a line. A bulleted item is "- " or "* "
+// and its words; a numbered one is up to three digits, "." or ")", a
+// space and its words — three digits and no more, so "2026. A year"
+// stays prose. The marker stands at the start of the line with a space
+// after it, so "**bold**", "*word*", "-5" and "--" are no items. The
+// list runs while the lines are items of its own kind: a blank line or
+// a line of prose ends it (no continuation lines, no nesting), and a
+// numbered line under bullets begins a list of its own. A numbered list
+// counts on from its first number whatever the lines under it say.
+const LIST_BULLET_RE = /^[-*] +(\S.*?) *$/, LIST_NUMBER_RE = /^(\d{1,3})[.)] +(\S.*?) *$/;
+function listItem(line) {
+  let m = LIST_BULLET_RE.exec(line);
+  if (m) return { ordered: false, num: 0, words: m[1] };
+  m = LIST_NUMBER_RE.exec(line);
+  return m ? { ordered: true, num: +m[1], words: m[2] } : null;
+}
+function listAt(lines, i) {
+  const first = listItem(lines[i]);
+  if (!first) return null;
+  const l = { ordered: first.ordered, start: first.num, items: [first.words], n: 1 };
+  for (; i + l.n < lines.length; l.n++) {
+    const it = listItem(lines[i + l.n]);
+    if (!it || it.ordered !== first.ordered) break;
+    l.items.push(it.words);
+  }
+  return l;
+}
+// the list as nodes: a ul, or an ol whose counter begins at --n, one
+// under its first number, with w2/w3 for the digits of its widest marker;
+// each item through the inline pipeline
+function formatList(l, marks) {
+  const attrs = {};
+  let cls = marks;
+  if (l.ordered) {
+    const digits = String(l.start + l.items.length - 1).length;
+    if (digits > 1) cls = " w" + digits + cls;
+    if (l.start !== 1) attrs.style = "--n:" + (l.start - 1);
+  }
+  if (cls) attrs.class = cls.slice(1);
+  return el(l.ordered ? "ol" : "ul", attrs, ...l.items.map(w => el("li", {}, ...formatInline(w))));
 }
 // A table — Markdown's pipe table, GFM's form, read exactly as the hub
 // reads it (exe-hub internal/card/table.go; its testdata/tables.json
@@ -815,7 +886,9 @@ function formatCoded(text, links) {
 // a post's words plain: a table back to its cells' words, " · " between
 // them and the delimiter row gone (the hub's card.Untable), a Markdown
 // link back to its words, then a bold stretch to its own (card.Unbold:
-// asterisks inside a code span stay)
+// asterisks inside a code span stay); a bulleted item's marker becomes a
+// bullet (card.Unlist), since the lines are run together and "- one -
+// two" would not read
 function plainWords(text) {
   text = text || "";
   if (text.includes("|")) {
@@ -828,6 +901,7 @@ function plainWords(text) {
     }
     text = out.join("\n");
   }
+  text = text.split("\n").map(line => { const m = LIST_BULLET_RE.exec(line); return m ? "\u2022 " + m[1] : line; }).join("\n");
   text = text.replace(MDLINK_RE, "$1");
   const codes = codeSpans(text);
   text = text.replace(BOLD_RE, (all, words, at) =>
