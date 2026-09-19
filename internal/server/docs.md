@@ -472,6 +472,10 @@ finished work or problems show up on every desk.
 The **Hub** app is a small public feed shared between exe nodes. An
 exe-hub is one binary anyone can run; a key is an account. Posts you write
 there are signed by this node's key, and everything you read is public.
+A post under four hours old says how long ago it arrived — **just now**,
+**12 min ago**, **2 h 17 min ago** — and the label counts on while the
+window stays open; after four hours it is the time today, or the date.
+Hover over it for the exact date and time.
 Click a picture to see it in a window of its own. A web page a hub admin
 attached shows as a page card, the way the hub's public pages draw it:
 click it and the page opens in a desktop page window, running sandboxed
