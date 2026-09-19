@@ -112,7 +112,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   matched to a mark by the marks' client rects. What a mark offers floats:
   the app contextual menu (Blue Pencil's `.dropdown` block) hung 2px under
   the word, opening with a `.dd-head` line that never inverts, and never
-  taking the focus from the field. A menu line that shows more (Show
+  taking the focus from the field. A composer's "@" list (Hub's `#at`,
+  `.at-item` rows: the 14px picture, the name, the id in 10px mono) is the
+  same block on a layer of its own, hung 2px under the "@" as found in
+  the field's mirror; its one inverted row is `.on`, moved by the arrows
+  and the pointer alike, never `:hover`, so two rows never invert at once. A menu line that shows more (Show
   Rewritten Sentence) puts a second layer of the same kind at the same
   left edge but under the field's bottom edge, so the text it is compared
   with stays uncovered; its head is `.dd-head.wide` (360px at most, never

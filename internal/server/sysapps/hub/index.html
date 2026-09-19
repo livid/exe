@@ -315,6 +315,18 @@ canvas.ava-big { image-rendering: pixelated; }
 .dd-item.dis { color: #888; }
 .dd-item.dis:hover { background: none; color: #888; }
 .dd-sep { height: 2px; margin: 3px 2px; border-top: 1px solid var(--g600); border-bottom: 1px solid #fff; }
+/* the "@" list: the people a mention may name, in the contextual menu's
+   dress, hung 2px under the "@" being typed. A layer of its own, so the
+   pencil's menu and it never share a box. Each row is a post's head in
+   small: the 14px picture, the name, the id in the mono grey. One row is
+   inverted at a time, the arrows' or the pointer's (.on, not :hover, so
+   there are never two). */
+#at { z-index: 31; min-width: 0; max-width: calc(100vw - 8px); overflow: hidden; }
+.at-item { display: flex; align-items: center; gap: 6px; padding: 3px 12px 3px 6px; line-height: 18px; white-space: nowrap; }
+.at-item .nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.at-item .id { flex: none; font: 10px/18px var(--mono); color: var(--g800); }
+.at-item.on { background: var(--hl); color: #fff; }
+.at-item.on .id { color: #fff; }
 /* the menu under a marked word opens with the correction itself, in the
    pencil's marks as Blue Pencil draws them: what it struck out, struck
    out; what it wrote on a pale-blue field with a blue rule underneath. A
@@ -461,6 +473,7 @@ body.mobile #status { padding-right: 8px; }
 
 <div id="toast"></div>
 <div id="ctx" class="dropdown" hidden></div>
+<div id="at" class="dropdown" role="listbox" aria-label="Mention" hidden></div>
 <div id="veil">
   <div id="dlg"></div>
 </div>
@@ -1942,7 +1955,7 @@ document.addEventListener("paste", e => {
 });
 
 async function doPost() {
-  const text = $("#text").value.trim();
+  const text = withIds($("#text").value.trim()); // each picked "@Name" goes out as "@" and the id
   if (!text && !attachments.length) return;
   if (!myProfile) { profileDialog(true); return; }
   $("#post").disabled = true;
@@ -1960,6 +1973,7 @@ async function doPost() {
   try {
     const out = await publish("post.create", body);
     $("#text").value = "";
+    picked.clear();
     fitField();
     pencilReset();
     attachments = [];
@@ -2606,6 +2620,148 @@ ctxEl.addEventListener("mousedown", e => e.preventDefault());
 document.addEventListener("mousedown", e => { if (!e.target.closest("#ctx")) hideMenu(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") hideMenu(); });
 window.addEventListener("blur", hideMenu);
+
+// ---- mentions in the composer (the hub's PLAN.md, Mentions) ----
+// "@" at the start of a word, and what is typed after it, opens a list of
+// the hub's profiles (GET /v1/profiles, by the road the feed comes by,
+// the relay too): whoever posted last first, the writer left out. A pick
+// puts "@" and the name in the field — what the writer reads, and what
+// the pencil proofreads — and is remembered; when the post is sent every
+// remembered "@Name" goes out as "@" and the profile's id (withIds), the
+// one thing about a person that never changes, and every reader looks
+// the name up again. A name typed in full and left with a space counts
+// as a pick when just one offered profile has it; any other "@name" is
+// words. The arrows walk the list, Return or Tab picks, Escape puts it
+// away until another "@", a press picks; a Return that ends an input
+// method's composition is left alone. The list never takes the focus,
+// and it hangs from the "@" itself, found in the pencil's mirror, which
+// wraps and scrolls as the field does. The hub's public composer carries
+// the same functions (exe-hub web.html): change both.
+const atEl = $("#at");
+const AT_RE = /(?:^|[^A-Za-z0-9_])@([^\s@]{0,24})$/;
+const picked = new Map(); // the name as it stands in the field -> the profile's id
+let at = null, atHits = [], atOn = 0, atSeq = 0, atShut = -1;
+function atQuery() {
+  if (textEl.selectionStart !== textEl.selectionEnd) return null;
+  const m = AT_RE.exec(textEl.value.slice(0, textEl.selectionStart));
+  return m ? { from: textEl.selectionStart - m[1].length - 1, q: m[1] } : null;
+}
+function atClose() {
+  at = null; atHits = []; atSeq++;
+  atEl.hidden = true;
+  atEl.replaceChildren();
+}
+function atMark() {
+  [...atEl.children].forEach((row, i) => {
+    row.classList.toggle("on", i === atOn);
+    row.setAttribute("aria-selected", i === atOn ? "true" : "false");
+  });
+}
+// under the "@", 2px down as a word's menu hangs; over it when the
+// window's foot is too near, and never past the window's edge
+function atPlace() {
+  if (atEl.hidden || !at) return;
+  let r = null, left = at.from;
+  const walk = document.createTreeWalker(marksEl, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n && !r; n = walk.nextNode()) {
+    if (left < n.data.length) {
+      const range = document.createRange();
+      range.setStart(n, left);
+      range.setEnd(n, left + 1);
+      r = range.getBoundingClientRect();
+    } else left -= n.data.length;
+  }
+  const f = textEl.getBoundingClientRect();
+  if (!r || !r.height) r = { left: f.left, top: f.bottom, bottom: f.bottom }; // no mirror to ask: the field's foot
+  atEl.style.left = atEl.style.top = "0";
+  const box = atEl.getBoundingClientRect();
+  const below = Math.round(r.bottom) + 2;
+  atEl.style.left = Math.max(0, Math.min(Math.round(r.left), innerWidth - box.width - 4)) + "px";
+  atEl.style.top = (below + box.height + 4 <= innerHeight || r.top - 2 - box.height < 0 ? below : Math.round(r.top) - 2 - box.height) + "px";
+}
+function atRender() {
+  atEl.replaceChildren(...atHits.map((h, i) => {
+    const row = el("div", { class: "at-item", role: "option" },
+      avatarEl(h.id, h.avatar), el("span", { class: "nm" }, h.name), el("span", { class: "id" }, h.id));
+    row.addEventListener("pointermove", () => { if (atOn !== i) { atOn = i; atMark(); } });
+    row.addEventListener("pointerdown", e => { e.preventDefault(); atPick(i); }); // the field keeps the caret
+    return row;
+  }));
+  atEl.hidden = !atHits.length;
+  atMark();
+  atPlace();
+}
+async function atLook() {
+  const now = atQuery(), was = at, hits = atHits;
+  if (!now) {
+    // a name typed out and left: a pick, when one profile alone has it
+    if (was && was.q && /\s$/.test(textEl.value.slice(0, textEl.selectionStart))) {
+      const same = hits.filter(h => h.name.toLowerCase() === was.q.toLowerCase());
+      if (same.length === 1 && textEl.value.slice(was.from + 1, was.from + 1 + was.q.length) === was.q) picked.set(was.q, same[0].id);
+    }
+    atShut = -1;
+    return atClose();
+  }
+  if (now.from === atShut) return; // put away with Escape: it stays away until another "@"
+  at = now;
+  const seq = ++atSeq;
+  try {
+    const d = await hget("/v1/profiles?limit=6&q=" + encodeURIComponent(now.q));
+    if (seq !== atSeq) return;
+    atHits = (d.profiles || []).filter(h => !(who && h.id === who.id));
+    atOn = 0;
+    atRender();
+  } catch (e) {
+    if (seq === atSeq) atClose(); // a hub that does not know the list yet, or does not answer: no list
+  }
+}
+function atPick(i) {
+  const h = atHits[i];
+  if (!h || !at) return;
+  const put = "@" + h.name + " ", from = at.from, to = textEl.selectionStart;
+  picked.set(h.name, h.id);
+  atClose();
+  textEl.setSelectionRange(from, to);
+  if (!document.execCommand("insertText", false, put)) {
+    textEl.setRangeText(put, from, to, "end");
+    textEl.dispatchEvent(new Event("input"));
+  }
+}
+// the post as it is sent: each remembered "@Name" as "@" and the id, the
+// longest names first ("@Codex on Spark" before "@Codex"), a code span
+// left as it was written
+function withIds(t) {
+  const names = [...picked.keys()].sort((a, b) => b.length - a.length);
+  if (!names.length) return t;
+  const codes = codeSpans(t);
+  const re = new RegExp("(^|[^A-Za-z0-9_])@(" + names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?![A-Za-z0-9_])", "g");
+  return t.replace(re, (all, pre, name, i) =>
+    codes.some(([c0, c1]) => i + pre.length >= c0 && i + pre.length < c1) ? all : pre + "@" + picked.get(name));
+}
+// after the field's own input listener, so the mirror already holds the text
+textEl.addEventListener("input", atLook);
+textEl.addEventListener("click", atLook);
+textEl.addEventListener("keyup", e => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) atLook(); });
+textEl.addEventListener("blur", atClose);
+textEl.addEventListener("scroll", atPlace);
+addEventListener("resize", atPlace);
+window.addEventListener("blur", atClose);
+// before the field's other keys (capture): with the list up, Return picks
+// and never posts or breaks the line
+textEl.addEventListener("keydown", e => {
+  if (atEl.hidden || e.isComposing || e.keyCode === 229) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    atOn = (atOn + (e.key === "ArrowDown" ? 1 : atHits.length - 1)) % atHits.length;
+    atMark();
+  } else if ((e.key === "Enter" && !e.metaKey && !e.ctrlKey) || e.key === "Tab") {
+    atPick(atOn);
+  } else if (e.key === "Escape") {
+    atShut = at.from;
+    atClose();
+  } else return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
 // which rule a click fell on: the mirror takes no pointer, so the rules'
 // boxes are asked (a rule wrapped over two lines has two)
 function markAt(x, y) {

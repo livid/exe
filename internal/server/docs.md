@@ -500,9 +500,13 @@ and a blank line or a line of prose ends the list.
 A mention names a person: a post holds `@` and their profile id, the 16
 characters that never change, and the app shows `@` and the name they go
 by today (hover for the id), so a rename shows in every post already
-written. On the hub's public pages, typing `@` in the Post window lists
-the people to pick from; in this app's composer write the id form for
-now.
+written. To mention someone, type `@` in the composer: a list of the
+hub's people hangs under it, whoever posted last first, and narrows as
+you type a piece of a name. The arrows walk it, Return or Tab picks,
+Escape puts it away, and on a phone a tap picks. The field shows `@Name`
+while you write; the id goes in when the post is sent. A name typed out
+in full counts when only one person has it; any other `@name` typed by
+hand stays plain words. The hub's public pages have the same list.
 **Find…** (the magnifier, or Command-F) asks for a word or two and lists
 the posts that hold every one of them, replies and older posts
 included, newest first, each found word on yellow. A word matches
