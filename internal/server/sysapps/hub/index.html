@@ -649,9 +649,11 @@ function viewImage(em) {
 // anything looser stays the text it was. A code span binds tighter, as
 // in Markdown — the form inside backticks stays literal — and a link's
 // words take code spans, never a link of their own; the address shows
-// on hover, since the words no longer say where the link goes. Where a
-// post's words show plain (the feed's latest line, the reply strip)
-// plainWords puts such a link back to its words. A bare URL is http(s)
+// on hover, since the words no longer say where the link goes. **words**
+// is bold (formatBold), outside the links and inside a link's words.
+// Where a post's words show plain (the feed's latest line, the reply
+// strip) plainWords puts such a link, and a bold stretch, back to its
+// words. A bare URL is http(s)
 // only; the punctuation that usually trails a URL in prose stays text;
 // and a URL is ASCII plus accented Latin letters, so CJK prose and its
 // fullwidth punctuation end it — Chinese sits flush against a link with
@@ -663,6 +665,13 @@ const URL_LATIN = "\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F";
 const URL_RE = new RegExp("https?:\\/\\/[\\w#$%&+,\\-./:;=?@\\[\\]~" + URL_LATIN + "]*[\\w#$%&+\\-/;=@" + URL_LATIN + "]", "g");
 const MDLINK_RE = new RegExp("\\[([^\\[\\]\\n]+)\\]\\((" + URL_RE.source + ")\\)", "g");
 const CODE_RE = /(`{1,2})(?!`)(.+?)(?<!`)\1(?!`)/g;
+// **bold**, Markdown's strong emphasis, read exactly as the hub reads it
+// (exe-hub internal/card Bold and Bolds; its testdata/bold.json holds
+// the cases both renderers are run against): two asterisks hard against
+// the first and the last of the words, on one line, the words holding no
+// asterisk of their own — no nesting, and the asterisks of ordinary
+// writing ("2 ** 3", a lone "**") stay the characters they were.
+const BOLD_RE = /\*\*([^\s*](?:[^*\n]*[^\s*])?)\*\*/g;
 const HEADING_RE = /^(#{1,3}) +(\S.*?) *$/;
 function formatText(text) {
   const out = [];
@@ -741,17 +750,48 @@ function formatTable(t, marks) {
   if (t.rows.length) parts.push(el("tbody", {}, ...t.rows.map(r => row("td", r))));
   return el("div", { class: "p-tbl" + marks }, el("table", {}, ...parts));
 }
+// a run of words: bold first, the outermost layer, so a bold stretch may
+// hold links, URLs and code — **[words](url)** is a bold link — then the
+// links and what lies between them
 function formatInline(text) {
-  const codes = [...text.matchAll(CODE_RE)].map(m => [m.index, m.index + m[0].length]);
-  const out = [];
-  let last = 0;
+  return formatBold(text, mdLinks(text).map(l => [l.from, l.to]), formatLinks);
+}
+const codeSpans = text => [...text.matchAll(CODE_RE)].map(m => [m.index, m.index + m[0].length]);
+// the Markdown links of a run of words, less those a code span claims:
+// one that is not wholly inside the link's words
+function mdLinks(text) {
+  const codes = codeSpans(text), out = [];
   for (const m of text.matchAll(MDLINK_RE)) {
     const from = m.index, to = from + m[0].length, w0 = from + 1, w1 = w0 + m[1].length;
-    // a code span that is not wholly inside the words claims the text
-    if (codes.some(([c0, c1]) => c0 < to && c1 > from && !(c0 >= w0 && c1 <= w1))) continue;
-    out.push(...formatCoded(text.slice(last, from), true));
-    out.push(el("a", { href: m[2], title: m[2], target: "_blank", rel: "noopener" }, ...formatCoded(m[1], false)));
+    if (!codes.some(([c0, c1]) => c0 < to && c1 > from && !(c0 >= w0 && c1 <= w1))) out.push({ from, to, words: m[1], url: m[2] });
+  }
+  return out;
+}
+// the bold stretches set in <strong>, the words inside and between them
+// handed to inner. A code span or a link (links, [from, to] each) that
+// overlaps a stretch without sitting wholly inside its words claims the
+// text, and the asterisks stay: `**kwargs**` in backticks is code, and a
+// link keeps its words whole — bold inside them is the link's to set.
+function formatBold(text, links, inner) {
+  const claims = [...codeSpans(text), ...links], out = [];
+  let last = 0;
+  for (const m of text.matchAll(BOLD_RE)) {
+    const from = m.index, to = from + m[0].length, w0 = from + 2, w1 = to - 2;
+    if (claims.some(([c0, c1]) => c0 < to && c1 > from && !(c0 >= w0 && c1 <= w1))) continue;
+    out.push(...inner(text.slice(last, from)), el("strong", {}, ...inner(m[1])));
     last = to;
+  }
+  out.push(...inner(text.slice(last)));
+  return out;
+}
+function formatLinks(text) {
+  const out = [];
+  let last = 0;
+  for (const l of mdLinks(text)) {
+    out.push(...formatCoded(text.slice(last, l.from), true));
+    out.push(el("a", { href: l.url, title: l.url, target: "_blank", rel: "noopener" },
+      ...formatBold(l.words, [], s => formatCoded(s, false))));
+    last = l.to;
   }
   out.push(...formatCoded(text.slice(last), true));
   return out;
@@ -774,7 +814,8 @@ function formatCoded(text, links) {
 }
 // a post's words plain: a table back to its cells' words, " · " between
 // them and the delimiter row gone (the hub's card.Untable), a Markdown
-// link back to its words
+// link back to its words, then a bold stretch to its own (card.Unbold:
+// asterisks inside a code span stay)
 function plainWords(text) {
   text = text || "";
   if (text.includes("|")) {
@@ -787,7 +828,11 @@ function plainWords(text) {
     }
     text = out.join("\n");
   }
-  return text.replace(MDLINK_RE, "$1").replace(/\s+/g, " ").trim();
+  text = text.replace(MDLINK_RE, "$1");
+  const codes = codeSpans(text);
+  text = text.replace(BOLD_RE, (all, words, at) =>
+    codes.some(([c0, c1]) => c0 < at + all.length && c1 > at && !(c0 >= at + 2 && c1 <= at + all.length - 2)) ? all : words);
+  return text.replace(/\s+/g, " ").trim();
 }
 function linkify(text) {
   const out = [];

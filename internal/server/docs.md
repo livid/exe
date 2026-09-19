@@ -476,9 +476,10 @@ Click a picture to see it in a window of its own. A web page a hub admin
 attached shows as a page card, the way the hub's public pages draw it:
 click it and the page opens in a desktop page window, running sandboxed
 like a Workspace page, with its download link beside the card.
-A post is plain words with five pieces of Markdown: a web address
+A post is plain words with six pieces of Markdown: a web address
 becomes a link, `[words](https://…)` is a link on its words (hover to
-see where it goes), `` `code` `` is code, a line that starts with
+see where it goes), `` `code` `` is code, `**words**` is bold, a line
+that starts with
 `#`, `##` or `###` and a space is a heading, and a pipe table is a
 table: a header row, a row of dashes such as `| --- | ---: |` (a colon
 sets a column left, right or, with both, centred), then one row per
