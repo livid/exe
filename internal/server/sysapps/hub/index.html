@@ -1250,6 +1250,68 @@ async function openThread(id, jumpTo) {
   }
 }
 
+// holdPlace keeps the reader where they are through a change to the
+// list: the first post in view stays put (a browser with scroll
+// anchoring has done it already and the difference is nothing).
+function holdPlace(change) {
+  const top = feedEl.getBoundingClientRect().top;
+  const pin = [...feedEl.children].find(n => n.getBoundingClientRect().bottom > top);
+  const was = pin && pin.getBoundingClientRect().top;
+  change();
+  if (pin && pin.isConnected) feedEl.scrollTop += pin.getBoundingClientRect().top - was;
+}
+
+// syncThread brings the open thread up to date where it stands. The
+// stream does that reply by reply; this is the catch-up for what the
+// stream could not say — it was down, the machine slept, an event was
+// dropped — asked for when the stream comes back, when the window is
+// looked at again, and once a minute while a thread is open. What the
+// hub has now is laid over what is drawn: a new reply goes in at its
+// place in reading order, a post that went is taken out, and nothing
+// already there is redrawn, so the reader's place, a playing video and
+// the reply being written all stay. The answer is as old as its asking:
+// a post the stream brought in meanwhile is not taken out for being
+// missing from it, and one the stream took out (gone) is not put back.
+const gone = new Set();
+let syncing = false, syncAgain = false, landing = 0;
+async function syncThread() {
+  if (view.kind !== "thread") return;
+  if (syncing) { syncAgain = true; return; } // one more once this one is back
+  const id = view.id, drawn = n => feedEl.querySelector(`.post[data-id="${CSS.escape(n)}"]`);
+  if (!drawn(id)) return; // still loading, or it failed: Refresh's business
+  syncing = true;
+  try {
+    const was = new Set([...feedEl.querySelectorAll(".post")].map(n => n.dataset.id));
+    const out = await hget("/v1/post/" + id);
+    if (view.kind !== "thread" || view.id !== id || !drawn(id)) return;
+    const want = out.thread || out.replies, ids = new Set(want.map(p => p.id));
+    holdPlace(() => {
+      for (const n of [...feedEl.querySelectorAll(".post")])
+        if (n.dataset.id !== id && was.has(n.dataset.id) && !ids.has(n.dataset.id)) n.remove();
+      let at = drawn(id);
+      for (const p of want) {
+        let n = drawn(p.id);
+        if (!n && gone.has(p.id)) continue;
+        if (!n) at.after(n = threadNode(p));
+        at = n;
+      }
+    });
+  } catch (e) { /* the next asking tries again */ }
+  finally {
+    syncing = false;
+    if (syncAgain) { syncAgain = false; syncThread(); }
+  }
+}
+setInterval(() => { if (!document.hidden) syncThread(); }, 60e3);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) wake(); });
+window.addEventListener("online", () => wake());
+// wake: back in view or back on the network — a stream waiting out its
+// pause is opened now, and the open thread catches up
+function wake() {
+  if (es && es.readyState === EventSource.CLOSED) connectEvents();
+  syncThread();
+}
+
 function showFeed() {
   view = { kind: "feed" };
   clearReplyTarget();
@@ -1389,12 +1451,29 @@ document.addEventListener("keydown", e => {
 // content comes from the tested /v1/post render path. Everything in the
 // list is keyed by data-id, so inserts dedupe against reloads racing the
 // stream, and a reconnect just refetches the view (drops absorbed).
-let es = null, esDown = false;
+//
+// A dropped connection the browser retries by itself, but an answer that
+// is not the stream ends an EventSource for good — and that is what a
+// proxy in front of the hub (Tailscale Serve, exe's relay) says while
+// the hub restarts: 502. So a closed stream is opened again from here,
+// 2 s, 4 s … 30 s apart.
+let es = null, esDown = false, esWait = 0, esTimer = 0;
 function connectEvents() {
+  clearTimeout(esTimer);
   if (es) es.close();
-  es = new EventSource(hurl("/v1/events"));
-  es.onopen = () => { if (esDown) { esDown = false; refreshView(); } };
-  es.onerror = () => { esDown = true; };
+  const me = es = new EventSource(hurl("/v1/events"));
+  es.onopen = () => {
+    esWait = 0;
+    if (!esDown) return;
+    esDown = false;
+    view.kind === "thread" ? syncThread() : refreshView();
+  };
+  es.onerror = () => {
+    esDown = true;
+    if (me !== es || me.readyState !== EventSource.CLOSED) return;
+    esWait = Math.min(esWait ? esWait * 2 : 2000, 30000);
+    esTimer = setTimeout(connectEvents, esWait);
+  };
   es.onmessage = async ev => {
     let m;
     try { m = JSON.parse(ev.data); } catch (e) { return; }
@@ -1411,7 +1490,12 @@ function connectEvents() {
       if (who && m.author === who.id) myProfile = prof; // Profile… reopens fresh
       return;
     }
-    if (m.type === "post.delete") { seen(m.id)?.remove(); return; }
+    if (m.type === "post.delete") {
+      gone.add(m.id);
+      const cur = seen(m.id);
+      if (cur) holdPlace(() => cur.remove());
+      return;
+    }
     if (m.type === "post.card") { // the post's link card landed: redraw it in place
       const cur = seen(m.id);
       if (!cur || view.kind === "search") return;
@@ -1428,15 +1512,26 @@ function connectEvents() {
       // any visible post can be the parent, the head or a reply; the
       // new reply lands at the end of its parent's subtree, so the
       // tree keeps reading order without a refetch
-      const parent = m.reply_to && seen(m.reply_to);
-      if (!parent) return;
-      const out = await hget("/v1/post/" + m.id);
-      if (seen(m.id)) return;
+      let parent = m.reply_to && seen(m.reply_to);
+      if (!parent) {
+        // not this thread's — unless its parent is a reply still on its
+        // way in (or the thread is): the catch-up settles which
+        if (m.reply_to && (landing || syncing)) syncThread();
+        return;
+      }
+      landing++;
+      let out;
+      try { out = await hget("/v1/post/" + m.id); }
+      catch (e) { syncThread(); return; } // the catch-up asks again
+      finally { landing--; }
+      parent = seen(m.reply_to);
+      if (seen(m.id) || !parent || gone.has(m.id)) return;
+      if (view.kind !== "thread") return;
       const d = (+parent.dataset.depth || 0) + 1;
       let last = parent;
       while (last.nextElementSibling && +last.nextElementSibling.dataset.depth > +parent.dataset.depth)
         last = last.nextElementSibling;
-      last.after(threadNode(out.post, d));
+      holdPlace(() => last.after(threadNode(out.post, d)));
       return;
     }
     if (view.kind === "search") return; // a snapshot; Refresh re-runs it

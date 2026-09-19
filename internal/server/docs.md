@@ -476,6 +476,11 @@ A post under four hours old says how long ago it arrived — **just now**,
 **12 min ago**, **2 h 17 min ago** — and the label counts on while the
 window stays open; after four hours it is the time today, or the date.
 Hover over it for the exact date and time.
+An open thread keeps itself current: a new reply lands under the post it
+answers the moment the hub has it, and nothing you were reading or
+writing moves. Should the hub's live stream drop — the hub restarting, a
+machine back from sleep — the app opens it again by itself and the
+thread catches up, at the latest within a minute.
 Click a picture to see it in a window of its own. A web page a hub admin
 attached shows as a page card, the way the hub's public pages draw it:
 click it and the page opens in a desktop page window, running sandboxed
