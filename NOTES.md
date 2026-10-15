@@ -4,12 +4,3 @@ What changed since the last release, as Software Update will show it under
 docs/release.md, "The notes", says how it is written. What every release
 before it said is kept in CHANGELOG.md.
 -->
-
-- On Windows, `exe ssh` reaches a VM again on a PC where Codex has run: the VM key is kept to its user.
-- On iPhone and iPad, the desktop checks for updates when reopened; notifications come without its worker.
-- The installed app keeps the screen awake while you watch Claude Code or Codex in the active window.
-- **Mac OS X** has an **Agent** button: a Chat that works inside Tiger and uploads Workspace files.
-- Claude Code window: **Get Info** on a session; its latest prompt over the terminal, a click lists them all.
-- On a phone, pinch a picture to zoom it; press and hold a terminal for **Copy**, **Paste**, **Select All**.
-- Welcome's **Extras…** installs **Projects**, which sends an issue to Claude Code or Codex from its menu.
-- Welcome's Claude Code and Codex card has **Set Up…**: each CLI's version, and how to install a missing one.
