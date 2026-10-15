@@ -4128,8 +4128,10 @@ Click the model name at the right end of the status line, and
 
 - **Which models.** The list is what the backend serves. The ChatGPT
   list is what the subscription serves: `gpt-5.6-sol`, `gpt-5.6-terra`,
-  `gpt-5.6-luna`, … For Ollama, the dialog's own advice is that a small
-  local model is plenty for proofreading and answers faster.
+  `gpt-5.6-luna`, … The Ollama list is what `ollama ls` shows, cloud
+  models too: `ollama pull muse-spark-open:cloud` on the node puts that
+  model on it. The dialog's own advice is that a small local model is
+  plenty for proofreading and answers faster.
 - **Which level.** Ollama's **Off** is fastest, but some models then
   think out loud in the answer. A level a ChatGPT model rejects runs at
   its default. **Configured** keeps the effort set in Configuration.
