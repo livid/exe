@@ -340,6 +340,23 @@ machine installed it with the questions answered at a terminal; the Intel
 build said its version under Rosetta. Not repeated: a new install on
 Windows.
 
+The fourth, 2026.10.15, was the first that every machine under test met
+already running a release with Software Update, so no lower-numbered
+build was needed. The update the window starts, `POST /v1/update` with
+`restart`, was sent on `precision`, `world` and the Mac node by a script
+that read each machine's token there and nowhere else. Each moved from
+2026.10.12 with a VM running, in 34 s, 9 s and 4 s, with one `update: exe
+2026.10.15 is installed` line in its log and its guest's journal ending in
+"Journal stopped". `lab` moved by a shell's `exe update -y`; `birdie` and a
+new VM on this machine installed it with the questions answered at a
+terminal; the Intel build said its version under Rosetta. The window's
+button was not pressed in a browser, as its code had not changed since
+2026.10.12. The notes were read in the window of that new VM, its daemon
+pointed at the mirror. Before publishing, `exe-projects` and `exe-planet`
+were pushed: Extras… installs them from GitHub, and a line of the notes
+needed their newest commits. Not tried: a new install on Windows, and the
+iPhone lines of the notes on a device.
+
 Rolling back is moving GitHub's "latest" mark to the release before
 (`gh release edit <older> --latest`); whether that is allowed with
 immutable releases on has not been tried — publishing the next version is
