@@ -830,6 +830,8 @@ sessions, one row for each tmux session. Each is a conversation of its own.
   session starts in the project's folder with the full issue and comments
   as its initial task. This needs tmux and a working directory on this host;
   the agent keeps its usual sign-in, trust and permission prompts.
+  [Apps](https://exe.v2core.com/docs/using/apps) says how the agent's plan
+  and report come back to the issue.
 - **Resize the column.** Drag the line between the list and the terminal.
   The width is kept with the window's layout.
 
@@ -3352,6 +3354,15 @@ movie in the Workspace's `Easel` folder.
 
 ### Projects
 
+Projects is a list of what is to be done in each of your projects, kept
+where you and your coding agents can both read and write it. A bug you
+spot, an idea, a loose end an agent mentions at the end of a task: each
+becomes an issue, with an address such as `EXE-12` that names it for
+good, so "fix EXE-12" is a whole instruction. You can hand an issue to
+Claude Code or Codex from its menu, see on the issue while an agent is at
+work on it, and read the agent's plan and report under it afterwards.
+**Projects and coding agents**, below, says how.
+
 Projects comes with
 [exe-projects](https://github.com/livid/exe-projects), an issue tracker
 that runs beside exe. Its `apps` folder goes in `apps_dirs`, and its
@@ -3363,15 +3374,10 @@ short name in capitals, such as `EXE`, and its issues are numbered from
 one: `EXE-12` names the same issue for good.
 
 Right-click an issue for what can be done to it: close or reopen it,
-edit it, **Star** it, or copy its address. A starred issue wears a yellow
-star where the list has its dot, and on the issue's own line, and
-**Unstar** takes it off. The pop-up at the top right lists the open, the
-closed, all or the starred issues.
-
-A coding agent works in the same tracker from a shell: `exe-projects new`
-files an issue, `exe-projects show EXE-12` reads one,
-`exe-projects star EXE-12` stars it and `exe-projects close EXE-12`
-closes it.
+edit it, **Star** it, copy its address, or send it to a coding agent. A
+starred issue wears a yellow star where the list has its dot, and on the
+issue's own line, and **Unstar** takes it off. The pop-up at the top
+right lists the open, the closed, all or the starred issues.
 
 A file attached to an issue is kept in IPFS, which takes Kubo on this
 machine; without it everything else works. Anyone who learns such a
@@ -3381,6 +3387,98 @@ Click a picture under an issue to see it in a picture window. When the
 issue has more than one, **Left** and **Right** show the one before and
 the one after, or a sideways swipe on a phone, and the window's top line
 says which it is, `2 of 5`.
+
+### Projects and coding agents
+
+An issue holds what an agent needs to start: what is wanted, the
+discussion so far and any screenshots. An agent can also write back, so
+its plan, its report and the commit that did the work end up on the
+issue, where you will look for them, not in a conversation that has
+scrolled away.
+
+<img src="https://hub.v2core.com/v1/embed/bafybeia33wdg34xzfu3asnfiyyqhtfxlnmyroi4rdbbeufw4g4fbgxgrue" alt="The Projects window with an issue's menu open: Close Issue, Edit, Star and Copy Address, then Send to Claude Code and Send to Codex" width="1040" height="685">
+
+The work goes round like this:
+
+1. **Write it down.** File an issue. If it is about something on screen,
+   attach a screenshot.
+2. **Hand it over.** Right-click the issue and choose
+   **Send to Claude Code** or **Send to Codex**. The agent's window opens,
+   or comes forward, with a new session in the project's working
+   directory. The session's first message is the whole issue with its
+   comments, and a note that asks the agent to read the project's
+   instructions, do the work, check it and report.
+3. **Watch it work.** While the agent's turn runs, a line under the issue's
+   title says so: a green dot, the agent, how long it has been at work, and
+   the session's name. The line goes when the turn ends.
+4. **Read what came back.** An agent that has been told about the tracker
+   comments its plan as a checklist, ticks it as it goes, reports, and
+   closes the issue with its commit. What it found on the way can become an
+   issue of its own.
+5. **Go round again.** If something is off, reopen the issue, say what in a
+   comment and send it again. The new session starts with the whole
+   discussion, the last report included.
+
+What to know about handing an issue over:
+
+- **The working directory.** Send to Claude Code opens the session in the
+  folder named in the project's sheet: **Project…**, the **Directory**
+  field. The items are grey for a project without one, or whose folder is
+  not on this machine.
+- **Which agents.** The menu lists the agents exe has found on this machine,
+  the same ones that have windows on the desktop. A second session takes
+  tmux; without it the items are grey.
+- **The agent's own questions stay.** It signs in, asks whether to trust a
+  folder it has not worked in, and asks for permissions as it always does.
+- **Size.** An issue and its discussion of more than 64 KiB are refused,
+  with their size, not cut short.
+- **A blank start.** Right-click a project and choose
+  **Open in Claude Code** for a new session in its folder with no first
+  message.
+
+The line on an issue counts every session in the Claude Code and Codex
+windows whose latest instruction that names an issue names this one,
+whether the menu sent it or you typed it, as in `fix EXE-12`. A session
+started in a plain Terminal window does not show.
+
+### Let an agent read and write issues
+
+An agent works in the tracker with the `exe-projects` command, from its
+own shell:
+
+| Command | What it does |
+|---|---|
+| `exe-projects show EXE-12` | Reads an issue whole, with its comments. |
+| `exe-projects new . "Title" -m "…"` | Files an issue in the project whose working directory holds this folder. The dot stands for that project. |
+| `exe-projects comment EXE-12 -m "…"` | Comments on an issue. `-a shot.png` attaches a file. |
+| `exe-projects edit EXE-12 -c <id> -F plan.md` | Rewrites one comment in place, such as a plan whose boxes are now ticked. |
+| `exe-projects close EXE-12 -m "Fixed in 485ddda"` | Closes an issue, with a last comment. |
+
+`exe-projects help` lists the rest. The command stays in the folder
+exe-projects was built in, so give an agent its full path.
+
+An agent writes under a name of its own when `EXE_PROJECTS_KEY` names an
+ed25519 key of its own, a PEM file like the one a hub key is kept in. It
+says what to call it once, with `exe-projects whoami -name "…"`. Without a
+key, what it writes is signed as this node, which is you.
+
+An agent learns about the tracker from the project's instructions:
+`CLAUDE.md` for Claude Code, `AGENTS.md` for Codex. A few lines are
+enough:
+
+```
+Issues for this project are in Projects. The command is
+~/exe-projects/exe-projects; `help` lists what it does.
+Read an issue with `show EXE-12`.
+Found something outside your task? File it with
+`new . "Title" -m "What you saw"` and carry on.
+Before you start an issue, comment your plan on it as a
+checklist. When you finish, tick the checklist, report
+what you did, and close the issue with the commit.
+```
+
+Without lines like these, an agent sent an issue still does the work,
+but reports only in its own conversation.
 
 ## Joining desks together
 
