@@ -50,8 +50,11 @@
       <p id="intro">Setup runs on this computer and continues if you close this dialog. Your Mac’s hard disk is kept for your next visit. <a href="https://archive.org/details/691-5305-A2ZMac_OS_X_v10.4_Tiger._Includes_Xcode_2._Install_Disc_2005_DVD" target="_blank" rel="noreferrer">Installer source</a>.</p>
       <p id="ports">While the Mac runs, this computer and no other reaches two of its Sharing services: Remote Login on port <b id="port-ssh">—</b> and Apple Remote Desktop’s VNC on port <b id="port-vnc">—</b>, both at 127.0.0.1. Turn them on in the Mac’s System Preferences → Sharing.</p>
       <div id="share">
-        <p id="share-intro">The Workspace is a volume for the Mac. In the Finder choose Go → Connect to Server…, enter <b id="share-mac">—</b>, click Connect, and give the name <b>workspace</b> and the password <b id="share-password">—</b>. Another computer on this network connects to <span id="share-others">—</span> with the same name and password.</p>
-        <div id="share-row"><button class="ghost" id="share-renew">New Password</button></div>
+        <p id="share-intro">In the Mac’s Finder choose Go → Connect to Server…, enter the address, click Connect, and sign in with the name and password.</p>
+        <div class="row"><label for="share-from">Connect from</label><span class="popup" id="share-from-popup"><select id="share-from"><option value="">The Mac in this window</option></select><span class="well" aria-hidden="true"><i><b></b></i></span></span></div>
+        <div class="row"><label for="share-address">Address</label><input type="text" id="share-address" readonly value="" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="share-address">Copy</button></div>
+        <div class="row"><label for="share-name">Name</label><input type="text" id="share-name" readonly value="workspace" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="share-name">Copy</button></div>
+        <div class="row"><label for="share-password">Password</label><input type="text" id="share-password" readonly value="" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="share-password">Copy</button></div>
       </div>
       <div id="agent-setup" hidden>
         <p id="agent-intro">The <b>Agent</b> button opens a Chat that works inside the Mac over Remote Login, as the Mac account <input type="text" id="agent-user" size="10" aria-label="Mac account the agent works as" placeholder="short name" spellcheck="false" autocomplete="off" autocapitalize="off">. Once, let its key in: paste this line into Terminal on the Mac, signed in as that account.</p>
@@ -61,7 +64,7 @@
       <p id="setup-loading">Checking setup progress…</p>
       <ol id="steps"></ol>
     </div>
-    <div class="btns"><button class="ghost default" id="setup-close">OK</button></div>
+    <div class="btns"><button class="ghost" id="share-renew">New Password</button><button class="ghost default" id="setup-close">OK</button></div>
   </section>
 </div>
 

@@ -362,13 +362,36 @@ async function renderShare(renew = false) {
     const response = await fetch('/v1/dav', {method: renew ? 'POST' : 'GET', headers, cache: 'no-store'});
     if (!response.ok) throw new Error((await response.text()).trim() || `HTTP ${response.status}`);
     const s = await response.json();
-    $('#share-mac').textContent = s.mac;
-    $('#share-password').textContent = s.password;
-    $('#share-others').textContent = s.addresses.length ? s.addresses.join(' or ') : 'nothing: exe listens on this computer alone';
+    // Connect from: the Mac in this window at the host's address under
+    // QEMU's user networking, then any other computer at this machine's.
+    const from = $('#share-from'), was = from.value;
+    const choices = [[s.mac, 'The Mac in this window'], ...s.addresses.map(a => [a, 'Another computer, at ' + new URL(a).hostname])];
+    if (choices.length !== from.options.length || choices.some(([v], i) => from.options[i].value !== v)) {
+      from.replaceChildren(...choices.map(([v, t]) => new Option(t, v)));
+      from.value = choices.some(([v]) => v === was) ? was : choices[0][0];
+    }
+    $('#share-address').value = from.value;
+    $('#share-password').value = s.password;
   } catch (e) { error(e); }
   finally { btn.disabled = false; }
 }
 $('#share-renew')?.addEventListener('click', () => renderShare(true));
+$('#share-from')?.addEventListener('change', e => { $('#share-address').value = e.target.value; });
+// Copy beside a field selects its text and puts it on the clipboard, and
+// reads Copied for a moment. A plain-http desk (the Tailscale address) has
+// no clipboard API; there the copy command does it on the selection.
+$('#share')?.addEventListener('click', async e => {
+  const b = e.target instanceof Element && e.target.closest('.copy');
+  if (!b) return;
+  const input = $('#' + b.dataset.copy);
+  input.focus({preventScroll: true}); input.select();
+  let ok = false;
+  try { await navigator.clipboard.writeText(input.value); ok = true; }
+  catch { try { ok = document.execCommand('copy'); } catch {} }
+  if (!ok) return;
+  b.textContent = 'Copied'; clearTimeout(b._t);
+  b._t = setTimeout(() => { b.textContent = 'Copy'; }, 1500);
+});
 renderShare();
 async function action(path) {
   if (pending) return;
@@ -426,7 +449,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' || (e.key === 'Enter' && !e.target.closest('a, button, select, input'))) {
     e.preventDefault(); panel.id === 'cd-dlg' ? cd.close(true) : setupDetails(false);
   } else if (e.key === 'Tab') {
-    const items = [...panel.querySelectorAll('a[href], button:not(:disabled), select:not(:disabled), [tabindex="0"]')].filter(el => el.getClientRects().length);
+    const items = [...panel.querySelectorAll('a[href], button:not(:disabled), select:not(:disabled), input:not(:disabled), textarea, [tabindex="0"]')].filter(el => el.getClientRects().length);
     const first = items[0], last = items[items.length - 1];
     if (!panel.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
     else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }

@@ -1894,8 +1894,9 @@ that **Mount Workspace**, in the window's **Setup…** menu, shows, and click
 **Connect**. The name is `workspace` and the password the one shown
 there; the Finder can keep both in its keychain. The volume is the
 Workspace folder itself over WebDAV, at `/Workspace/` on exe's own port, so
-another computer reaches it at this machine's address — Mount Workspace
-lists those too. Mac OS X 10.4 mounts it with no software added; Mac OS 9
+another computer reaches it at this machine's address: choose that
+computer under **Connect from** and the address changes. **Copy** beside a
+field puts it on the clipboard of the computer you are at. Mac OS X 10.4 mounts it with no software added; Mac OS 9
 has no WebDAV of its own, so its Mac still takes a CD.
 
 The password is the volume's alone, never the API token: a Mac that mounts
