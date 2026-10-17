@@ -320,8 +320,8 @@ function renderAgent(s) {
   if (!btn || !box) return;
   btn.hidden = !(s.running && s.installed && s.agent);
   box.hidden = !s.agent;
-  const item = $('#setup-menu option[value="agent"]');
-  if (item) item.disabled = !s.agent;
+  const item = $('#setup-list [data-page="agent"]');
+  if (item) { item.classList.toggle('off', !s.agent); item.setAttribute('aria-disabled', String(!s.agent)); }
   if (!s.agent) return;
   const user = $('#agent-user');
   if (document.activeElement !== user && !agentSaving) user.value = s.agent.user || '';
@@ -405,7 +405,7 @@ function dialog(open, veilID, triggerID, defaultID, restoreFocus = true) {
   const veil = $(veilID);
   if (veil.classList.contains('on') === open) return;
   veil.classList.toggle('on', open);
-  if ($(triggerID).tagName !== 'SELECT') $(triggerID).setAttribute('aria-expanded', String(open));
+  if ($(triggerID).getAttribute('aria-haspopup') === 'dialog') $(triggerID).setAttribute('aria-expanded', String(open));
   for (const el of [$('#bar'), $('main'), $('#error'), $('#status')]) el.inert = open;
   if (open) { rfb?.blur(); $(defaultID).focus({preventScroll: true}); }
   else if (restoreFocus) $(triggerID).focus({preventScroll: true});
@@ -426,10 +426,61 @@ function setupDetails(open, restoreFocus = true, page = 'details') {
   dialog(open, '#veil', setupTrigger, '#setup-close', restoreFocus);
 }
 $('#details')?.addEventListener('click', () => setupDetails(true));
-$('#setup-menu')?.addEventListener('change', e => {
-  const page = e.target.value; e.target.value = '';
-  if (page) setupDetails(true, true, page);
-});
+// The Setup menu's list hangs 2px under the button at its left edge, at
+// least as wide, kept inside the window. The row under the pointer or
+// the arrow keys is .on; Return or a click picks; Escape, a press
+// elsewhere or the window losing the keyboard puts the list away.
+const setupBtn = $('#setup-menu'), setupList = $('#setup-list');
+function setupRows() { return [...setupList.children].filter(r => !r.classList.contains('off')); }
+function setupOn(row) { for (const r of setupList.children) r.classList.toggle('on', r === row); }
+function openSetupMenu() {
+  setupList.hidden = false;
+  const r = $('#setup-popup').getBoundingClientRect();
+  setupList.style.minWidth = r.width + 'px';
+  setupList.style.top = (r.bottom + 2) + 'px';
+  setupList.style.maxHeight = Math.max(72, innerHeight - r.bottom - 10) + 'px';
+  // a whole number of pixels wide, so its right border is one device pixel
+  setupList.style.width = '';
+  setupList.style.width = Math.ceil(setupList.getBoundingClientRect().width) + 'px';
+  setupList.style.left = Math.max(4, Math.min(r.left, innerWidth - setupList.offsetWidth - 6)) + 'px';
+  setupOn(null);
+  setupBtn.setAttribute('aria-expanded', 'true');
+}
+function closeSetupMenu() {
+  if (setupList.hidden) return;
+  setupList.hidden = true;
+  setupBtn.setAttribute('aria-expanded', 'false');
+}
+function pickSetup(row) {
+  if (!row || row.classList.contains('off')) return;
+  closeSetupMenu();
+  setupDetails(true, true, row.dataset.page);
+}
+if (setupBtn && setupList) {
+  setupBtn.addEventListener('click', () => setupList.hidden ? openSetupMenu() : closeSetupMenu());
+  setupList.addEventListener('pointermove', e => {
+    const row = e.target.closest('.dd-item');
+    if (row && !row.classList.contains('on') && !row.classList.contains('off')) setupOn(row);
+  });
+  setupList.addEventListener('click', e => pickSetup(e.target.closest('.dd-item')));
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('#setup-list, #setup-popup')) closeSetupMenu();
+  }, true);
+  addEventListener('blur', closeSetupMenu);
+  document.addEventListener('keydown', e => {
+    if (setupList.hidden) {
+      if (document.activeElement === setupBtn && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); openSetupMenu(); }
+      return;
+    }
+    const rows = setupRows(), at = rows.findIndex(r => r.classList.contains('on'));
+    if (e.key === 'Escape') closeSetupMenu();
+    else if (e.key === 'ArrowDown') setupOn(rows[Math.min(rows.length - 1, at + 1)]);
+    else if (e.key === 'ArrowUp') setupOn(rows[Math.max(0, at - 1)]);
+    else if (e.key === 'Enter' && at >= 0) pickSetup(rows[at]);
+    else return;
+    e.preventDefault();
+  });
+}
 $('#setup-close').onclick = () => setupDetails(false);
 document.addEventListener('keydown', e => {
   const panel = $('#cd-veil').classList.contains('on') ? $('#cd-dlg') : $('#veil').classList.contains('on') ? $('#dlg') : null;

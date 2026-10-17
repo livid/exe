@@ -13,10 +13,10 @@
 <header id="bar">
   <button class="ghost" id="start" hidden>Start Mac</button>
   <button class="ghost" id="cancel" hidden>Pause setup</button>
-  <span class="popup" id="setup-popup">
-    <select id="setup-menu" aria-label="Setup" aria-controls="dlg"><option value="">Setup…</option><option value="details">Setup details</option><option value="share">Mount Workspace</option><option value="agent">Agent setup</option></select>
-    <span class="well" aria-hidden="true"><i><b></b></i></span>
-  </span>
+  <!-- The Setup menu: the shared pop-up frame around a button, and the
+       list that opens is a Platinum menu of the page's own, its rows
+       with icons, as Analytics' host menu. -->
+  <span class="popup" id="setup-popup"><button type="button" id="setup-menu" aria-haspopup="listbox" aria-expanded="false" aria-controls="setup-list">Setup…</button><span class="well" aria-hidden="true"><i><b></b></i></span></span>
   <button class="ghost" id="agent" hidden>Agent</button>
   <span class="popup" id="mac-keys-popup" hidden>
     <select id="mac-keys" aria-label="Send keys to Mac"><option value="">Mac keys…</option><option value="shift">Wake display</option><option value="cmd+q">⌘ Q — Quit</option><option value="cmd+w">⌘ W — Close</option><option value="cmd+tab">⌘ Tab — Next application</option><option value="cmd+space">⌘ Space — Spotlight</option><option value="cmd+opt+esc">⌥ ⌘ Esc — Force Quit</option></select>
@@ -27,6 +27,11 @@
   <span id="cd-group" hidden><button class="ghost" id="cd" aria-label="CD images" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M4 0h4v1h2v1h1v2h1v4h-1v2h-1v1H8v1H4v-1H2v-1H1V8H0V4h1V2h1V1h2zM4 1v1H2v2H1v4h1v2h2v1h4v-1h2V8h1V4h-1V2H8V1zM5 4h2v1h1v2H7v1H5V7H4V5h1zM5 5v2h2V5z"/></svg><span id="cd-label">CD…</span></button><span id="cd-name">Checking CD…</span></span>
   <span id="bar-help">Click the Mac screen to type</span>
 </header>
+<div class="dropdown icons" id="setup-list" role="listbox" aria-label="Setup" hidden>
+  <div class="dd-item" role="option" data-page="details"><span class="dd-ico"><svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#000000" d="M1 1h9v1h-9zM1 2h1v1h-1zM9 2h2v1h-2zM1 3h1v1h-1zM9 3h1v1h-1zM11 3h1v1h-1zM1 4h1v1h-1zM9 4h4v1h-4zM1 5h1v1h-1zM12 5h1v1h-1zM1 6h1v1h-1zM12 6h1v1h-1zM1 7h1v1h-1zM12 7h1v1h-1zM1 8h1v1h-1zM12 8h1v1h-1zM1 9h1v1h-1zM12 9h1v1h-1zM1 10h1v1h-1zM12 10h1v1h-1zM1 11h1v1h-1zM12 11h1v1h-1zM1 12h1v1h-1zM12 12h1v1h-1zM1 13h12v1h-12z"/><path fill="#ffffff" d="M2 2h7v1h-7zM2 3h7v1h-7zM10 3h1v1h-1zM2 4h7v1h-7zM2 5h1v1h-1zM9 5h3v1h-3zM2 6h10v1h-10zM2 7h1v1h-1zM9 7h3v1h-3zM2 8h10v1h-10zM2 9h1v1h-1zM9 9h3v1h-3zM2 10h10v1h-10zM2 11h1v1h-1zM7 11h5v1h-5zM2 12h10v1h-10z"/><path fill="#999999" d="M3 5h6v1h-6zM3 7h6v1h-6zM3 9h6v1h-6zM3 11h4v1h-4z"/></svg></span>Setup details</div>
+  <div class="dd-item" role="option" data-page="share"><span class="dd-ico"><svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#000000" d="M1 3h14v1h-14zM0 4h1v1h-1zM15 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h16v1h-16zM0 10h1v1h-1zM12 10h1v1h-1zM14 10h2v1h-2zM0 11h1v1h-1zM15 11h1v1h-1zM1 12h14v1h-14z"/><path fill="#ffffff" d="M1 4h14v1h-14z"/><path fill="#cccccc" d="M1 5h14v1h-14zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h14v1h-14z"/><path fill="#999999" d="M1 10h11v1h-11zM1 11h14v1h-14z"/><path fill="#33cc33" d="M13 10h1v1h-1z"/></svg></span>Mount Workspace</div>
+  <div class="dd-item" role="option" data-page="agent"><span class="dd-ico"><svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#000000" d="M3 2h4v1h-4zM2 3h1v1h-1zM7 3h1v1h-1zM1 4h1v1h-1zM4 4h2v1h-2zM8 4h1v1h-1zM1 5h1v1h-1zM3 5h1v1h-1zM6 5h1v1h-1zM8 5h8v1h-8zM1 6h1v1h-1zM3 6h1v1h-1zM6 6h1v1h-1zM15 6h1v1h-1zM1 7h1v1h-1zM4 7h2v1h-2zM8 7h2v1h-2zM12 7h1v1h-1zM15 7h1v1h-1zM2 8h1v1h-1zM7 8h1v1h-1zM9 8h1v1h-1zM12 8h1v1h-1zM15 8h1v1h-1zM3 9h4v1h-4zM9 9h7v1h-7z"/><path fill="#ffcc00" d="M3 3h4v1h-4zM2 4h2v1h-2zM6 4h2v1h-2zM2 5h1v1h-1zM7 5h1v1h-1zM2 6h1v1h-1zM7 6h8v1h-8zM2 7h2v1h-2zM6 7h2v1h-2zM10 7h2v1h-2zM13 7h2v1h-2zM3 8h4v1h-4zM10 8h2v1h-2zM13 8h2v1h-2z"/></svg></span>Agent setup</div>
+</div>
 <div id="error" role="alert" hidden></div>
 <main>
 <details id="guide" open hidden><summary>Install Mac OS X — follow these steps in the Mac screen</summary><ol>
