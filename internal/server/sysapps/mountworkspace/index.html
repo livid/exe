@@ -110,6 +110,7 @@ main { height: 100%; overflow: auto; padding: 12px; }
 .row .popup { height: 20px; }
 .copy { min-width: 58px; padding: 2px 6px; }
 .field { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.row .wide { grid-column: 2 / 4; }
 .hint { font-size: 11px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg { display: flex; gap: 6px; margin: 16px 0 12px; }
 .seg button { min-width: 96px; }
@@ -130,7 +131,7 @@ ol li:last-child { margin-bottom: 0; }
   <div class="row"><label for="address">Address</label><input type="text" id="address" readonly value="" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="address">Copy</button></div>
   <div class="row"><label for="name">Name</label><input type="text" id="name" readonly value="workspace" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="name">Copy</button></div>
   <div class="row"><label for="password">Password</label><input type="text" id="password" readonly value="" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="password">Copy</button></div>
-  <div class="row"><span></span><span class="field"><button class="ghost" id="renew">New Password</button><span class="hint">every computer that mounted signs in again</span></span></div>
+  <div class="row"><span></span><span class="field wide"><button class="ghost" id="renew">New Password</button><span class="hint">every computer that mounted signs in again</span></span></div>
   <div class="seg" role="tablist" aria-label="Your computer"><button class="ghost" role="tab" data-os="mac" aria-controls="mac">macOS</button><button class="ghost" role="tab" data-os="win" aria-controls="win">Windows</button><button class="ghost" role="tab" data-os="linux" aria-controls="linux">Linux</button></div>
   <section id="mac" role="tabpanel">
     <ol>
