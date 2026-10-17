@@ -342,6 +342,26 @@ $('#agent')?.addEventListener('click', () => parent.postMessage({exe: 'chat'}, l
 $('#agent-user')?.addEventListener('change', saveAgentUser);
 $('#agent-user')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); saveAgentUser(); } });
 $('#agent-line')?.addEventListener('focus', e => e.target.select());
+// The Workspace volume's address and password, on a page that has the
+// block (Mac OS X's); New Password renews it and drops every Mac that
+// mounted with the old one.
+async function renderShare(renew = false) {
+  if (!$('#share')) return;
+  const btn = $('#share-renew');
+  btn.disabled = true;
+  try {
+    const headers = token ? {Authorization: 'Bearer ' + token} : {};
+    const response = await fetch('/v1/dav', {method: renew ? 'POST' : 'GET', headers, cache: 'no-store'});
+    if (!response.ok) throw new Error((await response.text()).trim() || `HTTP ${response.status}`);
+    const s = await response.json();
+    $('#share-mac').textContent = s.mac;
+    $('#share-password').textContent = s.password;
+    $('#share-others').textContent = s.addresses.length ? s.addresses.join(' or ') : 'nothing: exe listens on this computer alone';
+  } catch (e) { error(e); }
+  finally { btn.disabled = false; }
+}
+$('#share-renew')?.addEventListener('click', () => renderShare(true));
+renderShare();
 async function action(path) {
   if (pending) return;
   pending = true; clearError();

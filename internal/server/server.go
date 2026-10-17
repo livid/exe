@@ -334,6 +334,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/workspace/{path...}", s.handleWorkspacePut)
 	mux.HandleFunc("POST /v1/workspace/{path...}", s.handleWorkspaceMove)
 	mux.HandleFunc("DELETE /v1/workspace/{path...}", s.handleWorkspaceDelete)
+	// The Workspace as a volume on a Mac (dav.go): /Workspace/ is outside /v1 and
+	// behind the share's own password, never the token.
+	mux.HandleFunc("GET /v1/dav", s.handleShare)
+	mux.HandleFunc("POST /v1/dav", s.handleShare)
+	// Method by method: a bare "/Workspace/" would conflict with "GET /".
+	dav := s.davHandler()
+	for _, m := range []string{"OPTIONS", "GET", "HEAD", "POST", "PUT", "DELETE", "PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK"} {
+		mux.Handle(m+" /Workspace/", dav)
+		mux.Handle(m+" /Workspace", dav)
+	}
 	mux.HandleFunc("POST /v1/pages", s.handlePageTicket)
 	mux.HandleFunc("GET /pages/{ticket}/{name}", s.handlePage)
 	mux.HandleFunc("GET /v1/newsfeed", s.handleNewsfeedGet)

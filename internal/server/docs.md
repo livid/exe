@@ -1876,6 +1876,30 @@ server knows no newer kind — and Remote Login has to be on in the Mac's
 Sharing pane. A chat with the Mac fails with the reason while any of this
 is missing.
 
+### The Workspace as a volume on the Mac
+
+The Workspace of this exe mounts on the Mac's desktop as a volume named
+**Workspace**: what you drop in the Workspace window is in the Mac's Finder, and
+a file the Mac saves there, a game's save or a screenshot, stands in the
+Workspace before you change windows. Both Macs exe runs see it, and so does
+any Mac OS X computer on your network.
+
+In the Mac's Finder choose **Go → Connect to Server…**, enter the address
+**Setup details** shows under "The Workspace is a volume for the Mac" and
+click **Connect**. The name is `workspace` and the password the one shown
+there; the Finder can keep both in its keychain. The volume is the
+Workspace folder itself over WebDAV, at `/Workspace/` on exe's own port, so
+another computer reaches it at this machine's address — Setup details
+lists those too. Mac OS X 10.4 mounts it with no software added; Mac OS 9
+has no WebDAV of its own, so its Mac still takes a CD.
+
+The password is the volume's alone, never the API token: a Mac that mounts
+the volume can read and write the Workspace and nothing else. **New
+Password** makes another and every Mac that mounted with the old one is
+asked again. A file the Mac writes syncs to your other nodes like one the
+desk saved, up to the Workspace's size limit; the Mac's own `.DS_Store` and
+`._name` sidecars stay on this node and out of every listing.
+
 ### Clock and network
 
 The Mac's clock starts at today's date and time, and Tiger shows it in the

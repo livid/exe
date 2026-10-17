@@ -32,7 +32,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 // indirect
 	golang.org/x/mod v0.38.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
@@ -44,5 +43,6 @@ require (
 
 require (
 	github.com/livid/exe-stats v0.1.0
+	golang.org/x/net v0.57.0
 	modernc.org/sqlite v1.59.0
 )
