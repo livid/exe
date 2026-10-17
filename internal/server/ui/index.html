@@ -1793,6 +1793,7 @@ body.mobile th.sorted {
 </div>
 <div class="dropdown" id="dd-help" hidden>
   <div class="dd-item" data-act="welcome">Welcome…</div>
+  <div class="dd-item" data-act="mountws">Mount Workspace…</div>
   <div class="dd-item" data-act="docs">exe Documentation…</div>
   <div class="dd-item" data-act="skillguide">Agent Skill Guide…</div>
 </div>
@@ -4295,6 +4296,7 @@ const ACTIONS = {
   hubjoin: () => openHubJoin(),
   token: () => tokOpen(),
   welcome: () => openWelcomeWin(),
+  mountws: () => openAppWin("mountworkspace"),
   docs: where => openDocsWin(where),
   skillguide: () => openSkillWin(),
 };

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mount Workspace</title>
+<!-- Help → Mount Workspace…: how a computer of today mounts the
+     Workspace as a drive, with the address, the name and the password
+     ready to copy. The volume is the daemon's WebDAV face of the
+     Workspace folder, the one a Mac exe runs mounts too. -->
+<link rel="stylesheet" href="/platinum/popup.css">
+<style>
+/* Platinum values match the exe desktop (same block as Dict and Notes) */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/16px var(--font); color: var(--black); background: var(--g200);
+  user-select: none; -webkit-user-select: none; cursor: default; overflow: hidden; }
+[hidden] { display: none !important; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  white-space: nowrap; flex: none;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+/* the chosen system stays depressed, like a Platinum segmented control */
+button.ghost.on { background: #888; color: #fff;
+  box-shadow: inset 1px 1px 0 #666, inset -1px -1px 0 #aaa,
+    inset 2px 2px 0 #777, inset -2px -2px 0 #999; }
+button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
+button:focus { outline: none; }
+button:focus-visible, .popup:focus-within { outline: 2px solid #9999fe; outline-offset: 1px; }
+
+/* the sunken text field and the text area (the Mac window's) */
+input[type=text], textarea { background: #fff; color: var(--black);
+  border: 1px solid var(--black); border-radius: 0; padding: 2px 5px; font: inherit; font-size: 12px;
+  height: 20px; line-height: 14px; user-select: text; -webkit-user-select: text; cursor: text;
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+/* a box of lines is as tall as its wrapped lines (the script fits it), so it never scrolls inside the page */
+textarea { display: block; width: 100%; height: 64px; padding: 3px 5px; resize: none; overflow: hidden;
+  font: 11px/14px Monaco, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+input[type=text]:focus, textarea:focus { outline: 2px solid #9999fe; outline-offset: 0; }
+
+/* Mac OS 9 scrollbars — the desktop's pixel-sampled spec, adapted for a
+   document window: the host frame draws the outer black line, so bars are
+   15px (1px leading separator + the sampled 14px face) with no trailing
+   border of their own — otherwise the edge doubles to 2px. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+/* Safari redraws a custom scroll bar only when its element's own style
+   changes, and the classes above change nothing of the element's own: the
+   thumb's end merges stayed stale there and doubled the line against the
+   arrows. Each class sets a property of its own, so WebKit sees a change. */
+.scrolled-y { --sb-scrolled-y: 1; } .at-y-end { --sb-at-y-end: 1; }
+.scrolled-x { --sb-scrolled-x: 1; } .at-x-end { --sb-at-x-end: 1; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:start:increment { display: none; }
+::-webkit-scrollbar-corner { background: var(--g300); }
+
+/* The page: a line of words, the four rows of Mount Workspace (a label,
+   a field, Copy), then the steps for one system at a time. */
+main { height: 100%; overflow: auto; padding: 12px; }
+.intro { margin: 0 0 16px; }
+.row { display: grid; grid-template-columns: 84px 1fr 58px; column-gap: 12px; align-items: center; margin: 0 0 8px; }
+.row label { text-align: right; }
+.row input { width: 100%; min-width: 0; }
+.row .popup { height: 20px; }
+.copy { min-width: 58px; padding: 2px 6px; }
+.field { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hint { font-size: 11px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg { display: flex; gap: 6px; margin: 16px 0 12px; }
+.seg button { min-width: 96px; }
+@media (max-width: 400px) { .seg button { min-width: 0; flex: 1; } }
+ol { margin: 0 0 12px; padding-left: 20px; }
+ol li { margin: 0 0 6px; }
+ol li:last-child { margin-bottom: 0; }
+.note { margin: 0 0 8px; }
+.addr { font: 11px/14px Monaco, Menlo, Consolas, monospace; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
+.end { display: flex; justify-content: flex-end; margin-top: 8px; }
+@media (max-width: 480px) { .row { grid-template-columns: 70px 1fr 58px; column-gap: 8px; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="intro">The Workspace mounts on your own computer as a drive named <b>Workspace</b>. What you drop into it is on this desk at once, and what the desk or an agent saves there is on your computer.</p>
+  <div class="row"><label for="from">Connect from</label><span class="popup"><select id="from"><option value="">Reading the volume’s details…</option></select><span class="well" aria-hidden="true"><i><b></b></i></span></span></div>
+  <div class="row"><label for="address">Address</label><input type="text" id="address" readonly value="" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="address">Copy</button></div>
+  <div class="row"><label for="name">Name</label><input type="text" id="name" readonly value="workspace" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="name">Copy</button></div>
+  <div class="row"><label for="password">Password</label><input type="text" id="password" readonly value="" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="password">Copy</button></div>
+  <div class="row"><span></span><span class="field"><button class="ghost" id="renew">New Password</button><span class="hint">every computer that mounted signs in again</span></span></div>
+  <div class="seg" role="tablist" aria-label="Your computer"><button class="ghost" role="tab" data-os="mac" aria-controls="mac">macOS</button><button class="ghost" role="tab" data-os="win" aria-controls="win">Windows</button><button class="ghost" role="tab" data-os="linux" aria-controls="linux">Linux</button></div>
+  <section id="mac" role="tabpanel">
+    <ol>
+      <li>In the Finder choose <b>Go → Connect to Server…</b> (⌘ K).</li>
+      <li>Enter the address and click <b>Connect</b>.</li>
+      <li>Sign in with the name and the password. The Finder can keep them in your keychain.</li>
+    </ol>
+    <p class="note">Workspace then stands on your desktop and in the Finder’s sidebar. Eject it to unmount.</p>
+    <p class="note">To have it back after a restart, add Workspace to your Login Items in System Settings → General, or keep the address in Connect to Server’s list with its + button.</p>
+  </section>
+  <section id="win" role="tabpanel" hidden>
+    <ol>
+      <li>In File Explorer open <b>This PC</b> and choose <b>Map network drive</b> (on Windows 11, under the toolbar’s <b>…</b> button).</li>
+      <li>Pick a drive letter, enter the address as the folder, tick <b>Connect using different credentials</b>, and click <b>Finish</b>.</li>
+      <li>Sign in with the name and the password.</li>
+    </ol>
+    <p class="note">Windows takes a password over plain http only after the first line below; an https address needs no change. The second line lets files over 50 MB through. Run them in an administrator Command Prompt, then restart the computer.</p>
+    <textarea id="reg" readonly rows="4" spellcheck="false" aria-label="Registry lines for Windows">reg add HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters /v BasicAuthLevel /t REG_DWORD /d 2 /f
+reg add HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters /v FileSizeLimitInBytes /t REG_DWORD /d 4294967295 /f</textarea>
+    <div class="end"><button class="ghost copy" data-copy="reg">Copy</button></div>
+  </section>
+  <section id="linux" role="tabpanel" hidden>
+    <ol>
+      <li>In GNOME Files choose <b>Other Locations</b>, enter <span class="addr" id="gvfs">dav://…</span> under <b>Connect to Server</b>, and click <b>Connect</b>. In KDE Dolphin the address is <span class="addr" id="kio">webdav://…</span>.</li>
+      <li>Sign in with the name and the password.</li>
+    </ol>
+    <p class="note">From a shell, with the davfs2 package installed, these lines mount it at /mnt/workspace and ask for the name and the password:</p>
+    <textarea id="davfs" readonly rows="2" spellcheck="false" aria-label="Shell lines for Linux"></textarea>
+    <div class="end"><button class="ghost copy" data-copy="davfs">Copy</button></div>
+  </section>
+</main>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+// the desktop hands its window the API token
+const QUERY = new URLSearchParams(location.search);
+const TOKEN = QUERY.get("token") ||
+  (() => { try { return localStorage.getItem("exe_token") || ""; } catch (e) { return ""; } })();
+async function api(path, method = "GET") {
+  const headers = TOKEN ? { Authorization: "Bearer " + TOKEN } : {};
+  const r = await fetch(path, { method, headers, cache: "no-store" });
+  if (!r.ok) { await r.text().catch(() => {}); throw new Error("HTTP " + r.status); }
+  return r.json();
+}
+// Connect from: the desk's own https address first, when the desk came
+// that way (Tailscale Serve), since Windows takes a password over https
+// as it is; then this machine's addresses on the network, as the daemon
+// lists them. The one this desk was reached by is chosen to begin with.
+async function load(renew = false) {
+  const from = $("#from"), btn = $("#renew");
+  btn.disabled = true;
+  try {
+    const s = await api("/v1/dav", renew ? "POST" : "GET");
+    const choices = [];
+    if (location.protocol === "https:") choices.push([location.origin + "/Workspace/", "This desk’s address, over https"]);
+    for (const a of s.addresses) choices.push([a, "This machine, at " + new URL(a).hostname]);
+    if (!choices.length) choices.push([location.origin + "/Workspace/", "This desk’s address"]);
+    from.replaceChildren(...choices.map(([v, t]) => new Option(t, v)));
+    const here = choices.find(([v]) => new URL(v).hostname === location.hostname);
+    from.value = (choices[0][0].startsWith("https:") ? choices[0] : here || choices[0])[0];
+    $("#address").value = from.value;
+    $("#password").value = s.password;
+    paintLinux();
+  } catch (e) {
+    from.replaceChildren(new Option("Could not read the volume’s details", ""));
+    $("#address").value = e.message;
+  } finally { btn.disabled = false; }
+}
+// New Password makes another: every computer that mounted with the old
+// one is asked again, the Macs exe runs included.
+$("#renew").addEventListener("click", () => load(true));
+$("#from").addEventListener("change", e => { $("#address").value = e.target.value; paintLinux(); });
+// Linux spells the address by the program: GNOME Files wants dav:// (davs://
+// over https), Dolphin webdav:// (webdavs://), and davfs2 takes it as it is.
+function paintLinux() {
+  const a = $("#address").value, https = a.startsWith("https:");
+  const rest = a.replace(/^https?:/, "");
+  $("#gvfs").textContent = (https ? "davs:" : "dav:") + rest;
+  $("#kio").textContent = (https ? "webdavs:" : "webdav:") + rest;
+  $("#davfs").value = "sudo mkdir -p /mnt/workspace\nsudo mount -t davfs " + a + " /mnt/workspace";
+  fitBoxes();
+}
+// Copy beside a field selects its text and puts it on the clipboard, and
+// reads Copied for a moment. A plain-http desk (the Tailscale address) has
+// no clipboard API; there the copy command does it on the selection.
+document.addEventListener("click", async e => {
+  const b = e.target instanceof Element && e.target.closest(".copy");
+  if (!b) return;
+  const field = $("#" + b.dataset.copy);
+  field.focus({ preventScroll: true }); field.select();
+  let ok = false;
+  try { await navigator.clipboard.writeText(field.value); ok = true; }
+  catch (err) { try { ok = document.execCommand("copy"); } catch (err2) {} }
+  if (!ok) return;
+  b.textContent = "Copied"; clearTimeout(b._t);
+  b._t = setTimeout(() => { b.textContent = "Copy"; }, 1500);
+});
+// the steps for the computer this browser runs on, until the other is chosen
+function show(os) {
+  for (const b of document.querySelectorAll(".seg button")) {
+    b.classList.toggle("on", b.dataset.os === os);
+    b.setAttribute("aria-selected", String(b.dataset.os === os));
+  }
+  for (const id of ["mac", "win", "linux"]) $("#" + id).hidden = os !== id;
+  fitBoxes();
+}
+// A box of lines (the registry lines, the shell lines) is as tall as they
+// come out wrapped in this browser's font, so it never scrolls inside the
+// page: measured while it is laid out, never while hidden.
+function fitBoxes() {
+  for (const t of document.querySelectorAll("textarea")) {
+    if (!t.getClientRects().length) continue;
+    t.style.height = "auto";
+    t.style.height = (t.scrollHeight + t.offsetHeight - t.clientHeight) + "px";
+  }
+}
+addEventListener("resize", fitBoxes);
+document.fonts?.ready.then(fitBoxes);
+$(".seg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) show(b.dataset.os); });
+const platform = navigator.userAgentData?.platform || navigator.platform || "";
+show(/win/i.test(platform) ? "win" : /linux/i.test(platform) && !/android/i.test(navigator.userAgent) ? "linux" : "mac");
+load();
+</script>
+</body>
+</html>

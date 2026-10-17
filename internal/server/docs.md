@@ -3054,6 +3054,32 @@ When `api_token` is set, each call needs the
 `Authorization: Bearer <token>` header; see
 [Configuration](https://exe.v2core.com/docs/using/configuration).
 
+### Mount the Workspace on your own computer
+
+The Workspace mounts on your own computer as a drive named **Workspace**:
+what you drop into it is on the desk at once, and what the desk or an
+agent saves there is on your computer. **Help → Mount Workspace…** shows
+the address, the name and the password with **Copy** beside each, and
+the steps for macOS, Windows and Linux. **Connect from** picks the address:
+the desk's own https address when you reached the desk that way, or this
+machine's address on the network.
+
+On a Mac, choose **Go → Connect to Server…** in the Finder, enter the
+address, click **Connect** and sign in as `workspace` with the password.
+On Windows, choose **Map network drive** under This PC in File Explorer,
+enter the address as the folder, tick **Connect using different
+credentials** and sign in the same way. Windows takes a password over
+plain http only after a change in its registry; the window shows that
+line ready to copy, with the one that lets files over 50 MB through. An
+https address needs the first of them not. On Linux, GNOME Files takes the
+address as `dav://` under **Other Locations → Connect to Server**, Dolphin
+as `webdav://`, and a shell mounts it with davfs2; the window spells each
+out for the address chosen.
+
+The drive is the same volume [a Mac exe runs mounts](#the-workspace-as-a-volume-on-the-mac),
+the Workspace folder over WebDAV at `/Workspace/` on exe's port, behind
+the volume's own password.
+
 ## Apps
 
 An app is a small program that runs in a window of the desktop and has an

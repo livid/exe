@@ -58,11 +58,12 @@ func TestWelcomeMark(t *testing.T) {
 }
 
 // Welcome is a system app the desktop lists but keeps off its icons, and
-// so is Extras, the wizard its Apps card opens: each says so itself, and
-// no other built-in app does.
+// so are Extras, the wizard its Apps card opens, Agent Setup, and Mount
+// Workspace under Help: each says so itself, and no other built-in app
+// does.
 func TestWelcomeIsListedHidden(t *testing.T) {
 	s := New(&config.Config{}, nil, nil, "", t.TempDir())
-	hidden := map[string]string{"welcome": "Welcome", "extras": "Extras", "agents": "Agent Setup"}
+	hidden := map[string]string{"welcome": "Welcome", "extras": "Extras", "agents": "Agent Setup", "mountworkspace": "Mount Workspace"}
 	seen := false
 	for _, a := range s.listApps() {
 		if title, ok := hidden[a.Name]; ok {

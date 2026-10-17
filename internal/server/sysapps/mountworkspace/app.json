@@ -1,0 +1,6 @@
+{
+  "title": "Mount Workspace",
+  "icon": "icon.svg",
+  "hidden": true,
+  "window": { "width": 520, "height": 532, "grow": false }
+}
