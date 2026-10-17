@@ -57,9 +57,9 @@
         <div class="row"><label for="share-password">Password</label><input type="text" id="share-password" readonly value="" spellcheck="false" autocomplete="off"><button class="ghost copy" data-copy="share-password">Copy</button></div>
       </div>
       <div id="agent-setup" hidden>
-        <p id="agent-intro">The <b>Agent</b> button opens a Chat that works inside the Mac over Remote Login, as the Mac account <input type="text" id="agent-user" size="10" aria-label="Mac account the agent works as" placeholder="short name" spellcheck="false" autocomplete="off" autocapitalize="off">. Once, let its key in: paste this line into Terminal on the Mac, signed in as that account.</p>
-        <textarea id="agent-line" readonly rows="3" aria-label="Line to paste into the Mac’s Terminal" spellcheck="false"></textarea>
-        <p id="agent-note">Tiger’s Remote Login must be on, and the account is any the Mac’s Accounts pane lists; its short name is what the Terminal’s prompt shows.</p>
+        <p id="agent-intro">The <b>Agent</b> button opens a Chat that works inside the Mac over Remote Login, as the account below. Once, paste the key line into Terminal on the Mac, signed in as that account.</p>
+        <div class="row"><label for="agent-user">Account</label><span class="field"><input type="text" id="agent-user" placeholder="short name" spellcheck="false" autocomplete="off" autocapitalize="off"><span class="hint">short name in the Accounts pane</span></span></div>
+        <div class="row top"><label for="agent-line">Key line</label><textarea id="agent-line" readonly rows="3" spellcheck="false"></textarea><button class="ghost copy" data-copy="agent-line">Copy</button><p class="hint" id="agent-note">Remote Login must be on in the Mac’s System Preferences → Sharing.</p></div>
       </div>
       <p id="setup-loading">Checking setup progress…</p>
       <ol id="steps"></ol>

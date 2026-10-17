@@ -326,16 +326,6 @@ function renderAgent(s) {
   const user = $('#agent-user');
   if (document.activeElement !== user && !agentSaving) user.value = s.agent.user || '';
   $('#agent-line').value = authorizeLine(s.agent.key);
-  fitAgentLine();
-}
-// The key line's box is as tall as its line, whole: no line cut at the
-// box's foot. Measured only while the box is laid out; hidden, it would
-// measure nothing and come out a strip.
-function fitAgentLine() {
-  const line = $('#agent-line');
-  if (!line || !line.getClientRects().length) return;
-  line.style.height = 'auto';
-  line.style.height = line.scrollHeight + 'px';
 }
 const authorizeLine = key => key ? `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${key}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys` : '';
 let agentSaving = false;
@@ -380,7 +370,7 @@ $('#share-from')?.addEventListener('change', e => { $('#share-address').value = 
 // Copy beside a field selects its text and puts it on the clipboard, and
 // reads Copied for a moment. A plain-http desk (the Tailscale address) has
 // no clipboard API; there the copy command does it on the selection.
-$('#share')?.addEventListener('click', async e => {
+$('#setup')?.addEventListener('click', async e => {
   const b = e.target instanceof Element && e.target.closest('.copy');
   if (!b) return;
   const input = $('#' + b.dataset.copy);
@@ -434,7 +424,6 @@ function setupDetails(open, restoreFocus = true, page = 'details') {
     if (page === 'share') renderShare();
   }
   dialog(open, '#veil', setupTrigger, '#setup-close', restoreFocus);
-  if (open && page === 'agent') fitAgentLine();
 }
 $('#details')?.addEventListener('click', () => setupDetails(true));
 $('#setup-menu')?.addEventListener('change', e => {
