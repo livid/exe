@@ -325,9 +325,15 @@ function renderAgent(s) {
   if (!s.agent) return;
   const user = $('#agent-user');
   if (document.activeElement !== user && !agentSaving) user.value = s.agent.user || '';
+  $('#agent-line').value = authorizeLine(s.agent.key);
+  fitAgentLine();
+}
+// The key line's box is as tall as its line, whole: no line cut at the
+// box's foot. Measured only while the box is laid out; hidden, it would
+// measure nothing and come out a strip.
+function fitAgentLine() {
   const line = $('#agent-line');
-  line.value = authorizeLine(s.agent.key);
-  // as tall as its line, whole: no line cut at the box's foot
+  if (!line || !line.getClientRects().length) return;
   line.style.height = 'auto';
   line.style.height = line.scrollHeight + 'px';
 }
@@ -405,6 +411,7 @@ function setupDetails(open, restoreFocus = true, page = 'details') {
     if (page === 'share') renderShare();
   }
   dialog(open, '#veil', setupTrigger, '#setup-close', restoreFocus);
+  if (open && page === 'agent') fitAgentLine();
 }
 $('#details')?.addEventListener('click', () => setupDetails(true));
 $('#setup-menu')?.addEventListener('change', e => {
