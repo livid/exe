@@ -10,7 +10,7 @@ package server
 // learns nothing it could call the API with. A dot name goes through, since
 // the Mac writes .DS_Store and ._name beside what it copies, and stays
 // node-local and unlisted like every hidden path; a symlink that leaves the
-// folder is refused. A write lands as one the desk made: the sync engine
+// folder is refused, by os.Root, in the open itself. A write lands as one the desk made: the sync engine
 // versions it and open Workspace windows refresh.
 
 import (
@@ -186,50 +186,43 @@ func (s *Server) davHandler() http.Handler {
 }
 
 // davFS is the workspace folder as a webdav.FileSystem that keeps to the
-// folder: webdav.Dir follows a symlink wherever it points, this does not.
+// folder. webdav.Dir follows a symlink wherever it points; this opens every
+// path through an os.Root on the folder, which resolves the path one step
+// at a time from the folder's own descriptor and refuses a step that leads
+// out, in the open itself. There is no check before the use, so a link that
+// a program on the host puts in between finds nothing to slip past.
 type davFS struct {
 	s    *Server
 	root string
 }
 
+// open opens the folder for one operation, making it when it is missing. A
+// Root held across operations would follow the folder wherever it moved.
+func (f davFS) open() (*os.Root, error) {
+	if err := os.MkdirAll(f.root, 0o755); err != nil {
+		return nil, err
+	}
+	return os.OpenRoot(f.root)
+}
+
 func davRel(name string) string { return strings.TrimPrefix(path.Clean("/"+name), "/") }
 
-// resolve turns a volume path into the file's path on disk, refusing one
-// whose nearest existing ancestor, symlinks followed, lies outside the
-// folder.
-func (f davFS) resolve(name string) (string, error) {
-	p := filepath.Join(f.root, filepath.FromSlash(path.Clean("/"+name)))
-	probe := p
-	for {
-		if _, err := os.Lstat(probe); err == nil {
-			break
-		}
-		parent := filepath.Dir(probe)
-		if parent == probe {
-			break
-		}
-		probe = parent
+// davName is a volume path as a Root takes it: relative to the folder, and
+// "." for the folder itself.
+func davName(name string) string {
+	if rel := davRel(name); rel != "" {
+		return filepath.FromSlash(rel)
 	}
-	real, err := filepath.EvalSymlinks(probe)
-	if err != nil {
-		return "", err
-	}
-	rootReal, err := filepath.EvalSymlinks(f.root)
-	if err != nil {
-		return "", err
-	}
-	if real != rootReal && !strings.HasPrefix(real, rootReal+string(filepath.Separator)) {
-		return "", os.ErrPermission
-	}
-	return p, nil
+	return "."
 }
 
 func (f davFS) Mkdir(_ context.Context, name string, perm os.FileMode) error {
-	p, err := f.resolve(name)
+	root, err := f.open()
 	if err != nil {
 		return err
 	}
-	if err := os.Mkdir(p, perm); err != nil {
+	defer root.Close()
+	if err := root.Mkdir(davName(name), perm); err != nil {
 		return err
 	}
 	f.s.davChanged(davRel(name), false, false)
@@ -237,11 +230,12 @@ func (f davFS) Mkdir(_ context.Context, name string, perm os.FileMode) error {
 }
 
 func (f davFS) OpenFile(_ context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
-	p, err := f.resolve(name)
+	root, err := f.open()
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(p, flag, perm)
+	defer root.Close()
+	file, err := root.OpenFile(davName(name), flag, perm)
 	if err != nil {
 		return nil, err
 	}
@@ -252,19 +246,20 @@ func (f davFS) OpenFile(_ context.Context, name string, flag int, perm os.FileMo
 }
 
 func (f davFS) RemoveAll(_ context.Context, name string) error {
-	p, err := f.resolve(name)
-	if err != nil {
-		return err
-	}
 	rel := davRel(name)
 	if rel == "" {
 		return errors.New("the Workspace itself stays")
 	}
-	fi, err := os.Lstat(p)
+	root, err := f.open()
 	if err != nil {
 		return err
 	}
-	if err := os.RemoveAll(p); err != nil {
+	defer root.Close()
+	fi, err := root.Lstat(davName(name))
+	if err != nil {
+		return err
+	}
+	if err := root.RemoveAll(davName(name)); err != nil {
 		return err
 	}
 	f.s.davChanged(rel, true, !fi.IsDir())
@@ -272,19 +267,16 @@ func (f davFS) RemoveAll(_ context.Context, name string) error {
 }
 
 func (f davFS) Rename(_ context.Context, oldName, newName string) error {
-	from, err := f.resolve(oldName)
+	root, err := f.open()
 	if err != nil {
 		return err
 	}
-	to, err := f.resolve(newName)
+	defer root.Close()
+	fi, err := root.Lstat(davName(oldName))
 	if err != nil {
 		return err
 	}
-	fi, err := os.Lstat(from)
-	if err != nil {
-		return err
-	}
-	if err := os.Rename(from, to); err != nil {
+	if err := root.Rename(davName(oldName), davName(newName)); err != nil {
 		return err
 	}
 	f.s.davChanged(davRel(oldName), true, !fi.IsDir())
@@ -293,11 +285,12 @@ func (f davFS) Rename(_ context.Context, oldName, newName string) error {
 }
 
 func (f davFS) Stat(_ context.Context, name string) (os.FileInfo, error) {
-	p, err := f.resolve(name)
+	root, err := f.open()
 	if err != nil {
 		return nil, err
 	}
-	return os.Stat(p)
+	defer root.Close()
+	return root.Stat(davName(name))
 }
 
 // davWritten tells the daemon about a file when the Mac is done writing it.

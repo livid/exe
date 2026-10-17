@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -153,5 +154,51 @@ func TestDAVStaysInTheWorkspace(t *testing.T) {
 	}
 	if res := davDo(t, ts, http.MethodGet, "/Workspace/../workspace.password", pw, "", nil); res.StatusCode == http.StatusOK {
 		t.Fatal("dot-dot left the folder")
+	}
+}
+
+// A program on the host turns a folder of the Workspace into a link out of
+// it, and back, as fast as it can, while the Mac writes into that folder:
+// every path is opened step by step through os.Root, so no write lands
+// outside, whichever instant the link appears. A check followed by an open
+// by name would let one through.
+func TestDAVHoldsWhileAFolderTurnsIntoALink(t *testing.T) {
+	s, ts := davTestServer(t)
+	pw := davShare(t, ts, http.MethodGet).Password
+	outside := t.TempDir()
+	saves := filepath.Join(s.workspaceDir(), "Saves")
+	if err := os.MkdirAll(saves, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			os.RemoveAll(saves)
+			if i%2 == 0 {
+				os.Symlink(outside, saves)
+			} else {
+				os.Mkdir(saves, 0o755)
+			}
+		}
+	}()
+	for i := 0; i < 400; i++ {
+		res := davDo(t, ts, http.MethodPut, fmt.Sprintf("/Workspace/Saves/%d.txt", i), pw, "x", nil)
+		res.Body.Close()
+	}
+	close(stop)
+	<-done
+	if landed, _ := os.ReadDir(outside); len(landed) != 0 {
+		names := []string{}
+		for _, e := range landed {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("%d writes landed outside the Workspace: %v", len(landed), names)
 	}
 }
