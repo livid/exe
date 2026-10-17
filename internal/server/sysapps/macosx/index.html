@@ -13,7 +13,10 @@
 <header id="bar">
   <button class="ghost" id="start" hidden>Start Mac</button>
   <button class="ghost" id="cancel" hidden>Pause setup</button>
-  <button class="ghost" id="details" aria-haspopup="dialog" aria-controls="dlg" aria-expanded="false">Setup details</button>
+  <span class="popup" id="setup-popup">
+    <select id="setup-menu" aria-label="Setup" aria-controls="dlg"><option value="">Setup…</option><option value="details">Setup details</option><option value="share">Mount Workspace</option><option value="agent">Agent setup</option></select>
+    <span class="well" aria-hidden="true"><i><b></b></i></span>
+  </span>
   <button class="ghost" id="agent" hidden>Agent</button>
   <span class="popup" id="mac-keys-popup" hidden>
     <select id="mac-keys" aria-label="Send keys to Mac"><option value="">Mac keys…</option><option value="shift">Wake display</option><option value="cmd+q">⌘ Q — Quit</option><option value="cmd+w">⌘ W — Close</option><option value="cmd+tab">⌘ Tab — Next application</option><option value="cmd+space">⌘ Space — Spotlight</option><option value="cmd+opt+esc">⌥ ⌘ Esc — Force Quit</option></select>
@@ -38,7 +41,9 @@
 <footer id="status" role="status" aria-live="polite"><span id="lamp" aria-hidden="true"></span><span id="message">Checking your Mac…</span><span id="hardware">PowerPC G4 · 1 GB</span><span id="connection"></span></footer>
 
 <div id="veil">
-  <section id="dlg" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+  <!-- One page at a time, chosen from the bar's Setup menu: the steps,
+       the Workspace volume, or the agent's way in. -->
+  <section id="dlg" role="dialog" aria-modal="true" aria-labelledby="setup-title" data-page="details">
     <h2 id="setup-title">Setup details</h2>
     <div id="download-progress" hidden><progress id="progress" aria-label="Installer download"></progress><div id="transfer"></div></div>
     <div id="setup" tabindex="0">

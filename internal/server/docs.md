@@ -1795,6 +1795,10 @@ describes them. What differs:
 
 - **The display** is 1024×768. The window fits it to whole screen pixels,
   as it does for Mac OS 9.
+- **Setup…** is a menu where Mac OS 9 has the Setup details button, since
+  this Mac has more to set up: **Setup details** shows the steps and the
+  download's progress, **Mount Workspace** the Workspace volume's address
+  and password, and **Agent setup** the agent's way in.
 - **Mac keys…** sends ⌘ Q to quit, ⌘ W to close, ⌘ Tab for the next
   application, ⌘ Space for Spotlight and ⌥ ⌘ Esc to force an application
   to quit: the keys your own computer keeps for itself.
@@ -1868,9 +1872,10 @@ which copies a file of the Workspace into the Mac, a picture included. It
 knows what Tiger's 2005 tools lack, keeps a memory of the Mac between
 chats, and never restarts or shuts the Mac down unasked.
 
-It needs a way in, once: in **Setup details**, enter the Mac account to
-work as (the short name in Tiger's Accounts pane), and paste the line shown
-there into Terminal on the Mac, signed in as that account. The line
+It needs a way in, once: choose **Agent setup** from the window's
+**Setup…** menu, enter the Mac account to work as (the short name in
+Tiger's Accounts pane), and paste the line shown there into Terminal on the
+Mac, signed in as that account. The line
 authorizes a key exe made for this Mac — an RSA key, since Tiger's SSH
 server knows no newer kind — and Remote Login has to be on in the Mac's
 Sharing pane. A chat with the Mac fails with the reason while any of this
@@ -1885,11 +1890,11 @@ Workspace before you change windows. Both Macs exe runs see it, and so does
 any Mac OS X computer on your network.
 
 In the Mac's Finder choose **Go → Connect to Server…**, enter the address
-**Setup details** shows under "The Workspace is a volume for the Mac" and
-click **Connect**. The name is `workspace` and the password the one shown
+that **Mount Workspace**, in the window's **Setup…** menu, shows, and click
+**Connect**. The name is `workspace` and the password the one shown
 there; the Finder can keep both in its keychain. The volume is the
 Workspace folder itself over WebDAV, at `/Workspace/` on exe's own port, so
-another computer reaches it at this machine's address — Setup details
+another computer reaches it at this machine's address — Mount Workspace
 lists those too. Mac OS X 10.4 mounts it with no software added; Mac OS 9
 has no WebDAV of its own, so its Mac still takes a CD.
 

@@ -320,6 +320,8 @@ function renderAgent(s) {
   if (!btn || !box) return;
   btn.hidden = !(s.running && s.installed && s.agent);
   box.hidden = !s.agent;
+  const item = $('#setup-menu option[value="agent"]');
+  if (item) item.disabled = !s.agent;
   if (!s.agent) return;
   const user = $('#agent-user');
   if (document.activeElement !== user && !agentSaving) user.value = s.agent.user || '';
@@ -384,13 +386,31 @@ function dialog(open, veilID, triggerID, defaultID, restoreFocus = true) {
   const veil = $(veilID);
   if (veil.classList.contains('on') === open) return;
   veil.classList.toggle('on', open);
-  $(triggerID).setAttribute('aria-expanded', String(open));
+  if ($(triggerID).tagName !== 'SELECT') $(triggerID).setAttribute('aria-expanded', String(open));
   for (const el of [$('#bar'), $('main'), $('#error'), $('#status')]) el.inert = open;
   if (open) { rfb?.blur(); $(defaultID).focus({preventScroll: true}); }
   else if (restoreFocus) $(triggerID).focus({preventScroll: true});
 }
-function setupDetails(open, restoreFocus = true) { dialog(open, '#veil', '#details', '#setup-close', restoreFocus); }
-$('#details').onclick = () => setupDetails(true);
+// The dialog's pages, chosen from the bar's Setup menu on Mac OS X's page:
+// the setup steps (all that Mac OS 9's Setup details button opens), the
+// Workspace volume, and the agent's way in. Setup opens the steps by
+// itself; a dialog already open keeps its page through the polls.
+const setupPages = {details: 'Setup details', share: 'Mount Workspace', agent: 'Agent setup'};
+const setupTrigger = $('#setup-menu') ? '#setup-menu' : '#details';
+function setupDetails(open, restoreFocus = true, page = 'details') {
+  const dlg = $('#dlg');
+  if (open && 'page' in dlg.dataset && !$('#veil').classList.contains('on')) {
+    dlg.dataset.page = page;
+    $('#setup-title').textContent = setupPages[page];
+    if (page === 'share') renderShare();
+  }
+  dialog(open, '#veil', setupTrigger, '#setup-close', restoreFocus);
+}
+$('#details')?.addEventListener('click', () => setupDetails(true));
+$('#setup-menu')?.addEventListener('change', e => {
+  const page = e.target.value; e.target.value = '';
+  if (page) setupDetails(true, true, page);
+});
 $('#setup-close').onclick = () => setupDetails(false);
 document.addEventListener('keydown', e => {
   const panel = $('#cd-veil').classList.contains('on') ? $('#cd-dlg') : $('#veil').classList.contains('on') ? $('#dlg') : null;

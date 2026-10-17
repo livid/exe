@@ -17,7 +17,7 @@ import (
 // An agent's way into the Mac: a Chat pinned to it works inside the Mac
 // over Tiger's Remote Login, on the "ssh" forward, as an account of the
 // Mac, with a key of this machine's that the account authorizes once (the
-// line Setup details shows, pasted into the Mac's Terminal). Mac OS 9 has
+// line Agent setup shows, pasted into the Mac's Terminal). Mac OS 9 has
 // no shell, so the Mac OS 9 app's Mac has no agent.
 
 // Agent is the way in as the status tells it to the window and the chat.

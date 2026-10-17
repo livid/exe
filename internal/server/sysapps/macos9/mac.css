@@ -156,6 +156,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #cd-upload-status { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1100px) { #bar-help { display: none; } }
 #mac-keys-popup { width: 184px; height: 20px; }
+#setup-popup { width: 96px; height: 20px; }
 .popup:focus-within, button:focus-visible, a:focus-visible { outline: 2px solid #9999fe; outline-offset: 1px; }
 .popup select:disabled { color: #777; }
 #bar-help { margin-left: auto; color: #555; font-size: 11px; }
@@ -181,6 +182,16 @@ h2 { font-size: 12px; margin: 0 0 12px; }
   box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
     1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
 #agent-line:focus { outline: 2px solid #9999fe; outline-offset: 0; }
+/* Mac OS X's dialog shows one page at a time, chosen from the bar's Setup
+   menu: the setup steps (all of Mac OS 9's dialog), the Workspace volume,
+   or the agent's way in. The steps keep the fixed height, since the list
+   arrives after the dialog opens; the other two pages are as tall as their
+   words, with no margin under their last line. */
+#dlg:is([data-page="share"], [data-page="agent"]) :is(#download-progress, #intro, #ports, #setup-loading, #steps),
+#dlg:not([data-page="share"]) #share,
+#dlg:not([data-page="agent"]) #agent-setup { display: none; }
+#dlg:is([data-page="share"], [data-page="agent"]) { height: auto; }
+#dlg[data-page="share"] #share-row, #dlg[data-page="agent"] #agent-note { margin-bottom: 0; }
 #steps { list-style: none; padding: 0; margin: 0; }
 #steps li { padding: 4px 0; border-bottom: 1px solid var(--g400); display: flex; gap: 12px; align-items: flex-start; }
 #steps .badge { width: 16px; flex: none; text-align: center; }

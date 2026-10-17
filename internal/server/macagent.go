@@ -19,7 +19,7 @@ import (
 // A Chat pinned to the Mac OS X app's Mac: the Agent button of its window
 // opens one, and the chat's tools run inside Tiger over Remote Login, on
 // the loopback port the Mac forwards (internal/macos9/agent.go), as the
-// account Setup details names, with the key that dialog hands out. The
+// account Agent setup names, with the key that dialog hands out. The
 // Linux VMs are out of its scope as another VM is out of a pinned chat's;
 // expose, list_ports and github_push, which read a VM's network or its
 // record, are not offered.
@@ -44,7 +44,7 @@ func (s *Server) macTarget() (sshexec.Target, error) {
 		return sshexec.Target{}, errors.New("the Mac is not running: start it from the Mac OS X window first")
 	}
 	if a.User == "" {
-		return sshexec.Target{}, errors.New("no account for the agent on the Mac yet: in the Mac OS X window's Setup details, enter the Mac account to work as and paste the key line into the Mac's Terminal")
+		return sshexec.Target{}, errors.New("no account for the agent on the Mac yet: under Agent setup in the Mac OS X window's Setup menu, enter the Mac account to work as and paste the key line into the Mac's Terminal")
 	}
 	return sshexec.Target{Host: "127.0.0.1", Port: a.Port, User: a.User, KeyPath: m.AgentKeyPath(), Legacy: true}, nil
 }
@@ -69,7 +69,7 @@ func (s *Server) macSystemPrompt() string {
 	note := ""
 	if user == "" {
 		user = "(not chosen yet)"
-		note = "\nNo account is chosen yet, so every tool will fail until the user enters one in the Mac OS X window's Setup details and pastes the key line into the Mac's Terminal: say so first.\n"
+		note = "\nNo account is chosen yet, so every tool will fail until the user enters one under Agent setup in the Mac OS X window's Setup menu and pastes the key line into the Mac's Terminal: say so first.\n"
 	}
 	return fmt.Sprintf(chatMacTmpl, user, note)
 }

@@ -5,4 +5,4 @@ docs/release.md, "The notes", says how it is written. What every release
 before it said is kept in CHANGELOG.md.
 -->
 
-- The Workspace is a volume on the Mac: **Go → Connect to Server…** in Mac OS X, with the address and password in the Mac OS X window's **Setup details**.
+- The Workspace is a volume on the Mac: **Go → Connect to Server…** in Mac OS X, with the address and password under **Mount Workspace** in the Mac OS X window's **Setup…** menu.
