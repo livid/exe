@@ -8,4 +8,4 @@ before it said is kept in CHANGELOG.md.
 - **Help → Mount Workspace…** shows how your Mac, Windows or Linux computer mounts the Workspace as a drive.
 - In Mac OS X, **Go → Connect to Server…** mounts the Workspace, with the address under **Setup…**.
 - On a phone, a key row under the terminal windows sends **Esc**, **Tab**, **Shift-Tab** and the arrows.
-- A **Terminal** you open on one computer opens on your other screens too, with the same columns and rows.
+- **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.

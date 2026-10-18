@@ -3891,15 +3891,18 @@ const AGENT_APPS = {
 function agentOfWin(id) {
   return id.startsWith("win-") && AGENT_APPS[id.slice(4)] ? id.slice(4) : "";
 }
-// whether this browser shows an agent's window, kept in localStorage as
-// "col" (the window has its session column) or "1": a reload, the browser
-// closed and opened again, and this browser's other tabs bring the window
-// back (winRestore), and a tab already open follows one that opens or
-// closes it (the storage listener there). A browser that never opened the
-// window gets none by itself — another device's, a test's: a second
-// window takes the session's size (tmux sizes it to the client attached
-// last). Builds before this one kept the note a tab at a time, in
-// sessionStorage; one still there is read, and moves on the next write
+// this browser's note of an agent's window, kept in localStorage as
+// "col" (the window has its session column) or "1". Where the window is
+// a view of the agent's tmux sessions (agentShared), the layout opens
+// and closes it on every desk, as it does an app's window, and the note
+// only tells a reload that the window has its column before hostinfo
+// answers. Without tmux each window is a fresh run of the CLI, and the
+// note alone brings this browser's back: a reload, the browser closed
+// and opened again, and this browser's other tabs (winRestore, the
+// storage listener there) — never another browser's, which would start
+// a CLI of its own. Builds before this one kept the note a tab at a
+// time, in sessionStorage; one still there is read, and moves on the
+// next write
 function agentShown(app) {
   const k = "exe_" + app + "_open";
   try { return localStorage.getItem(k) || sessionStorage.getItem(k) || ""; } catch (e) { return ""; }
@@ -3911,16 +3914,26 @@ function agentNote(app, v) {
     if (v) localStorage.setItem(k, v); else localStorage.removeItem(k);
   } catch (e) {}
 }
-// agentFollow opens or closes an agent's window because the note says so,
-// not a hand here: the tab the hand was in saves the layout, and its
-// snapshot places and stacks this window with the rest, so nothing is
-// pushed from here — a restore that pushed could put a layout this tab
-// had cached over a newer one
+// agentShared says whether an agent's window is a view of its tmux
+// sessions — the session column, the same on every desk — rather than a
+// fresh run of the CLI of its own. hostinfo says (hostAgents); until it
+// answers, a load goes by this browser's note and by the layout, whose
+// entry for a window with a column keeps the column's width (cw)
+function agentShared(app) {
+  return hostAgents[app] ? hostAgents[app].sessions
+    : agentShown(app) === "col" || !!(agentGeom[app] && agentGeom[app].cw);
+}
+// agentFollow opens or closes an agent's window because the layout or
+// the note says so, not a hand here: the desk or tab the hand was in
+// saves the layout, and its snapshot places and stacks this window with
+// the rest, so nothing is pushed from here — a restore that pushed could
+// put a layout this tab had cached over a newer one. A window opened so
+// never takes the keys: a click does that
 function agentFollow(app, open) {
   const w = document.getElementById("win-" + app), was = winApplying;
   if (open ? w : !w) return;
   winApplying = true;
-  try { if (open) openHostTermWin(app); else closeWin(w); } finally { winApplying = was; }
+  try { if (open) openHostTermWin(app, null, null, { restore: true }); else closeWin(w); } finally { winApplying = was; }
 }
 // last-known geometry of each agent window: the tmux session behind it is
 // persistent, so its geometry rides the snapshot even while the window is
@@ -4018,8 +4031,8 @@ function applyWinState(st) {
   if (showAllOn) showAllExit();
   if (showDeskOn) showDeskExit();
   st = canonicalAppKeys(st, canonicalWindowID);
-  // remember each agent window's geometry for its next open — a snapshot
-  // never opens one: that is the note's to say (agentShown), a browser at a time
+  // remember each agent window's geometry for its next open, and the
+  // cells and column width that go with it (pass 2)
   for (const app of Object.keys(AGENT_APPS)) if (st["win-" + app]) agentGeom[app] = st["win-" + app];
   for (const id of Object.keys(st)) if (id.startsWith("win-tool-")) toolGeom[id] = st[id];
   // a Terminal's likewise: restoreTerms opens the windows — when the desk
@@ -4058,6 +4071,13 @@ function applyWinState(st) {
         if (v.open && !w) openIconEditor(key, v);
         else if (w && v.open && w.hidden) openWin(w);
         else if (w && !v.open && !w.hidden) closeWin(w);
+        continue;
+      }
+      if (agentOfWin(id)) {
+        // an agent's window on tmux sessions opens and closes with the
+        // layout, on every desk; one without is a CLI run of this
+        // browser's own, which the note keeps (agentShown)
+        if (agentShared(agentOfWin(id)) && !v.open !== !w) agentFollow(agentOfWin(id), !!v.open);
         continue;
       }
       if (!w || !WIN_SYNC_OPEN.has(id)) continue;
@@ -4132,7 +4152,7 @@ function applyWinState(st) {
         // the session has, and takes it from no other desk (tmux sizes it
         // to the client that attached, typed or resized last). The
         // position is clamped again at the width that gives
-        if (cells && w._cells(v.cols, v.rows)) winClampPos(w);
+        if (cells && w._cells(v.cols, v.rows, v)) winClampPos(w);
         if (w._fit) w._fit(); // xterm refits to the remotely applied geometry
       }
     }
@@ -4206,25 +4226,40 @@ const winRestored = new Promise(done => { winRestoredDone = done; });
 function winRestore() {
   // mobile restores its own phone-local state, never the desktop snapshot
   if (IS_MOBILE) { mobRestore(); winRestoredDone(); return; }
+  // builds before this one kept an agent's window a browser at a time,
+  // by the note alone: the first load of this one keeps the windows this
+  // browser showed and saves them into the layout, so a window open on
+  // any desk before is open on every desk after (agentShared)
+  let carry = [];
+  try {
+    if (!localStorage.getItem("exe_agents_shared")) carry = Object.keys(AGENT_APPS).filter(a => agentShown(a)).map(a => [a, agentShown(a)]);
+    localStorage.setItem("exe_agents_shared", "1");
+  } catch (e) {}
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem("exe_winstate") || "null"); } catch (e) {}
   if (cached) applyWinState(cached); else openWin("#win-vms");
-  // an agent window this browser shows comes back with the desk, in every
-  // tab of it (agentShown); the layout fetched next places and stacks it
-  for (const app of Object.keys(AGENT_APPS)) if (agentShown(app)) agentFollow(app, true);
+  // an agent window without tmux that this browser showed comes back with
+  // the desk, in every tab of it (agentShown); the layout fetched next
+  // places and stacks it. One on tmux sessions is the layout's to open
+  for (const app of Object.keys(AGENT_APPS)) if (agentShown(app) && !agentShared(app)) agentFollow(app, true);
   j("/v1/ui/state").then(r => {
     winRev = r.rev || 0;
     if (r.state) {
       localStorage.setItem("exe_winstate", JSON.stringify(r.state));
       applyWinState(r.state);
     }
-  }).catch(() => {}).finally(() => { winSubscribe(); restoreTerms(); winRestoredDone(); });
+  }).catch(() => {}).finally(() => {
+    const keep = carry.filter(([a, note]) => (note === "col" || agentShared(a)) && !document.getElementById("win-" + a));
+    for (const [a, note] of keep) { agentNote(a, note); agentFollow(a, true); }
+    if (keep.length) winSave();
+    winSubscribe(); restoreTerms(); winRestoredDone();
+  });
 }
 // this browser's other tabs follow an agent window opened or closed in one
-// of them, as they follow any other window's — those by the layout
-// stream, this by the note changing under them (a storage event reaches
-// every tab but the one that wrote). A phone shows one window at a time
-// and opens its own
+// of them by the note changing under them (a storage event reaches every
+// tab but the one that wrote) — one on tmux sessions by the layout stream
+// too, as every desk does. A phone shows one window at a time and opens
+// its own
 window.addEventListener("storage", e => {
   if (IS_MOBILE || e.storageArea !== localStorage || !e.key) return;
   const app = Object.keys(AGENT_APPS).find(a => "exe_" + a + "_open" === e.key);
@@ -9241,18 +9276,18 @@ $("#tp-text").addEventListener("keydown", e => { if (e.key === "Escape") tpClose
 // an agent window, remembers its geometry (termGeom), opens on every other
 // desk too (termsFollow), and it closes when its shell exits; its close
 // box ends the session. termSess.restore marks a window opened on a session
-// that was already there (restoreTerms, mobRestore), which never takes
-// the keys by itself. termSess 0 is a one-off shell, the host having no tmux.
+// that was already there (restoreTerms, mobRestore, and with app alone an
+// agent's window that agentFollow opens), which never takes the keys by
+// itself. termSess 0 is a one-off shell, the host having no tmux.
 // Returns the window
 function openHostTermWin(app, cmd, vm, termSess) {
   if (!app && !cmd && !vm && termSess === undefined) { newHostTerm(); return null; }
   const sess = termSess ? termSess.number : 0, restore = !!(termSess && termSess.restore);
   const agent = app ? AGENT_APPS[app] : null;
   // the column needs tmux on the host, which hostinfo reports — but a
-  // reload restores the window before that fetch answers, so the browser
-  // remembers with its open note whether the window had a column
-  const column = !!(agent && (hostAgents[app] ? hostAgents[app].sessions
-    : agentShown(app) === "col"));
+  // reload restores the window before that fetch answers, so the note
+  // and the layout say whether the window had a column (agentShared)
+  const column = !!(agent && agentShared(app));
   const tool = cmd ? cmd.trim().split(/\s+/)[0].split("/").pop() : "";
   const toolId = cmd && !agent && !vm ? "win-tool-" + encodeURIComponent(cmd.trim()) : "";
   if (toolId) {
@@ -9265,7 +9300,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
     // (a disconnected window is closed first, then reopened to reconnect)
     const old = document.getElementById("win-" + app);
     if (old) { openWin(old); return old; }
-    agentNote(app, column ? "col" : "1"); // this browser shows it now, in every tab
+    agentNote(app, column ? "col" : "1"); // this browser shows it now, in every tab (agentShown)
   }
   if (sess) {
     // one session, one window here too
@@ -9350,19 +9385,32 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // its column — is the same cols×rows on every desk that shows it: the
   // layout carries its cells (_grid, winSnapshot), and _cells sizes the
   // window to hold them here, in this screen's font and pixel ratio,
-  // where another screen's pixels could hold a cell more or less. A
-  // window that holds them already keeps its size, a grow drag's odd
-  // pixels and all — a reload moves nothing. False when it is left
-  // alone, so too while the box has no layout (shaded)
+  // where another screen's pixels could hold a cell more or less. It
+  // takes px, the size of the desk that saved them, where that holds
+  // them here (a screen with the same font: the two match to the pixel);
+  // else a window that holds them already keeps its size, a grow drag's
+  // odd pixels and all; else it holds exactly the cells. False when it
+  // is left alone, so too while the box has no layout (shaded)
   if (tmuxed && !IS_MOBILE) {
     w._grid = () => [term.cols, term.rows];
-    w._cells = (cols, rows) => {
+    w._cells = (cols, rows, px) => {
       if (!box.clientWidth) return false;
-      const now = fit.proposeDimensions();
-      if (now && now.cols === cols && now.rows === rows) return false;
       const need = termCellsPx(w, box, term, cols, rows);
-      w.style.width = Math.max(minW, Math.min(window.innerWidth - 24, need.w)) + "px";
-      box.style.height = Math.max(minH, Math.min(window.innerHeight - 170, need.h)) + "px";
+      // asked after termCellsPx's resize: until a terminal's first, its
+      // scroll bar is measured wide, and the box would hold a column less
+      const holds = () => { const now = fit.proposeDimensions(); return !!now && now.cols === cols && now.rows === rows; };
+      const size = (pw, ph) => {
+        w.style.width = Math.max(minW, Math.min(window.innerWidth - 24, pw)) + "px";
+        box.style.height = Math.max(minH, Math.min(window.innerHeight - 170, ph)) + "px";
+      };
+      const was = [w.style.width, box.style.height];
+      if (px && px.w && px.h) {
+        size(px.w, px.h);
+        if (holds()) return true;
+        [w.style.width, box.style.height] = was;
+      }
+      if (holds()) return false;
+      size(need.w, need.h);
       return true;
     };
     if (geom && geom.cols && geom.rows && w._cells(geom.cols, geom.rows)) winClampPos(w);
