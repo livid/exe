@@ -835,8 +835,10 @@ sessions, one row for each tmux session. Each is a conversation of its own.
 - **Start one in a project's folder.** In Projects, right-click a project
   and choose **Open in Claude Code**: the Claude Code window opens, or comes
   forward, and a new session starts in the project's working directory, at
-  the top of the list. The item is greyed for a project without a working
-  directory, or whose folder is not on this machine.
+  the top of the list. On a phone, each project in the list has an **Open
+  in Claude Code** button at its right, which does the same. The item and
+  the button are greyed for a project without a working directory, or
+  whose folder is not on this machine.
 - **Work on an issue.** Right-click an issue in Projects and choose **Send to
   Claude Code** or **Send to Codex**. Only detected agents appear. A new
   session starts in the project's folder with the full issue and comments

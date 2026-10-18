@@ -684,7 +684,12 @@ restyling: `internal/server/ui/index.html` (the desktop),
   8px between) and cut with an ellipsis before any button gives way; at
   the right the screen's one main action, a push button in words. A
   button that makes something wears an 8px plus alone (2px strokes, the
-  chevron's weight, in a 30px button) under 360px. What else a screen
+  chevron's weight, in a 30px button) under 360px. A row's own action
+  (Projects' Open in Claude Code) is a 30px glyph button at the row's
+  right, 12px in, centred on the row: the glyph in the button's ink with
+  the ground showing through (the Hub's `.k` and `.w`, which goes dark
+  with a press), dimmed as the row's menu item is, and only in the desk,
+  where there is a window to ask. What else a screen
   can do has a row at its foot, where a thumb is: the held row itself (a
   1px black top line, 12px all round), a pop-up at the left at the
   button's 20px, buttons at the right, the status bar under it keeping
