@@ -809,6 +809,19 @@ restyling: `internal/server/ui/index.html` (the desktop),
   or the bell), or the Chat list's 6px pulsing green dot while it works
   unwatched — green means "live" everywhere.
 
+- A terminal window's key row on a phone (`.keyrow`, `keyRowButtons`):
+  the keys a phone's keyboard has not, in a row of their own under the
+  terminal and over the status bar — Esc, Tab, Shift-Tab and the four
+  arrows, seven ghost buttons sharing the width, 8px apart and 12px from
+  the edges, 20px tall in a 32px row whose top line is its one seam with
+  the terminal. Shift is the Mac's hollow arrow, 7 by 8, before its
+  word; the arrows are the scroll bars' 7px triangle on a stem, all in
+  `currentColor`. A finger gets the row's whole height and half of each
+  gap through a `::before`; the button keeps its 20px look. A press
+  takes no focus (`pointerdown` cancelled), so the keyboard stays up,
+  and raises none when it was down. Off a phone the row is `display:
+  none`. `~/tools/playwright/exe-term-keyrow-test.js` checks it.
+
 - A modal dialog of a window's own (the Claude Code window's Search,
   `.sess-veil`): a veil of the overlay's 15% black over the window's
   frame, so its title bar stays free, the desk's other windows go on

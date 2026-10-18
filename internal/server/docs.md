@@ -581,6 +581,11 @@ fullscreen, one at a time. They cannot be moved or resized there.
   session's history, and a flick keeps it going. Press and hold the terminal
   for **Copy**, **Paste** and **Select All**: how to paste into Claude Code's
   composer, since the phone's keyboard has no paste key.
+- A row of keys under the terminal sends what the phone's keyboard has not:
+  **Esc**, **Tab**, **Shift-Tab** and the four arrows. Esc stops Claude
+  Code's turn or clears its composer, Shift-Tab cycles its modes, and the
+  arrows walk a menu or the prompt history. The keyboard stays up while you
+  tap them. Terminal windows have the row too.
 - In Todo and Weather a finger scrolls the list. To move a row, press and
   hold it for half a second until it tints, then drag it to its new place.
 - A picture window swipes down to close, the window under it showing through
@@ -836,7 +841,9 @@ sessions, one row for each tmux session. Each is a conversation of its own.
   The width is kept with the window's layout.
 
 The list runs newest first, so the session the icon first opened is normally
-at the bottom. On a phone the column is a strip of tabs above the terminal.
+at the bottom. On a phone the column is a strip of tabs above the terminal,
+and a row of keys under it sends **Esc**, **Tab**, **Shift-Tab** and the
+arrows, which the phone's keyboard has not.
 
 <img src="https://hub.v2core.com/v1/embed/bafybeigr4z6peilck47xgpbqq6lcxn2ka3hb36nhuxfglswhcw7yn5uco4" alt="The Codex window: its sessions down the left, a finished turn in the terminal, and the subscription's weekly usage on the status line" width="821" height="487">
 

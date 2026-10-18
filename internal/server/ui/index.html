@@ -628,6 +628,22 @@ body.mobile #cstrip { z-index: 5; }
   border-top: 1px solid var(--black); background: var(--g300); }
 .held-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .held button { flex: none; width: 68px; padding-left: 0; padding-right: 0; }
+/* a terminal window's key row on a phone (openHostTermWin): the keys a
+   phone's keyboard has not — Esc, Tab, Shift-Tab and the four arrows —
+   in a row of their own under the terminal, over the held row and the
+   status bar; off a phone the row is not there. Seven ghost buttons
+   share the width, 8px apart and 12px from the edges, 20px tall in a
+   32px row; its top line is its one seam with the terminal. A finger
+   gets the whole row's height and half of each gap (::before) while the
+   button keeps its own 20px look. The glyphs are 7px pixel arrows in
+   currentColor, white under a press like a word */
+.keyrow { display: none; }
+body.mobile .term-window .keyrow { display: flex; gap: 8px; padding: 6px 12px;
+  border-top: 1px solid var(--black); background: var(--g300); }
+.keyrow button { flex: 1 1 0; min-width: 0; padding-left: 0; padding-right: 0; position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 3px; }
+.keyrow button::before { content: ""; box-sizing: border-box; position: absolute; inset: -6px -4px; }
+.keyrow svg { display: block; flex: none; shape-rendering: crispEdges; fill: currentColor; }
 
 /* Get Info window, OS 9 style: icon + name header, groove rule, then
    right-aligned bold labels over a two-column grid */
@@ -9257,6 +9273,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       <div class="win-body" style="padding:0">${column
         ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="Search every ${agent.title} conversation on this machine">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
         : `<div class="hostterm-box${sess ? " tmux" : ""}"></div>`}</div>
+      <div class="keyrow">${keyRowButtons()}</div>
       <div class="held" hidden><span class="held-text"></span><button class="ghost held-copy">Copy</button><button class="ghost held-drop">Dismiss</button><button class="ghost held-insert">Insert</button></div>
       <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
       ${GROW_TILE}
@@ -10153,11 +10170,30 @@ function openHostTermWin(app, cmd, vm, termSess) {
     }, { passive: true });
     box.addEventListener("touchcancel", () => { vel = 0; }, { passive: true });
   }
-  term.onData(d => {
+  // what is typed goes down the link; a pane scrolled back returns to
+  // the live screen first (above)
+  const typed = d => {
     if (!(ws && ws.readyState === 1)) return;
     if (scrolled) sendScroll(0);
     ws.send(enc.encode(d));
-  });
+  };
+  term.onData(typed);
+  // the phone's key row (.keyrow, shown by the mobile CSS alone): the
+  // keys a phone's keyboard has not. A press is kept from taking the
+  // focus — the keyboard would go down with it — and the key goes as
+  // the keyboard's would: Shift-Tab as CSI Z, an arrow in the CLI's
+  // cursor-key mode of the moment (Claude Code sets the application
+  // one). Focus is not moved either way: a key sent with the keyboard
+  // down must not raise it
+  const keySeq = { esc: "\x1b", tab: "\t", stab: "\x1b[Z" }, arrowOf = { up: "A", down: "B", right: "C", left: "D" };
+  for (const b of w.querySelectorAll(".keyrow button")) {
+    b.addEventListener("pointerdown", e => e.preventDefault());
+    b.addEventListener("mousedown", e => e.preventDefault());
+    b.addEventListener("click", () => {
+      const k = b.dataset.k;
+      typed(keySeq[k] || (term.modes.applicationCursorKeysMode ? "\x1bO" : "\x1b[") + arrowOf[k]);
+    });
+  }
   window.addEventListener("resize", resize);
   wireGrow(w.querySelector(".grow-box"), w, box, minW, { minH, onMove: resize });
   w._fit = resize; // applyWinState: refit after a remote geometry change
@@ -10233,6 +10269,23 @@ function sessBell() {
 // button's own colour over a white lens
 function sessFindGlyph() {
   return '<svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M3 0h3v1h-3zM1 1h2v1h-2zM6 1h2v1h-2zM0 2h1v1h-1zM8 2h1v1h-1zM0 3h1v1h-1zM8 3h1v1h-1zM0 4h1v1h-1zM8 4h1v1h-1zM0 5h1v1h-1zM8 5h1v1h-1zM0 6h1v1h-1zM8 6h1v1h-1zM1 7h2v1h-2zM6 7h2v1h-2zM3 8h3v1h-3zM7 8h3v1h-3zM8 9h3v1h-3zM9 10h3v1h-3zM10 11h3v1h-3zM11 12h2v1h-2z"/><path class="w" d="M3 1h3v1h-3zM1 2h7v1h-7zM1 3h7v1h-7zM1 4h7v1h-7zM1 5h7v1h-7zM1 6h7v1h-7zM3 7h3v1h-3z"/></svg>';
+}
+// the phone key row's buttons (openHostTermWin, .keyrow): Esc and Tab as
+// words, Shift-Tab as the Mac's hollow shift arrow before its word, the
+// arrows as 7px pixel glyphs — a triangle on a stem, the scroll bars'
+// shape — all in currentColor so a press turns them white with the row
+function keyRowButtons() {
+  const shift = "M3 0h1v1H3zM2 1h1v1H2zM4 1h1v1H4zM1 2h1v1H1zM5 2h1v1H5zM0 3h1v1H0zM6 3h1v1H6zM0 4h3v1H0zM4 4h3v1H4zM2 5h1v3H2zM4 5h1v3H4zM3 7h1v1H3z";
+  const arrow = {
+    left: "M0 3h1v1H0zM1 2h1v3H1zM2 1h1v5H2zM3 0h1v7H3zM4 2h3v3H4z",
+    up: "M3 0h1v1H3zM2 1h3v1H2zM1 2h5v1H1zM0 3h7v1H0zM2 4h3v3H2z",
+    down: "M2 0h3v3H2zM0 3h7v1H0zM1 4h5v1H1zM2 5h3v1H2zM3 6h1v1H3z",
+    right: "M0 2h3v3H0zM3 0h1v7H3zM4 1h1v5H4zM5 2h1v3H5zM6 3h1v1H6z",
+  };
+  const svg = (d, h) => `<svg viewBox="0 0 7 ${h}" width="7" height="${h}" aria-hidden="true"><path d="${d}"/></svg>`;
+  return `<button class="ghost" data-k="esc">Esc</button><button class="ghost" data-k="tab">Tab</button>`
+    + `<button class="ghost" data-k="stab" aria-label="Shift-Tab">${svg(shift, 8)}<span>Tab</span></button>`
+    + ["left", "up", "down", "right"].map(k => `<button class="ghost" data-k="${k}" aria-label="${k[0].toUpperCase() + k.slice(1)} arrow">${svg(arrow[k], 7)}</button>`).join("");
 }
 // the same dot hollow: a thread that lives elsewhere, not in a session here
 function sessAway() {
