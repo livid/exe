@@ -102,6 +102,25 @@ func (s *Server) handleUIStatePut(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"rev": rev})
 }
 
+// uiAnnounce sends every connected browser an event that is not a
+// layout — {"term":…} when a Terminal session starts (termsessions.go),
+// so every desk opens its window. The snapshot and its rev stay as they
+// are: a browser tells the event from a layout by its missing "state".
+func (s *Server) uiAnnounce(ev any) {
+	b, err := json.Marshal(ev)
+	if err != nil {
+		return
+	}
+	s.ui.mu.Lock()
+	defer s.ui.mu.Unlock()
+	for ch := range s.ui.subs {
+		select {
+		case ch <- b:
+		default: // a slow subscriber: its stream's reconnect, or its next load, opens the window
+		}
+	}
+}
+
 // handleUIStateEvents is an SSE stream of layout snapshots: the current one
 // on connect, then one per change (tagged with the originating client so a
 // browser can ignore its own echoes).

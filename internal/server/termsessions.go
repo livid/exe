@@ -1,8 +1,10 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sort"
@@ -162,8 +164,15 @@ func (s *Server) handleTermSessions(w http.ResponseWriter, r *http.Request) {
 
 // handleTermSessionNew starts a Terminal session for a new window, which
 // then attaches with /v1/host/terminal?term=<number>. 501 on a host
-// without tmux: the window runs a one-off shell instead.
+// without tmux: the window runs a one-off shell instead. Every desk
+// hears of it on the layout stream (uiAnnounce) and opens its own
+// window of the session; the desk that asked names itself in the body,
+// {"client":…}, and the event carries that on, so it is not news there.
 func (s *Server) handleTermSessionNew(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Client string `json:"client"`
+	}
+	json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&req) // no body: no desk to leave out
 	t, err := s.newTermSession()
 	if errors.Is(err, errNoTmux) {
 		writeErr(w, http.StatusNotImplemented, err)
@@ -173,6 +182,7 @@ func (s *Server) handleTermSessionNew(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.uiAnnounce(map[string]any{"term": t, "client": req.Client})
 	writeJSON(w, http.StatusCreated, t)
 }
 

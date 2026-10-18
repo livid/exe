@@ -30,6 +30,18 @@ func TestTermSessionNumber(t *testing.T) {
 	}
 }
 
+func TestTermQuerySize(t *testing.T) {
+	for q, want := range map[string][2]int{
+		"cols=120&rows=40": {120, 40}, "": {80, 24}, "cols=120": {80, 24},
+		"cols=1&rows=40": {80, 24}, "cols=120&rows=1001": {80, 24}, "cols=x&rows=40": {80, 24},
+	} {
+		r := httptest.NewRequest("GET", "/v1/host/terminal?term=1&"+q, nil)
+		if c, rr := termQuerySize(r); c != want[0] || rr != want[1] {
+			t.Errorf("termQuerySize(%q) = %d×%d, want %d×%d", q, c, rr, want[0], want[1])
+		}
+	}
+}
+
 func TestParseTermSessions(t *testing.T) {
 	out := "exe-claude:1757600000:1\nexe-term-10:1757600300:0\nexe-term-2:1757600200:1\nexe-term-x:1:0\nmine:1:0\n"
 	got := parseTermSessions(out)
@@ -46,7 +58,9 @@ func TestParseTermSessions(t *testing.T) {
 // screen for the next link. A second window of it hears "closed" when
 // the close box (DELETE) ends it, a hang-up by hand "detached", and the
 // shell's exit "session ended" — which is also what a link to a session
-// that is not there hears at once.
+// that is not there hears at once. Every desk hears of a session
+// started, naming the desk that asked, and a link starts at the size it
+// asks for.
 func TestTermSessionsLive(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("no tmux on this host")
@@ -83,11 +97,34 @@ func TestTermSessionsLive(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&v)
 		return resp.StatusCode, v
 	}
+	// the layout stream, as a desk subscribed to it hears it
+	events := make(chan []byte, 8)
+	s.ui.subs = map[chan []byte]struct{}{events: {}}
 	create := func(want int) {
 		t.Helper()
-		code, v := call("POST", "/v1/host/terminals")
-		if code != http.StatusCreated || v["number"] != float64(want) || v["name"] != termSessionName(want) {
-			t.Fatalf("POST: %d %v, want number %d", code, v, want)
+		req, _ := http.NewRequest("POST", srv.URL+"/v1/host/terminals", strings.NewReader(`{"client":"desk-a"}`))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v map[string]any
+		json.NewDecoder(resp.Body).Decode(&v)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated || v["number"] != float64(want) || v["name"] != termSessionName(want) {
+			t.Fatalf("POST: %d %v, want number %d", resp.StatusCode, v, want)
+		}
+		select {
+		case b := <-events:
+			var ev struct {
+				Term   termSession `json:"term"`
+				Client string      `json:"client"`
+				State  any         `json:"state"`
+			}
+			if json.Unmarshal(b, &ev) != nil || ev.Term.Number != want || ev.Client != "desk-a" || ev.State != nil {
+				t.Fatalf("the layout stream heard %s, want Terminal %d from desk-a and no layout", b, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the layout stream heard nothing of Terminal %d", want)
 		}
 	}
 	link := func(n int) *termLink {
@@ -149,10 +186,16 @@ func TestTermSessionsLive(t *testing.T) {
 	if _, v := call("GET", "/v1/host/terminals"); !strings.Contains(fmt.Sprint(v["terminals"]), "exe-term-1") {
 		t.Fatalf("after the link went: %v", v)
 	}
-	two, three := link(1), link(1)
+	two := link(1)
+	three := dialTerm(t, ctx, fmt.Sprintf("ws%s/v1/host/terminal?term=1&cols=101&rows=31", strings.TrimPrefix(srv.URL, "http")))
 	waitFor("two windows on it", func() bool {
 		out, _ := tmuxCmd("list-clients", "-t", "=exe-term-1", "-F", "#{client_pid}").Output()
 		return len(strings.Fields(string(out))) == 2
+	})
+	// the second came in at the size it asked for, which the session took
+	waitFor("the window's size", func() bool {
+		out, _ := tmuxCmd("list-clients", "-t", "=exe-term-1", "-F", "#{client_width}x#{client_height}").Output()
+		return strings.Contains(string(out), "101x31")
 	})
 	if !strings.Contains(pane(1), "mark-42") {
 		t.Fatalf("the screen did not outlive the link: %q", pane(1))

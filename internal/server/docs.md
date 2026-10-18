@@ -140,6 +140,11 @@ are open. It is mirrored live to every browser looking at this desk, so
 dragging a window here moves it on your other screens too. A phone shows one
 window at a time and keeps its own.
 
+Terminal windows are mirrored the same way. A Terminal you open here opens on
+your other screens, and its close box closes it on all of them. A terminal
+window keeps the same columns and rows on every screen, so a program in it
+looks the same on each, even where the font is wider.
+
 ### Save a screenshot of a window
 
 Right-click a window's title bar (on a touch screen, press and hold it) and
@@ -763,7 +768,8 @@ machine; hover it for the folder its sessions start in.
 - An agent has one window. Its icon brings that window forward when it is
   already open.
 - Every double-click on **Terminal** opens another window: **Terminal**,
-  **Terminal 2** and so on.
+  **Terminal 2** and so on. The window opens on every screen that has the
+  desk open, and on one that opens the desk later.
 
 The desktop menu can open all three too, and can run one command in a
 terminal window of its own.

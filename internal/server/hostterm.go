@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -194,6 +195,20 @@ func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// termQuerySize is the cols×rows a window asks its link to start at
+// (?cols=&rows=), else 80×24. A client attaching to a shared tmux
+// session becomes the one tmux sizes the session to, so one that came
+// in at 80×24 would jump the pane to that and back on every other
+// window of it — each reload, each reconnect.
+func termQuerySize(r *http.Request) (int, int) {
+	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))
+	rows, _ := strconv.Atoi(r.URL.Query().Get("rows"))
+	if cols < 2 || cols > 1000 || rows < 2 || rows > 1000 {
+		return 80, 24
+	}
+	return cols, rows
+}
+
 // handleHostTerminal bridges a browser WebSocket to a login shell on the
 // host itself — the desktop's Terminal window. Same wire protocol as the
 // VM terminal: binary frames carry terminal bytes both ways, text frames
@@ -233,7 +248,8 @@ func shQuote(s string) string {
 // when a close box ended it and "session ended" when its shell exited —
 // or at once, without a client, when there is no such session. The
 // wheel's {"scroll":n} works there as in an agent window. With neither,
-// the window is a one-off shell that ends with its link.
+// the window is a one-off shell that ends with its link. ?cols= and
+// ?rows= are the window's size, which the link starts at (termQuerySize).
 func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	var sh hostShell
 	var err error
@@ -241,13 +257,14 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	var ash agentShell
 	var session string // the agent session the window opens on
 	var termName string
+	cols, rows := termQuerySize(r)
 	if app := r.URL.Query().Get("app"); app != "" {
 		a, ok := hostAgents[app]
 		if !ok {
 			writeErr(w, http.StatusBadRequest, fmt.Errorf("unknown app %q", app))
 			return
 		}
-		if ash, session, err = s.startAgent(a, 80, 24); err == nil {
+		if ash, session, err = s.startAgent(a, cols, rows); err == nil {
 			sh = ash
 		}
 		agent = &a
@@ -268,9 +285,9 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		sh, err = startTermClient(termName, 80, 24)
+		sh, err = startTermClient(termName, cols, rows)
 	} else {
-		sh, err = startHostShell(r.URL.Query().Get("cmd"), 80, 24)
+		sh, err = startHostShell(r.URL.Query().Get("cmd"), cols, rows)
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
