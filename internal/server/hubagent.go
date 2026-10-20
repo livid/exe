@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"exe/internal/peer"
@@ -60,8 +59,7 @@ type hubAgent struct {
 	dayKey string
 	dayN   int
 	lastAt time.Time
-	bin    string      // test override for the Claude Code CLI
-	live   atomic.Bool // the hub's event stream is open (Configuration → Hub says so)
+	bin    string // test override for the Claude Code CLI
 }
 
 // hubAgentSetup is the agent as configured right now; RunHubAgent
@@ -250,8 +248,6 @@ func (s *Server) hubAgentFollow(ctx context.Context, set *hubAgentSetup) error {
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("events: status %d", resp.StatusCode)
 	}
-	s.hubAgent.live.Store(true)
-	defer s.hubAgent.live.Store(false)
 	stall := time.AfterFunc(hubAgentStall, func() { resp.Body.Close() })
 	defer stall.Stop()
 
