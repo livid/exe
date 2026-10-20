@@ -56,17 +56,6 @@ func LoadIdentity(stateDir string) (*Identity, error) {
 	return parseIdentity(b, "peer_ed25519")
 }
 
-// LoadIdentityFile reads an existing PKCS8 ed25519 PEM — an identity
-// other than the node's own, such as an agent's hub key. It never
-// generates one: a missing file is an error, not a fresh identity.
-func LoadIdentityFile(path string) (*Identity, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return parseIdentity(b, filepath.Base(path))
-}
-
 func parseIdentity(b []byte, name string) (*Identity, error) {
 	block, _ := pem.Decode(b)
 	if block == nil {

@@ -244,10 +244,6 @@ func cmdServe() error {
 	// existed get theirs on boot.
 	go srv.BackfillChatMeta()
 
-	// The hub agent answers replies on the exe-hub as an identity of its
-	// own; it idles until hub.url / hub.agent.* are configured.
-	go srv.RunHubAgent(context.Background())
-
 	// The ticker's price alerts: a minute-by-minute sampler that pushes a
 	// notification when a token makes a rare move (docs/price-alerts.md).
 	go srv.RunAlerts(context.Background())

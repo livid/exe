@@ -467,6 +467,13 @@ func mergeConfig(old *config.Config, body []byte) (config.Config, error) {
 	if err := json.Unmarshal(body, &keys); err != nil {
 		return config.Config{}, err
 	}
+	// sections the daemon no longer has, which a client that read the
+	// configuration before they went may still send back: dropped, not
+	// refused (hub: the hub agent's, removed 2026-10-20)
+	if _, ok := keys["hub"]; ok {
+		delete(keys, "hub")
+		body, _ = json.Marshal(keys)
+	}
 	nc := *old // unknown-in-request fields keep their current values
 	if _, ok := keys["services"]; ok {
 		nc.Services = nil
@@ -504,7 +511,6 @@ func (s *Server) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.hubAgentKick()
 	// every desk is drawn in the language its page came in: tell them all,
 	// and each loads its page again (a desk that misses this hears it from
 	// its next layout stream, which names the language too)

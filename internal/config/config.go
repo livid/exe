@@ -47,35 +47,6 @@ type GitHubConfig struct {
 	ClientID string `json:"client_id"`
 }
 
-// HubConfig points the daemon at an exe-hub. Reads there are public; the
-// Hub app's writes are signed with this node's peer key, and the optional
-// agent below writes with a key of its own (see server/hubagent.go).
-type HubConfig struct {
-	// URL is the hub's base address, e.g. http://100.64.0.2:7788.
-	URL   string         `json:"url,omitempty"`
-	Agent HubAgentConfig `json:"agent"`
-}
-
-// HubAgentConfig lends this node's voice to an agent identity on the hub:
-// replies from the listed profiles under the agent's own posts get an
-// answer written by Claude with every tool disabled.
-type HubAgentConfig struct {
-	// Key is the agent's ed25519 private key (PKCS8 PEM) — its own
-	// identity, never the node's peer key. Empty disables the agent.
-	Key string `json:"key,omitempty"`
-	// Answer lists the hub profile ids (16 hex) whose replies are
-	// answered. Nobody else's text ever reaches the model.
-	Answer []string `json:"answer,omitempty"`
-	// Model is the Claude model that writes the replies.
-	Model string `json:"model,omitempty"`
-	// Repos are local checkouts whose recent commit subjects the agent
-	// sees, so it can talk about what shipped.
-	Repos []string `json:"repos,omitempty"`
-	// MaxPerDay and MaxPerThread bound how much the agent says.
-	MaxPerDay    int `json:"max_per_day,omitempty"`
-	MaxPerThread int `json:"max_per_thread,omitempty"`
-}
-
 type CloudflareConfig struct {
 	APIToken  string `json:"api_token"`
 	AccountID string `json:"account_id"`
@@ -181,7 +152,6 @@ type Config struct {
 	Ollama      OllamaConfig      `json:"ollama"`
 	OpenAI      OpenAIConfig      `json:"openai"`
 	GitHub      GitHubConfig      `json:"github"`
-	Hub         HubConfig         `json:"hub"`
 	Cloudflare  CloudflareConfig  `json:"cloudflare"`
 	Jupiter     JupiterConfig     `json:"jupiter"`
 	Firecracker FirecrackerConfig `json:"firecracker"`
@@ -241,9 +211,6 @@ func Default() *Config {
 			BaseURL: "https://ollama.com",
 			Model:   "glm-5.2",
 		},
-		Hub: HubConfig{Agent: HubAgentConfig{
-			Model: "claude-fable-5", MaxPerDay: 40, MaxPerThread: 8,
-		}},
 		OpenAI: OpenAIConfig{
 			Model: "gpt-5.4",
 		},
@@ -328,21 +295,6 @@ func NormalizeListen(addr string) string {
 	return addr
 }
 
-// cleanList trims a user-entered list, dropping blanks; fn, if set, maps
-// each kept entry.
-func cleanList(in []string, fn func(string) string) []string {
-	var out []string
-	for _, v := range in {
-		if v = strings.TrimSpace(v); v != "" {
-			if fn != nil {
-				v = fn(v)
-			}
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
 // Normalize cleans up user-entered values in place.
 // Languages are the desk's languages, as BCP 47 tags, English first.
 var Languages = []string{"en", "zh-Hans", "ja"}
@@ -383,11 +335,6 @@ func (c *Config) Normalize() {
 	c.OpenAI.Model = strings.TrimSpace(c.OpenAI.Model)
 	c.OpenAI.Effort = strings.ToLower(strings.TrimSpace(c.OpenAI.Effort))
 	c.GitHub.ClientID = strings.TrimSpace(c.GitHub.ClientID)
-	c.Hub.URL = strings.TrimSpace(c.Hub.URL)
-	c.Hub.Agent.Key = strings.TrimSpace(c.Hub.Agent.Key)
-	c.Hub.Agent.Model = strings.TrimSpace(c.Hub.Agent.Model)
-	c.Hub.Agent.Answer = cleanList(c.Hub.Agent.Answer, strings.ToLower)
-	c.Hub.Agent.Repos = cleanList(c.Hub.Agent.Repos, nil)
 	var dirs []string
 	for _, d := range c.AppsDirs {
 		if d = strings.TrimSpace(d); d != "" {

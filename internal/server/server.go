@@ -220,8 +220,6 @@ type Server struct {
 	// appicons.go).
 	appIconMu sync.Map // hostname -> *sync.Mutex
 
-	// The exe-hub agent: watches a hub and answers replies (see hubagent.go).
-	hubAgent hubAgent
 }
 
 // vmRoot is the folder that holds vms/: VMDir, or the state folder.
@@ -245,7 +243,6 @@ func New(cfg *config.Config, vms vmm.Manager, px *proxy.Proxy, keyPath, stateDir
 		}
 		px.SetBuiltin(SiteBackend, SiteHandler(s.Site))
 	}
-	s.hubAgent.kick = make(chan struct{}, 1)
 	s.cfg.Store(cfg)
 	s.ensureStateDirs()
 	return s

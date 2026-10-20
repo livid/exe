@@ -37,3 +37,20 @@ func TestMergeConfigServices(t *testing.T) {
 		t.Fatal("an unknown field passed")
 	}
 }
+
+// The hub section went with the hub agent. A client that read the
+// configuration before still sends it back with the rest: the rest is
+// saved, the section dropped, and an unknown key is still refused.
+func TestMergeConfigDropsTheHubSection(t *testing.T) {
+	old := &config.Config{DefaultCPUs: 2}
+	nc, err := mergeConfig(old, []byte(`{"default_cpus": 4, "hub": {"url": "http://100.64.0.2:7788", "agent": {"key": "~/k.pem", "answer": ["1111111111111111"]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nc.DefaultCPUs != 4 {
+		t.Fatalf("default_cpus %d, want 4", nc.DefaultCPUs)
+	}
+	if _, err := mergeConfig(old, []byte(`{"hub": {}, "no_such_field": 1}`)); err == nil {
+		t.Fatal("an unknown field beside hub passed")
+	}
+}

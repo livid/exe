@@ -11778,10 +11778,8 @@ const CONFIG_FIELDS = [
   { group: "GitHub", fields: [
     { path: "github.client_id", hint: "an OAuth app client ID with device flow enabled (github.com → Settings → Developer settings → OAuth Apps) — used by Publish to GitHub; the token stays on this host" },
   ]},
-  // this node on the hub its Hub app joined (the Hub app's Join a Hub sets
-  // that); the hub agent's settings, the config's hub section, stay in
-  // the file, out of the window and its Save
-  { group: "Hub", section: "hub", fields: [] },
+  // this node on the hub its Hub app joined (the Hub app's Join a Hub sets that)
+  { group: "Hub", fields: [] },
   // set up by the wizard alone: its IDs belong together, and the wizard
   // checks each against Cloudflare as it goes. The tab says what is set
   { group: "Cloudflare", section: "cloudflare", fields: [] },
