@@ -74,13 +74,21 @@ func (s *Server) cfProbe(ctx context.Context) map[string]any {
 	if err := client.VerifyToken(ctx); err != nil {
 		problems = append(problems, "token: "+err.Error())
 	} else {
-		if zone, err := client.DNSAccess(ctx); err != nil {
+		if err := client.CheckDNSAccess(ctx); err != nil {
 			problems = append(problems, "zone DNS access: "+err.Error())
-		} else if zone != "" {
-			names["zone_name"] = zone
 		}
-		if acct := client.AccountName(ctx); acct != "" {
-			names["account_name"] = acct
+		// the zone names itself and its account; a token that may not read
+		// the zone may still list its accounts
+		if zone, acct, err := client.Zone(ctx); err == nil {
+			names["zone_name"] = zone
+			if acct.ID == c.AccountID && acct.Name != "" {
+				names["account_name"] = acct.Name
+			}
+		}
+		if names["account_name"] == nil {
+			if acct := client.AccountName(ctx); acct != "" {
+				names["account_name"] = acct
+			}
 		}
 		if t, err := client.GetTunnel(ctx, c.TunnelID); err != nil {
 			problems = append(problems, "tunnel: "+err.Error())

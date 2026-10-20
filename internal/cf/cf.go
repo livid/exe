@@ -165,23 +165,21 @@ func (c *Client) GetTunnel(ctx context.Context, id string) (*Tunnel, error) {
 // CheckDNSAccess verifies the token can read DNS records in the zone — the
 // exact capability EnsureDNS needs (DNS Edit implies read).
 func (c *Client) CheckDNSAccess(ctx context.Context) error {
-	_, err := c.DNSAccess(ctx)
-	return err
+	var out []json.RawMessage
+	return c.do(ctx, "GET", "/zones/"+c.ZoneID+"/dns_records?per_page=1", nil, &out)
 }
 
-// DNSAccess checks that the token reads the zone's DNS records, and says
-// the zone's name from the record it read ("" for a zone with none).
-func (c *Client) DNSAccess(ctx context.Context) (string, error) {
-	var recs []struct {
-		ZoneName string `json:"zone_name"`
+// Zone is the client's zone as Cloudflare names it, and the account that
+// holds it. (A DNS record no longer carries its zone's name.)
+func (c *Client) Zone(ctx context.Context) (name string, account IDName, err error) {
+	var z struct {
+		Name    string `json:"name"`
+		Account IDName `json:"account"`
 	}
-	if err := c.do(ctx, "GET", "/zones/"+c.ZoneID+"/dns_records?per_page=1", nil, &recs); err != nil {
-		return "", err
+	if err := c.do(ctx, "GET", "/zones/"+c.ZoneID, nil, &z); err != nil {
+		return "", IDName{}, err
 	}
-	if len(recs) > 0 {
-		return recs[0].ZoneName, nil
-	}
-	return "", nil
+	return z.Name, z.Account, nil
 }
 
 // AccountName is the name of the client's account among those the token
