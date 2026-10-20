@@ -11837,11 +11837,28 @@ async function loadConfig() {
     pane.append(grid);
     panel.append(pane);
   });
+  cfgFitTabs();
   // populate placeholders elsewhere in the UI
   $("#c-cpus").placeholder = loadedConfig.default_cpus || "cpus";
   $("#c-mem").placeholder = loadedConfig.default_memory_mb || "mem MB";
   $("#c-disk").placeholder = loadedConfig.default_disk_gb || "disk GB";
 }
+// The tab row neither wraps nor scrolls, and how wide it is depends on the
+// face: Windows draws it in Lucida Sans, wider than the 560px floor leaves
+// room for, and the body then scrolled sideways. So the floor is what the
+// row needs, and a narrower window (a saved width, another desk's) widens
+// to it. Not on a phone, whose tab row wraps.
+function cfgFitTabs() {
+  const w = $("#win-config"), bar = $("#cfg-tabs"), last = bar.lastElementChild;
+  if (!w._edge || !last || !bar.offsetWidth) return;
+  const row = last.getBoundingClientRect().right - bar.getBoundingClientRect().left + parseFloat(getComputedStyle(bar).paddingRight);
+  w._edge.minW = Math.max(560, Math.ceil(row + w.offsetWidth - bar.clientWidth));
+  if (w.offsetWidth < w._edge.minW) w.style.width = w._edge.minW + "px";
+}
+// a shaded window has no row to measure: fit it again when it opens out
+// (a frame later: widening the window inside the callback would resize
+// the row it observes, Chrome's "ResizeObserver loop" error)
+new ResizeObserver(() => requestAnimationFrame(cfgFitTabs)).observe($("#cfg-tabs"));
 async function daemonRestart(btn) {
   if (!btn.classList.contains("armed")) {
     btn.classList.add("armed");

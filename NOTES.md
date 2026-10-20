@@ -9,3 +9,4 @@ before it said is kept in CHANGELOG.md.
 - In Mac OS X, **Go → Connect to Server…** mounts the Workspace, with the address under **Setup…**.
 - On a phone, a key row under the terminal windows sends **Esc**, **Tab**, **Shift-Tab** and the arrows.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.
+- On Windows, **Configuration** is never narrower than its tabs, so it no longer scrolls sideways.
