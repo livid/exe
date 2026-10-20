@@ -864,5 +864,12 @@
 "done": "完了",
 "interrupted": "中断",
 "Control Strip — click to hide or show it": "コントロールバー — クリックで隠す / 表示",
-", ": " "
+", ": " ",
+"Account:": "アカウント：",
+"Zone:": "ゾーン：",
+"Tunnel:": "トンネル：",
+"Base domain:": "ベースドメイン：",
+"API token:": "API トークン：",
+"Change…": "変更…",
+"Set Up…": "設定…"
 }

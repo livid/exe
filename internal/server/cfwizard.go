@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -68,17 +69,23 @@ func (s *Server) cfProbe(ctx context.Context) map[string]any {
 	client := &cf.Client{Token: c.APIToken, AccountID: c.AccountID, ZoneID: c.ZoneID, TunnelID: c.TunnelID, Domain: c.Domain}
 
 	var problems, notes []string
-	tunnelName := ""
+	// the names beside the IDs, for Configuration → Cloudflare to show
+	names := map[string]any{}
 	if err := client.VerifyToken(ctx); err != nil {
 		problems = append(problems, "token: "+err.Error())
 	} else {
-		if err := client.CheckDNSAccess(ctx); err != nil {
+		if zone, err := client.DNSAccess(ctx); err != nil {
 			problems = append(problems, "zone DNS access: "+err.Error())
+		} else if zone != "" {
+			names["zone_name"] = zone
+		}
+		if acct := client.AccountName(ctx); acct != "" {
+			names["account_name"] = acct
 		}
 		if t, err := client.GetTunnel(ctx, c.TunnelID); err != nil {
 			problems = append(problems, "tunnel: "+err.Error())
 		} else {
-			tunnelName = t.Name
+			names["tunnel_name"] = t.Name
 			switch t.Status {
 			case "healthy":
 			case "degraded":
@@ -96,9 +103,7 @@ func (s *Server) cfProbe(ctx context.Context) map[string]any {
 			"status":  "error",
 			"message": "Cloudflare problem: " + strings.Join(problems, "; ") + " — click to run the setup wizard.",
 		}
-		if tunnelName != "" {
-			res["tunnel_name"] = tunnelName
-		}
+		maps.Copy(res, names)
 		return res
 	}
 	msg := "Cloudflare is working: token, DNS access, and tunnel all check out."
@@ -106,9 +111,7 @@ func (s *Server) cfProbe(ctx context.Context) map[string]any {
 		msg += " (" + strings.Join(notes, "; ") + ")"
 	}
 	res := map[string]any{"status": "ok", "message": msg}
-	if tunnelName != "" {
-		res["tunnel_name"] = tunnelName
-	}
+	maps.Copy(res, names)
 	return res
 }
 

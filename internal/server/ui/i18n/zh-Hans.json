@@ -864,5 +864,12 @@
 "done": "完成",
 "interrupted": "已中断",
 "Control Strip — click to hide or show it": "控制条 — 点击以隐藏或显示",
-", ": " "
+", ": " ",
+"Account:": "账户：",
+"Zone:": "区域：",
+"Tunnel:": "隧道：",
+"Base domain:": "基础域名：",
+"API token:": "API 令牌：",
+"Change…": "更改…",
+"Set Up…": "设置…"
 }

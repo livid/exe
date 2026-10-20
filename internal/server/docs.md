@@ -2369,7 +2369,8 @@ Publishing needs three things at Cloudflare:
   **Account → Cloudflare Tunnel → Edit**. Add **Zone → Analytics → Read**
   for the Analytics app.
 
-Then choose **Special → Cloudflare Setup Wizard…** and give them to exe:
+Then choose **Special → Cloudflare Setup Wizard…**, or **Set Up…** on the
+**Cloudflare** tab of **Windows → Configuration**, and give them to exe:
 
 1. Paste the token. **Validate & Continue** checks each answer against
   Cloudflare before the next step opens.
@@ -2382,8 +2383,12 @@ Then choose **Special → Cloudflare Setup Wizard…** and give them to exe:
   once, with no restart.
 
 The wizard writes the `cloudflare.*` settings (`api_token`, `account_id`,
-`zone_id`, `tunnel_id` and `domain`), which **Configuration → Cloudflare**
-shows too.
+`zone_id`, `tunnel_id`, `domain` and `metrics_url`). The wizard alone sets
+them, because they must belong together: the account, the zone and the
+tunnel, and a token that may edit that zone. **Configuration → Cloudflare**
+shows them, with the account, the zone and the tunnel by name, and whether
+the last check passed. To change one, click **Change…** there. The wizard
+opens with every answer filled in, and you change only the one you want.
 
 Two things decide whether a published name finds its way back to this
 machine:
@@ -2592,9 +2597,8 @@ site that also publishes to IPFS: every publish writes its new CID there.
   fields.
 
 Live local traffic is read from cloudflared's loopback metrics listener at
-`http://127.0.0.1:20241`. If it uses another local port, set
-`cloudflare.metrics_url` in **Configuration → Cloudflare** to the base
-address (without `/metrics`). exe verifies that the local connector belongs
+`http://127.0.0.1:20241`. If it uses another local port, set `metrics_url`
+on the wizard's last step to the base address (without `/metrics`). exe verifies that the local connector belongs
 to the selected tunnel.
 
 A machine without a local cloudflared connector can still show the
@@ -4833,6 +4837,9 @@ want and press **Save**.
   moved, reload the page at the new address.
 - **Bind to Tailscale IP**, on the **Daemon** tab of a machine on a tailnet,
   fills `listen` with that address for you to save.
+- The **Cloudflare** tab has no fields. It shows what the Cloudflare Setup
+  Wizard set, and its **Set Up…** or **Change…** button opens the wizard.
+  See [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web).
 
 A few keys have no field in the window; `vm_dir`, the folder that holds the
 VMs' disks, is one. Edit the file for those and restart the daemon, which

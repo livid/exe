@@ -165,8 +165,38 @@ func (c *Client) GetTunnel(ctx context.Context, id string) (*Tunnel, error) {
 // CheckDNSAccess verifies the token can read DNS records in the zone — the
 // exact capability EnsureDNS needs (DNS Edit implies read).
 func (c *Client) CheckDNSAccess(ctx context.Context) error {
-	var out []json.RawMessage
-	return c.do(ctx, "GET", "/zones/"+c.ZoneID+"/dns_records?per_page=1", nil, &out)
+	_, err := c.DNSAccess(ctx)
+	return err
+}
+
+// DNSAccess checks that the token reads the zone's DNS records, and says
+// the zone's name from the record it read ("" for a zone with none).
+func (c *Client) DNSAccess(ctx context.Context) (string, error) {
+	var recs []struct {
+		ZoneName string `json:"zone_name"`
+	}
+	if err := c.do(ctx, "GET", "/zones/"+c.ZoneID+"/dns_records?per_page=1", nil, &recs); err != nil {
+		return "", err
+	}
+	if len(recs) > 0 {
+		return recs[0].ZoneName, nil
+	}
+	return "", nil
+}
+
+// AccountName is the name of the client's account among those the token
+// lists, or "" when it lists none by that ID.
+func (c *Client) AccountName(ctx context.Context) string {
+	accounts, err := c.ListAccounts(ctx)
+	if err != nil {
+		return ""
+	}
+	for _, a := range accounts {
+		if a.ID == c.AccountID {
+			return a.Name
+		}
+	}
+	return ""
 }
 
 // ZoneName resolves the zone's domain name. Tokens without Zone Read fall

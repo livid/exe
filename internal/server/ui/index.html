@@ -40,10 +40,13 @@
 /* Charcoal and the faces after it have no Han or kana: in Chinese or
    Japanese (the html element's lang, Configuration → General) those come
    from the language's own system face, after the Latin ones. Osaka is
-   what Mac OS 9 drew Japanese in */
-:root:lang(zh-Hans) { --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana,
+   what Mac OS 9 drew Japanese in. The lang turns the generic sans-serif
+   into a CJK face too, so the Latin face Linux and Android give English
+   (DejaVu Sans, Roboto) is named: without it Latin text and marks such as
+   a mask's • came from the CJK face, the dots full width */
+:root:lang(zh-Hans) { --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, "DejaVu Sans", Roboto,
   "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
-:root:lang(ja) { --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana,
+:root:lang(ja) { --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, "DejaVu Sans", Roboto,
   "Osaka", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Meiryo UI", "Meiryo", "Noto Sans CJK JP", sans-serif; }
 * { box-sizing: border-box; }
 /* iOS Safari inflates text after a rotate to landscape (its text-size
@@ -663,6 +666,9 @@ body.mobile .term-window .keyrow { display: flex; gap: 8px; padding: 6px 12px;
 .gi-grid { display: grid; grid-template-columns: max-content 1fr; gap: 5px 8px; font-size: 12px; }
 .gi-grid b { text-align: right; }
 .gi-grid span { user-select: text; word-break: break-word; }
+/* Configuration → Cloudflare: the summary's rows under its status line */
+#cfg-cf .cf-sum { margin-top: 12px; }
+#cfg-cf .cf-why { margin-top: 6px; user-select: text; }
 
 /* About This Computer, after the Mac OS 9.0 box (pixel-sampled from a
    capture): a white logo panel sunk into the platinum field (#888 and
@@ -11781,14 +11787,9 @@ const CONFIG_FIELDS = [
     { path: "hub.agent.max_per_day", num: true, hint: "replies per day; hot-reloads" },
     { path: "hub.agent.max_per_thread", num: true, hint: "the agent's replies in one thread before it goes quiet there" },
   ]},
-  { group: "Cloudflare", fields: [
-    { path: "cloudflare.api_token", secret: true },
-    { path: "cloudflare.account_id" },
-    { path: "cloudflare.zone_id" },
-    { path: "cloudflare.tunnel_id" },
-    { path: "cloudflare.domain" },
-    { path: "cloudflare.metrics_url", hint: "local cloudflared metrics server; default http://127.0.0.1:20241" },
-  ]},
+  // set up by the wizard alone: its IDs belong together, and the wizard
+  // checks each against Cloudflare as it goes. The tab says what is set
+  { group: "Cloudflare", wizard: "cloudflare", fields: [] },
 ];
 // modelSelect is a dropdown of a backend's live model list (Ollama's
 // /api/tags or the ChatGPT catalog via /v1/chat/models). Until the list
@@ -11847,10 +11848,7 @@ async function loadConfig() {
     const pane = el("div", { class: "pane" });
     pane.dataset.group = g.group;
     pane.hidden = g.group !== cfgActiveTab;
-    if (g.group === "Cloudflare") {
-      pane.append(el("div", { class: "row", style: "justify-content:flex-end; margin-bottom:8px" },
-        el("button", { class: "ghost sm", onclick: () => wizOpen(false) }, L("Cloudflare Setup Wizard…"))));
-    }
+    if (g.group === "Cloudflare") pane.append(el("div", { id: "cfg-cf" }));
     if (g.group === "OpenAI") pane.append(openaiAuthBox());
     if (g.group === "GitHub") pane.append(githubAuthBox());
     if (g.group === "Daemon") {
@@ -11900,9 +11898,10 @@ async function loadConfig() {
       if (f.hint) field.append(el("div", { class: "hint" }, L(f.hint)));
       grid.append(field);
     }
-    pane.append(grid);
+    if (g.fields.length) pane.append(grid);
     panel.append(pane);
   });
+  cfSummaryPaint();
   cfgFitTabs();
   // populate placeholders elsewhere in the UI
   $("#c-cpus").placeholder = loadedConfig.default_cpus || "cpus";
@@ -11981,7 +11980,10 @@ $("#cfg-save").onclick = async () => {
   }
   $("#cfg-save").disabled = true;
   try {
-    const res = await j("/v1/config", { method: "PUT", json: nc });
+    // the keys a wizard sets are left as the daemon has them
+    const body = { ...nc };
+    for (const g of cfgGroups) if (g.wizard) delete body[g.wizard];
+    const res = await j("/v1/config", { method: "PUT", json: body });
     loadedConfig = nc;
     // a new language: this desk loads again into it at once, and the others
     // hear it from the daemon. Unsaved work holds that, as for a new build
@@ -12328,7 +12330,7 @@ function wizOpen(fresh) {
   const c = fresh === true ? {} : (loadedConfig && loadedConfig.cloudflare) || {};
   wiz.idx = 0;
   wiz.values = { api_token: c.api_token || "", account_id: c.account_id || "",
-    zone_id: c.zone_id || "", tunnel_id: c.tunnel_id || "", domain: c.domain || "" };
+    zone_id: c.zone_id || "", tunnel_id: c.tunnel_id || "", domain: c.domain || "", metrics_url: c.metrics_url || "" };
   wiz.options = {};
   wiz.zoneName = "";
   $("#wiz-overlay").hidden = false;
@@ -12382,6 +12384,13 @@ function wizRender() {
       el("div", {}, el("span", { class: "muted" }, "tunnel_id"), el("span", {}, show(wiz.values.tunnel_id))),
       el("div", {}, el("span", { class: "muted" }, L("domain")), el("span", {}, show(wiz.values.domain))));
     box.append(rev);
+    // the one setting no step asks for: where this machine's cloudflared
+    // serves its metrics, for the live traffic figures
+    const mu = el("input", { id: "wiz-metrics", type: "text", value: wiz.values.metrics_url, placeholder: "http://127.0.0.1:20241" });
+    mu.addEventListener("input", () => { wiz.values.metrics_url = mu.value.trim(); });
+    box.append(el("div", { class: "field", style: "margin-top:10px" },
+      el("label", { for: "wiz-metrics" }, "metrics_url"), mu,
+      el("div", { class: "hint" }, L("local cloudflared metrics server; default http://127.0.0.1:20241"))));
     if (loadedConfig && !loadedConfig.advertise_host) {
       box.append(el("div", { class: "wiz-fb warn", style: "margin-top:10px" },
         L("advertise_host is empty — after saving, set it in Config to this Mac's LAN or Tailscale IP (as reachable from the tunnel server), or published hostnames won't route back here.")));
@@ -12430,6 +12439,7 @@ $("#wiz-next").onclick = async () => {
         ...cur.cloudflare,
         api_token: wiz.values.api_token, account_id: wiz.values.account_id,
         zone_id: wiz.values.zone_id, tunnel_id: wiz.values.tunnel_id, domain: wiz.values.domain,
+        metrics_url: wiz.values.metrics_url,
       };
       await j("/v1/config", { method: "PUT", json: cur });
       toast(L("Cloudflare configuration saved"));
@@ -12473,6 +12483,7 @@ async function cfHeartbeat(force) {
   try {
     cfLast = await j("/v1/cloudflare/health" + (force ? "?force=1" : ""));
     cfStripPaint();
+    cfSummaryPaint();
     if (!$("#sum-overlay").hidden) renderSum();
   } catch (e) { /* keep the last known lamp */ }
 }
@@ -13401,6 +13412,37 @@ async function sumOpen() {
   cfStatsRefresh();
   try { loadedConfig = await j("/v1/config"); } catch (e) {}
   renderSum();
+}
+// Configuration → Cloudflare: what the wizard set, by name where the last
+// check learned one, and the button that opens the wizard on it
+function cfSummaryPaint() {
+  const box = document.getElementById("cfg-cf");
+  if (!box) return;
+  const c = (loadedConfig && loadedConfig.cloudflare) || {};
+  const set = !!(c.api_token && c.account_id && c.zone_id && c.tunnel_id && c.domain);
+  const st = !set ? "unconfigured" : cfLast ? cfLast.status : "";
+  const head = !set ? L("Cloudflare: not set up") : !st ? L("Cloudflare: checking…")
+    : st === "ok" ? L("Cloudflare: working") : L("Cloudflare: needs attention");
+  const mask = v => v && v.length >= 12 ? v.slice(0, 4) + "••••" + v.slice(-4) : v;
+  const named = (name, id) => !id ? "—" : name ? [name + " ", el("span", { class: "muted" }, "(" + mask(id) + ")")] : mask(id);
+  const k = cfLast || {};
+  const rows = [
+    [L("Account:"), named(k.account_name, c.account_id)],
+    [L("Zone:"), named(k.zone_name, c.zone_id)],
+    [L("Tunnel:"), named(k.tunnel_name, c.tunnel_id)],
+    [L("Base domain:"), c.domain || "—"],
+    [L("API token:"), c.api_token ? "••••" + c.api_token.slice(-4) : "—"],
+    ["metrics_url:", c.metrics_url || L("(default)")],
+  ];
+  const grid = el("div", { class: "gi-grid cf-sum" });
+  for (const [label, v] of rows) grid.append(el("b", {}, label), el("span", {}, ...[v].flat()));
+  const go = el("button", { class: "ghost", onclick: () => wizOpen(false) }, set ? L("Change…") : L("Set Up…"));
+  box.replaceChildren(
+    el("span", { class: "chip " + ({ ok: "running", unconfigured: "stopped", "": "starting" }[st] || "error") }, head),
+    // what is wrong, in the check's own words
+    ...(set && st && st !== "ok" ? [el("div", { class: "muted cf-why" }, cfLast.message || st)] : []),
+    grid,
+    el("div", { class: "row", style: "justify-content:flex-end; margin-top:12px" }, go));
 }
 function renderSum() {
   const c = (loadedConfig && loadedConfig.cloudflare) || {};
