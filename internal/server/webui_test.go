@@ -84,7 +84,7 @@ func TestUIFilesRevalidate(t *testing.T) {
 	state := httptest.NewRecorder()
 	s.Handler().ServeHTTP(state, httptest.NewRequest("GET", "/v1/ui/state", nil))
 	s.ui.mu.Lock()
-	ev := string(s.ui.eventLocked(""))
+	ev := string(s.ui.eventLocked("", "en"))
 	s.ui.mu.Unlock()
 	if !strings.Contains(ev, `"build":"`+deskBuild+`"`) {
 		t.Errorf("layout event does not name the build: %s", ev)

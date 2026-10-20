@@ -49,14 +49,15 @@ func (u *uiState) loadLocked(path string) {
 	}
 }
 
-func (u *uiState) eventLocked(client string) []byte {
+func (u *uiState) eventLocked(client, lang string) []byte {
 	data := u.data
 	if data == nil {
 		data = json.RawMessage("null")
 	}
 	// build rides along so a desktop reconnecting after a deploy learns at
-	// once that the daemon ships a newer page than the one it is running
-	ev, _ := json.Marshal(map[string]any{"rev": u.rev, "client": client, "state": data, "build": deskBuild})
+	// once that the daemon ships a newer page than the one it is running,
+	// and lang so one that missed a change of language learns of it
+	ev, _ := json.Marshal(map[string]any{"rev": u.rev, "client": client, "state": data, "build": deskBuild, "lang": lang})
 	return ev
 }
 
@@ -90,7 +91,7 @@ func (s *Server) handleUIStatePut(w http.ResponseWriter, r *http.Request) {
 	s.ui.data = append(json.RawMessage(nil), req.State...)
 	rev := s.ui.rev
 	persist, _ := json.Marshal(map[string]any{"rev": rev, "state": s.ui.data})
-	ev := s.ui.eventLocked(req.Client)
+	ev := s.ui.eventLocked(req.Client, s.Config().UILanguage())
 	for ch := range s.ui.subs {
 		select {
 		case ch <- ev:
@@ -137,7 +138,7 @@ func (s *Server) handleUIStateEvents(w http.ResponseWriter, r *http.Request) {
 		s.ui.subs = make(map[chan []byte]struct{})
 	}
 	s.ui.subs[ch] = struct{}{}
-	first := s.ui.eventLocked("")
+	first := s.ui.eventLocked("", s.Config().UILanguage())
 	s.ui.mu.Unlock()
 	defer func() {
 		s.ui.mu.Lock()

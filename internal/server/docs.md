@@ -4797,6 +4797,8 @@ shows what the daemon is doing and who is calling its API.
 
 ### What they are for
 
+- **Read exe in your language.** The desk's menus, windows and messages
+  come in English, Simplified Chinese or Japanese.
 - **Decide who reaches exe.** Set the address the desktop and the API listen
   on (your Tailscale IP, to use exe from your phone) and the token every API
   call must carry.
@@ -4817,10 +4819,10 @@ leaves it alone unless you ask.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreib5o3chahprhedmnmlt5ewo25povt6sfx5rfqqiawty3pwxv3b77i" alt="The Configuration window on its Daemon tab: listen, proxy_listen, ssh_listen, advertise_host, api_token and more" width="662" height="476">
 
-The fields are grouped on tabs: **Daemon**, **VMs**, **Ollama**,
-**OpenAI**, **GitHub**, **Hub** and **Cloudflare**, and on a Linux machine
-**Firecracker**, which runs the VMs there. Change what you want and press
-**Save**.
+The fields are grouped on tabs: **General**, **Daemon**, **VMs**,
+**Ollama**, **OpenAI**, **GitHub**, **Hub** and **Cloudflare**, and on a
+Linux machine **Firecracker**, which runs the VMs there. Change what you
+want and press **Save**.
 
 - Most fields hot-reload on Save: they take effect at once.
 - Fields marked `*` take effect after a daemon restart: `ssh_user`,
@@ -4837,10 +4839,26 @@ VMs' disks, is one. Edit the file for those and restart the daemon, which
 reads the file when it starts. [Configuration](/docs/config), on the
 website, has a longer table of the keys, `vm_dir` among them.
 
+### The language of the desk
+
+**Language**, on the **General** tab, is the language of the desk: English,
+简体中文 (Simplified Chinese) or 日本語 (Japanese). Choose one and press
+**Save**. Every screen that has this node's desk open loads it again in that
+language. A screen with unsaved work on it waits until the work is saved, as
+it does for an update.
+
+- The key is `language` in the file: `en`, `zh-Hans` or `ja`. It is English
+  when the key is not there.
+- Your own text stays as you wrote it: file names, notes, chats and the
+  desktop menu. So do the names of products and the keys of the settings.
+- The apps in windows (Welcome, Blue Pencil, the Hub app and the others)
+  and this manual are in English for now.
+
 ### The settings you will want first
 
 | Key | Tab | What it sets |
 |---|---|---|
+| `language` | General | The language of the desk's menus, windows and messages: `en`, `zh-Hans` or `ja`. |
 | `listen` | Daemon | The address of this UI and API. Bind it to your Tailscale IP to use exe from your phone. |
 | `api_token` | Daemon | Set it before listening beyond localhost; every API call then needs it. |
 | `ssh_listen` | Daemon | The address of the SSH gate, `:2222` unless changed; `off` disables it. |

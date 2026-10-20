@@ -122,6 +122,30 @@ var deskBuild = func() string {
 // uiIndex is the desktop page with its build stamped in.
 var uiIndex = bytes.ReplaceAll(uiHTML, []byte("__EXE_BUILD__"), []byte(deskBuild))
 
+// uiPages is the desktop page in each of the desk's languages: the html
+// element names it, and the page carries its catalog (ui/i18n/<lang>.json,
+// English text to that language's) in the l10n script, so the desk is
+// drawn in it from the first frame. English has no catalog.
+var uiPages = func() map[string][]byte {
+	pages := map[string][]byte{"en": uiIndex}
+	for _, l := range config.Languages[1:] {
+		b, err := uiFS.ReadFile("ui/i18n/" + l + ".json")
+		if err != nil {
+			panic(err)
+		}
+		var cat map[string]string
+		if err := json.Unmarshal(b, &cat); err != nil {
+			panic(fmt.Sprintf("ui/i18n/%s.json: %v", l, err))
+		}
+		js, _ := json.Marshal(cat) // escapes <, > and &: nothing in it can end the script
+		page := bytes.Replace(uiIndex, []byte(`<html lang="en">`), []byte(`<html lang="`+l+`">`), 1)
+		page = bytes.Replace(page, []byte(`<script type="application/json" id="l10n">{}</script>`),
+			[]byte(`<script type="application/json" id="l10n">`+string(js)+`</script>`), 1)
+		pages[l] = page
+	}
+	return pages
+}()
+
 // buildHeader says on every response which desktop build this daemon ships.
 func buildHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -164,11 +188,16 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 	// no-cache makes a plain reload always revalidate to the new build, and
 	// the ETag lets that revalidation come back as a 304. The page is stamped
 	// with deskBuild, so that is its tag: a system app changing changes the
-	// page's bytes too
+	// page's bytes too. Each language is a page of its own, and its tag says so
+	lang := s.Config().UILanguage()
+	tag := deskBuild
+	if lang != "en" {
+		tag += "-" + lang
+	}
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("ETag", `"`+deskBuild+`"`)
-	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(uiIndex))
+	w.Header().Set("ETag", `"`+tag+`"`)
+	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(uiPages[lang]))
 }
 
 // handleServiceWorker serves the desktop's service worker from the root so
@@ -467,11 +496,21 @@ func (s *Server) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nc.Normalize()
+	if nc.Language != "" && config.LanguageTag(nc.Language) == "" {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf("language %q: not one of %s", nc.Language, strings.Join(config.Languages, ", ")))
+		return
+	}
 	if err := s.storeConfig(&nc); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.hubAgentKick()
+	// every desk is drawn in the language its page came in: tell them all,
+	// and each loads its page again (a desk that misses this hears it from
+	// its next layout stream, which names the language too)
+	if old.UILanguage() != nc.UILanguage() {
+		s.uiAnnounce(map[string]any{"lang": nc.UILanguage()})
+	}
 
 	var restart []string
 	for _, f := range []struct{ name, oldV, newV string }{

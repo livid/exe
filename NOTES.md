@@ -10,3 +10,4 @@ before it said is kept in CHANGELOG.md.
 - On a phone, a key row under the terminal windows sends **Esc**, **Tab**, **Shift-Tab** and the arrows.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.
 - On Windows, **Configuration** is never narrower than its tabs, so it no longer scrolls sideways.
+- **Windows → Configuration → General** sets the language of the desk: English, 简体中文 or 日本語.

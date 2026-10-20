@@ -139,6 +139,10 @@ type Config struct {
 	// APIToken, when set, is required as a Bearer token on every API call.
 	APIToken string `json:"api_token"`
 
+	// Language is the desk's language, one of Languages: its menus,
+	// windows and messages. Empty is English.
+	Language string `json:"language,omitempty"`
+
 	// VMDir is where the VMs' disks and the base images are kept: its
 	// vms/ and images/ folders. Empty means the state folder itself
 	// (~/.exe), which is where they have always been. It is the one part
@@ -340,7 +344,35 @@ func cleanList(in []string, fn func(string) string) []string {
 }
 
 // Normalize cleans up user-entered values in place.
+// Languages are the desk's languages, as BCP 47 tags, English first.
+var Languages = []string{"en", "zh-Hans", "ja"}
+
+// LanguageTag is the one of Languages that s names, whatever its case,
+// or "" when it names none.
+func LanguageTag(s string) string {
+	for _, l := range Languages {
+		if strings.EqualFold(l, strings.TrimSpace(s)) {
+			return l
+		}
+	}
+	return ""
+}
+
+// UILanguage is the language the desk is drawn in: the configured one,
+// or English when none (or none it has) is set.
+func (c *Config) UILanguage() string {
+	if l := LanguageTag(c.Language); l != "" {
+		return l
+	}
+	return "en"
+}
+
 func (c *Config) Normalize() {
+	if l := LanguageTag(c.Language); l != "" {
+		c.Language = l
+	} else {
+		c.Language = strings.TrimSpace(c.Language)
+	}
 	c.Listen = NormalizeListen(c.Listen)
 	c.ProxyListen = NormalizeListen(c.ProxyListen)
 	c.SSHListen = NormalizeListen(c.SSHListen)

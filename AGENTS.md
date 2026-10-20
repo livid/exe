@@ -116,6 +116,10 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 - One seam, one line: where two chrome edges meet there is exactly one
   1px dark line — drop the other border.
 - No buttons on a status line; they get a row of their own.
+- Desktop text goes through `L()` and has its line in every catalog in
+  `internal/server/ui/i18n/` (Simplified Chinese, Japanese), in the same
+  commit; `go test ./internal/server` names a missing one. Code never
+  compares displayed text (docs/platinum.md, "Palette and type").
 - No layout jumps: content that arrives later fills placeholders that
   already have its final shape.
 - Icons are 32-grid pixel art in the palette standard (index.html, above

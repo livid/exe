@@ -98,6 +98,23 @@ restyling: `internal/server/ui/index.html` (the desktop),
   is installed they come to nothing. The desktop does not have them yet.
   Linux and Windows fall through to a face with a bold of its own, so
   weight is judged on a real Mac, not in headless Chromium.
+- In Chinese and Japanese (Configuration → General, the html element's
+  `lang`) Han and kana come from the language's own system face after
+  the Latin ones: PingFang SC, Microsoft YaHei, Noto Sans CJK SC; Osaka
+  (what Mac OS 9 drew Japanese in), Hiragino, Yu Gothic, Meiryo, Noto
+  Sans CJK JP. `lang` picks the face, so a Han character is drawn the way
+  each language writes it.
+- The desktop's text is written in English and translated where it is
+  drawn: `L("Save")`, and `` L`${n} items` ``, whose key is `{0} items`, in
+  the script; the markup's own text and tips by `l10nDom` at load (and on
+  an `innerHTML` window body, after it is set). The lines are in
+  `internal/server/ui/i18n/<lang>.json`, English text to translation; the
+  daemon puts the configured one into the page. A new string gets its
+  line in every catalog in the commit that adds it: `go test
+  ./internal/server` (TestUITextTranslated) names any it cannot find.
+  Code never compares displayed text with English: it keeps the word it
+  means in a `data-` attribute or a variable (a VM's state is
+  `data-state`, its `vmStateText` what is drawn).
 - Chrome is `user-select: none; cursor: default`. OS 9 had no pointing
   hand and no hover states: a control changes only while pressed (`:active`),
   menus alone highlight under the pointer (and, asked for by name, the
