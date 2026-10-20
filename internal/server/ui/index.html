@@ -669,6 +669,13 @@ body.mobile .term-window .keyrow { display: flex; gap: 8px; padding: 6px 12px;
 /* Configuration → Cloudflare: the summary's rows under its status line */
 #cfg-cf .cf-sum { margin-top: 12px; }
 #cfg-cf .cf-why { margin-top: 6px; user-select: text; }
+/* … and Configuration → Hub's, of the hub agent */
+#cfg-hub .cf-sum { margin-top: 12px; }
+#cfg-hub .cf-why { margin-top: 6px; user-select: text; }
+/* a setup wizard's fields, one under another */
+#gw-input .field + .field { margin-top: 10px; }
+#gw-input .gw-act { margin-top: 10px; }
+#gw-input input[type=number] { width: 90px; }
 
 /* About This Computer, after the Mac OS 9.0 box (pixel-sampled from a
    capture): a white logo panel sunk into the platinum field (#888 and
@@ -2698,6 +2705,28 @@ body.mobile th.sorted {
         <div class="row" style="justify-content:space-between; margin-top:18px">
           <button class="ghost" id="wiz-back">&larr; Back</button>
           <button class="btn" id="wiz-next">Validate &amp; Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- a setup wizard of steps of fields, each checked by the daemon (gwOpen):
+     the Hub agent's -->
+<div id="gw-overlay" class="overlay" hidden>
+  <div class="window modal front">
+    <div class="titlebar"><button class="tbox close" id="gw-x"></button><div class="stripe"></div>
+      <div class="title" id="gw-title"></div>
+      <div class="stripe"></div></div>
+    <div class="win-frame">
+      <div class="win-body">
+        <div class="muted" id="gw-ind" style="margin:0 0 10px"></div>
+        <div id="gw-desc" style="margin-bottom:12px"></div>
+        <div id="gw-input"></div>
+        <div id="gw-fb" style="margin-top:12px"></div>
+        <div class="row" style="justify-content:space-between; margin-top:18px">
+          <button class="ghost" id="gw-back">&larr; Back</button>
+          <button class="btn" id="gw-next">Validate &amp; Continue</button>
         </div>
       </div>
     </div>
@@ -11778,15 +11807,9 @@ const CONFIG_FIELDS = [
   { group: "GitHub", fields: [
     { path: "github.client_id", hint: "an OAuth app client ID with device flow enabled (github.com → Settings → Developer settings → OAuth Apps) — used by Publish to GitHub; the token stays on this host" },
   ]},
-  { group: "Hub", fields: [
-    { path: "hub.url", hint: "the exe-hub this node's agent watches, e.g. http://100.64.0.2:7788 — reads there are public, writes are signed" },
-    { path: "hub.agent.key", hint: "the agent's own ed25519 key (PKCS8 PEM), a separate identity from this node's peer key; empty keeps the agent off" },
-    { path: "hub.agent.answer", list: true, hint: "hub profile ids (16 hex) whose replies the agent answers, comma-separated — nobody else's text ever reaches the model" },
-    { path: "hub.agent.model", hint: "the Claude model that writes replies, run through the Claude Code CLI with every tool disabled" },
-    { path: "hub.agent.repos", list: true, hint: "local checkouts whose recent commit subjects the agent may talk about, comma-separated" },
-    { path: "hub.agent.max_per_day", num: true, hint: "replies per day; hot-reloads" },
-    { path: "hub.agent.max_per_thread", num: true, hint: "the agent's replies in one thread before it goes quiet there" },
-  ]},
+  // the hub agent: set up by its wizard, which checks each answer with
+  // the hub or on this host
+  { group: "Hub", wizard: "hub", fields: [] },
   // set up by the wizard alone: its IDs belong together, and the wizard
   // checks each against Cloudflare as it goes. The tab says what is set
   { group: "Cloudflare", wizard: "cloudflare", fields: [] },
@@ -11849,6 +11872,7 @@ async function loadConfig() {
     pane.dataset.group = g.group;
     pane.hidden = g.group !== cfgActiveTab;
     if (g.group === "Cloudflare") pane.append(el("div", { id: "cfg-cf" }));
+    if (g.group === "Hub") pane.append(el("div", { id: "cfg-hub" }));
     if (g.group === "OpenAI") pane.append(openaiAuthBox());
     if (g.group === "GitHub") pane.append(githubAuthBox());
     if (g.group === "Daemon") {
@@ -11902,6 +11926,7 @@ async function loadConfig() {
     panel.append(pane);
   });
   cfSummaryPaint();
+  hubSummaryLoad();
   cfgFitTabs();
   // populate placeholders elsewhere in the UI
   $("#c-cpus").placeholder = loadedConfig.default_cpus || "cpus";
@@ -12342,6 +12367,7 @@ document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   menuClose();
   if (!$("#wiz-overlay").hidden) wizClose();
+  if (!$("#gw-overlay").hidden) gwClose();
   if (!$("#sum-overlay").hidden) $("#sum-overlay").hidden = true;
   if (!$("#join-overlay").hidden) joinClose();
   if (!$("#cb-overlay").hidden) $("#cb-overlay").hidden = true;
@@ -13441,6 +13467,235 @@ function cfSummaryPaint() {
     el("span", { class: "chip " + ({ ok: "running", unconfigured: "stopped", "": "starting" }[st] || "error") }, head),
     // what is wrong, in the check's own words
     ...(set && st && st !== "ok" ? [el("div", { class: "muted cf-why" }, cfLast.message || st)] : []),
+    grid,
+    el("div", { class: "row", style: "justify-content:flex-end; margin-top:12px" }, go));
+}
+// ---- setup wizards (gwOpen) ----
+// A wizard of steps, each of a few fields that the daemon checks before
+// the next step opens, and a review that saves them all. def is
+//   { title(step), steps, check(step, values), say(step, answer), save(values) }
+// and a step { key, title, desc(), fields: [{ key, label, type: "text" |
+// "number" | "list", placeholder }], action: { label, run(values) } }; the
+// last is { key: "review", rows(values, info) }. A check answers { ok,
+// values (the settings as saved), info (what the review names), warnings };
+// a step with a warning waits for a second press to go on.
+const gw = { def: null, idx: 0, values: {}, info: {}, warned: "" };
+function gwOpen(def, values) {
+  Object.assign(gw, { def, idx: 0, values: { ...values }, info: {}, warned: "" });
+  $("#gw-overlay").hidden = false;
+  gwRender();
+}
+function gwClose() { $("#gw-overlay").hidden = true; }
+function gwFeedback(kind, text) {
+  const fb = $("#gw-fb");
+  fb.className = kind ? "wiz-fb " + kind : "";
+  fb.textContent = text;
+}
+// what the step's fields hold now, into the values
+function gwRead() {
+  for (const f of gw.def.steps[gw.idx].fields || []) {
+    const v = document.getElementById("gw-" + f.key).value;
+    gw.values[f.key] = f.type === "list" ? v.split(",").map(x => x.trim()).filter(Boolean)
+      : f.type === "number" ? (parseInt(v, 10) || 0) : v.trim();
+  }
+}
+function gwRender() {
+  const def = gw.def, step = def.steps[gw.idx];
+  $("#gw-title").textContent = def.title(step);
+  $("#gw-ind").textContent = L`Step ${gw.idx + 1} of ${def.steps.length}`;
+  $("#gw-desc").replaceChildren(step.desc());
+  $("#gw-back").style.visibility = gw.idx ? "visible" : "hidden";
+  $("#gw-next").textContent = step.key === "review" ? L("Save Configuration") : L("Validate & Continue");
+  gwFeedback("", "");
+  const box = $("#gw-input");
+  box.replaceChildren();
+  if (step.key === "review") {
+    const rev = el("div", { class: "wiz-review", style: "font-size:12px" });
+    for (const [k, v] of step.rows(gw.values, gw.info)) rev.append(el("div", {}, el("span", { class: "muted" }, k), el("span", {}, v || "—")));
+    box.append(rev);
+    return;
+  }
+  for (const f of step.fields) {
+    const v = gw.values[f.key];
+    const input = el("input", { id: "gw-" + f.key, type: f.type === "number" ? "number" : "text", placeholder: f.placeholder || "",
+      autocomplete: "off", spellcheck: "false", value: v == null || v === 0 ? "" : f.type === "list" ? v.join(", ") : String(v) });
+    input.addEventListener("keydown", e => { if (e.key === "Enter") $("#gw-next").click(); });
+    box.append(el("div", { class: "field" }, ...(f.label ? [el("label", { for: input.id }, f.label)] : []), input));
+  }
+  if (step.action) {
+    const b = el("button", { class: "ghost sm" }, step.action.label);
+    b.onclick = async () => {
+      gwRead();
+      b.disabled = true;
+      try { const said = await step.action.run(gw.values); gwRender(); gwFeedback("ok", said); }
+      catch (e) { gwFeedback("err", e.message); b.disabled = false; }
+    };
+    box.append(el("div", { class: "row gw-act" }, b));
+  }
+  box.querySelector("input")?.focus();
+}
+$("#gw-x").onclick = gwClose;
+$("#gw-back").onclick = () => { if (gw.idx > 0) { gwRead(); gw.idx--; gwRender(); } };
+$("#gw-next").onclick = async () => {
+  const def = gw.def, step = def.steps[gw.idx], btn = $("#gw-next");
+  btn.disabled = true;
+  if (step.key === "review") {
+    try { await def.save(gw.values); gwClose(); } catch (e) { gwFeedback("err", e.message); }
+    btn.disabled = false;
+    return;
+  }
+  gwRead();
+  btn.textContent = L("Checking…");
+  gwFeedback("", "");
+  const at = gw.idx, asked = step.key + JSON.stringify(gw.values);
+  let held = false;
+  try {
+    const res = await def.check(step.key, gw.values);
+    if (gw.idx !== at || $("#gw-overlay").hidden) return;
+    if (!res.ok) gwFeedback("err", def.say(step.key, res));
+    else {
+      Object.assign(gw.values, res.values || {});
+      Object.assign(gw.info, res.info || {});
+      const warn = (res.warnings || []).map(w => def.say("warning:" + w, res)).join(" ");
+      if (warn && gw.warned !== asked) {
+        // said once and held: the next press goes on
+        gw.warned = asked;
+        held = true;
+        gwFeedback("warn", def.say(step.key, res) + "\n\n⚠ " + warn);
+      } else {
+        gwFeedback("ok", def.say(step.key, res));
+        setTimeout(() => { if (gw.idx === at && !$("#gw-overlay").hidden) { gw.idx++; gwRender(); } }, 700);
+      }
+    }
+  } catch (e) { gwFeedback("err", e.message); }
+  finally {
+    btn.disabled = false;
+    if (gw.idx === at) btn.textContent = held ? L("Continue") : L("Validate & Continue");
+  }
+};
+
+// ---- Hub Agent Setup (Configuration → Hub) ----
+// The agent is an identity of its own on an exe-hub, which answers the
+// profiles it is given when they reply under its posts (hubagent.go).
+const hubWho = p => p.name ? `${p.name} (${p.id})` : p.id;
+const HUB_WIZ = {
+  title: step => L`Hub Agent Setup — ${step.title}`,
+  steps: [
+    { key: "hub", title: L("Hub"), fields: [{ key: "hub", placeholder: "http://100.64.0.2:7788" }],
+      desc: () => el("span", {}, L("The address of the exe-hub the agent posts on. Reads there are public; what the agent writes is signed with its key.")) },
+    { key: "key", title: L("Agent key"), fields: [{ key: "key", placeholder: "~/.exe/hub-agent_ed25519" }],
+      desc: () => el("span", {}, L("The agent's own ed25519 key, a PKCS8 PEM file on this machine. It is an identity apart from this node's key: the hub shows the agent's posts under a profile of their own.")),
+      action: { label: L("Create a Key"), run: async v => {
+        const r = await j("/v1/hub/agent/key", { method: "POST" });
+        v.key = r.key;
+        return r.made ? L`A new key for the agent is in ${r.key}.` : L`The key made before is in ${r.key}.`;
+      } } },
+    { key: "answer", title: L("Who it answers"), fields: [{ key: "answer", type: "list", placeholder: L("a name, or a 16-hex profile id") }],
+      desc: () => el("span", {}, L("The profiles whose replies under the agent's posts it answers, by name or by id, comma-separated. Nobody else's text ever reaches the model.")) },
+    { key: "model", title: L("Model and limits"),
+      fields: [{ key: "model", label: L("Model"), placeholder: "claude-fable-5" },
+        { key: "max_per_day", label: L("Replies a day"), type: "number", placeholder: "40" },
+        { key: "max_per_thread", label: L("Replies in one thread"), type: "number", placeholder: "8" }],
+      desc: () => el("span", {}, L("The Claude model that writes the replies, run by the Claude Code CLI on this host with every tool turned off, and how much the agent may say.")) },
+    { key: "repos", title: L("Repos"), fields: [{ key: "repos", type: "list", placeholder: "~/code/project" }],
+      desc: () => el("span", {}, L("Checkouts on this machine whose latest commit subjects the agent may talk about, comma-separated. Leave it empty and the agent talks about the thread alone.")) },
+    { key: "review", title: L("Review & save"),
+      desc: () => el("span", {}, L("Everything is checked. Save writes these settings to the hub section of the configuration, and the agent starts on them at once.")),
+      rows: (v, info) => [
+        [L("Hub"), v.hub],
+        [L("Agent"), info.agent ? hubWho(info.agent) : v.key],
+        [L("Answers"), (info.answer || v.answer.map(id => ({ id }))).map(hubWho).join(", ")],
+        [L("Model"), v.model],
+        [L("Limits"), L`${v.max_per_day} a day, ${v.max_per_thread} in one thread`],
+        [L("Repos"), v.repos.join(", ")]] },
+  ],
+  check: (step, v) => j("/v1/hub/agent/check", { method: "POST", json: { step, ...v } }),
+  // the check's answer in the desk's language (the daemon's own words are
+  // its message, for anyone else)
+  say: (step, r) => {
+    if (r.ok) switch (step) {
+      case "hub": return L`An exe-hub answered: ${r.profiles} profiles, ${r.posts} posts.`;
+      case "key": return L`The key is the agent ${hubWho(r.info.agent)}.`;
+      case "answer": return L`The agent answers ${r.n} profile(s), and nobody else.`;
+      case "model": return r.version ? L`Claude Code ${r.version} is on this host.` : L("Claude Code is on this host.");
+      case "repos": return r.subjects && r.subjects.length ? L`The latest commits: ${r.subjects.join(" · ")}` : L("No repos: the agent talks about the thread alone.");
+      case "warning:no-profile": return L("The hub has no profile for this key yet: the agent's first post makes one, with no name.");
+      case "warning:banned": return L("The hub has banned this key: the agent cannot post there.");
+      case "warning:gate": return L("The hub does not let this key post yet. An admin of the hub can invite it.");
+    }
+    switch (r.code) {
+      case "address": return L("Type the hub's address, such as http://100.64.0.2:7788.");
+      case "unreachable": return L`No exe-hub answered at ${r.hub}: ${r.detail}.`;
+      case "empty": return L("Give the path of the agent's key file, or click Create a Key.");
+      case "unreadable": return L`The key file does not work: ${r.detail}.`;
+      case "node": return L("That is this node's own key. The agent needs a key of its own.");
+      case "hub": return L("The hub's address does not work: go back to its step.");
+      case "profile": return r.unknown ? L`The hub has no profile ${r.who}.` : L`The hub did not answer about ${r.who}.`;
+      case "search": return L`The hub did not search for “${r.who}”.`;
+      case "unknown": return L`No profile on the hub is named “${r.who}”.`;
+      case "ambiguous": return L`${r.n} profiles are named “${r.who}”: give the one you mean by its id.`;
+      case "self": return L("The agent never answers itself: take its own profile off the list.");
+      case "none": return L("Name at least one profile: the agent answers nobody else.");
+      case "limits": return L("Both limits are 1 or more.");
+      case "no-cli": return L("Claude Code is not installed on this host, and the agent writes its replies with it.");
+      case "not-git": return L`${r.path} is not a git checkout on this host.`;
+    }
+    return r.message || L("validation failed");
+  },
+  // only the hub section: whatever else changed meanwhile stays as it is
+  save: async v => {
+    await j("/v1/config", { method: "PUT", json: { hub: { url: v.hub, agent: { key: v.key, answer: v.answer, model: v.model,
+      max_per_day: v.max_per_day, max_per_thread: v.max_per_thread, repos: v.repos } } } });
+    toast(L("Hub agent settings saved"));
+    loadConfig().catch(() => {});
+  },
+};
+async function hubWizOpen() {
+  const h = (loadedConfig && loadedConfig.hub) || {}, a = h.agent || {};
+  let hub = h.url || "";
+  // a node that has no agent yet starts from the hub its Hub app reads
+  if (!hub) try { hub = (await j("/v1/apps/hub/data/config.json")).hub || ""; } catch (e) {}
+  gwOpen(HUB_WIZ, { hub, key: a.key || "", answer: a.answer || [], model: a.model || "claude-fable-5",
+    max_per_day: a.max_per_day || 40, max_per_thread: a.max_per_thread || 8, repos: a.repos || [] });
+}
+
+// Configuration → Hub: the agent's state, what it is set to with the hub's
+// names for the profiles, and the button that opens its wizard
+let hubStatus = null;
+async function hubSummaryLoad() {
+  if (!document.getElementById("cfg-hub")) return;
+  hubSummaryPaint();
+  try { hubStatus = await j("/v1/hub/agent"); } catch (e) { hubStatus = { state: "error", message: e.message }; }
+  hubSummaryPaint();
+}
+function hubSummaryPaint() {
+  const box = document.getElementById("cfg-hub");
+  if (!box) return;
+  const h = (loadedConfig && loadedConfig.hub) || {}, a = h.agent || {}, st = hubStatus || {};
+  const set = !!(h.url && a.key && (a.answer || []).length);
+  const state = !hubStatus ? "checking" : st.state === "on" ? (st.live ? "on" : "connecting") : st.state || "error";
+  const head = { checking: L("Hub agent: checking…"), on: L("Hub agent: on"), connecting: L("Hub agent: reaching the hub…"),
+    off: L("Hub agent: off"), error: L("Hub agent: stopped") }[state];
+  const named = id => {
+    const n = [st.agent, ...(st.answer || [])].find(p => p && p.id === id && p.name);
+    return n ? [n.name + " ", el("span", { class: "muted" }, "(" + id + ")")] : [id];
+  };
+  const answer = a.answer || [];
+  const rows = [
+    [L("Hub:"), h.url || "—"],
+    [L("Agent:"), st.agent ? named(st.agent.id) : a.key || "—"],
+    [L("Answers:"), answer.length ? answer.flatMap((id, i) => [...(i ? [", "] : []), ...named(id)]) : "—"],
+    [L("Model:"), a.model || "claude-fable-5"],
+    [L("Limits:"), L`${a.max_per_day || 40} a day, ${a.max_per_thread || 8} in one thread`],
+    [L("Repos:"), (a.repos || []).join(", ") || "—"],
+  ];
+  const grid = el("div", { class: "gi-grid cf-sum" });
+  for (const [label, v] of rows) grid.append(el("b", {}, label), el("span", {}, ...[v].flat()));
+  const go = el("button", { class: "ghost", onclick: hubWizOpen }, set ? L("Change…") : L("Set Up…"));
+  box.replaceChildren(
+    el("span", { class: "chip " + { checking: "starting", on: "running", connecting: "starting", off: "stopped", error: "error" }[state] }, head),
+    // what holds it, in the daemon's words
+    ...(state === "error" && st.message ? [el("div", { class: "muted cf-why" }, st.message)] : []),
     grid,
     el("div", { class: "row", style: "justify-content:flex-end; margin-top:12px" }, go));
 }

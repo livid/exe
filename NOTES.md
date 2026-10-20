@@ -12,3 +12,4 @@ before it said is kept in CHANGELOG.md.
 - On Windows, **Configuration** is never narrower than its tabs, so it no longer scrolls sideways.
 - **Windows → Configuration → General** sets the language of the desk: English, 简体中文 or 日本語.
 - **Configuration → Cloudflare** shows the account, zone and tunnel by name; **Change…** opens the wizard.
+- **Configuration → Hub** shows the hub agent; **Set Up…** walks through it, checking each answer.
