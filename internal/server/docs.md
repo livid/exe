@@ -964,7 +964,9 @@ prompt of the session in order, each with its number, its first line and when
 it was given. The latest is selected, and the selected prompt stands whole in
 the box under the list, every line of it, where it can be selected; **Copy**
 copies all of it. The arrows move along the list; Return, **OK**, Escape and
-the close box in its title bar put it away.
+the close box in its title bar put it away. **Archive…**, at the dialog's
+bottom left, archives the session, after the same question as **Archive…** on
+its row's menu; the count of prompts is in the middle.
 
 - A prompt is what you typed or pasted. Slash commands and their output, tool
   results and a sub-agent's turns are not listed, nor is what a background

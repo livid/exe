@@ -1378,15 +1378,22 @@ a.svc:hover { text-decoration: underline; }
 .si-head .si-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
 .si-grid { line-height: 15px; }
 .si-grid .muted { font-size: 11px; }
-.si-btns .si-archive { width: auto; padding: 0 10px; }
+.si-btns .si-archive, .sp-btns .sp-archive { width: auto; padding-left: 10px; padding-right: 10px; }
 /* Prompts, from the prompt line: the Search dialog's box with a white
    list of the session's prompts — a number in a slot as wide as the
    count, the first line, and at the right in 10px #777 when it was
    given — fourteen rows from the first paint; under the list, behind
    the 1px line that is the list's last arrow's, the selected prompt
    whole in a sunken white box six lines tall, selectable and scrolling,
-   so the dialog never changes height; then the button row with the
-   count at its left, Copy, and OK in the ring */
+   so the dialog never changes height; then the button row with
+   Archive… at its left, as wide as its word, the count centred in the
+   dialog, and Copy and OK in the ring at the right — three columns, the
+   outer two equal, so the count stays on the centre line whatever the
+   buttons' widths, giving way only where a phone has no room for it */
+.sp-btns { display: grid; grid-template-columns: 1fr auto 1fr; }
+.sp-btns .sp-archive { justify-self: start; }
+.sp-btns .sf-count { text-align: center; }
+.sp-btns .sp-end { justify-self: end; display: flex; gap: 12px; }
 .sp-row .k { flex: none; width: var(--kw, 8px); text-align: right; font-size: 10px; color: #777; }
 .sp-row.sel .k { color: #fff; }
 .sp-box { flex: none; padding: 8px; border-top: 1px solid var(--black); }
@@ -9791,8 +9798,10 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // and copied, and Copy takes all of it. It opens filled, on the
   // latest prompt, the status line saying so while a long transcript
   // is read; the arrows move along the list, Escape, Return and OK put
-  // it away. The list is the daemon's answer from when the dialog opened
-  let spVeil = null, spAsked = 0, spList, spText, spCount, spCopy, spOk, spRows = [], spSel = 0;
+  // it away. Archive…, at the button row's left as in Get Info, puts it
+  // away and archives the session after the column's own dialog. The
+  // list is the daemon's answer from when the dialog opened
+  let spVeil = null, spAsked = 0, spList, spText, spCount, spArchive, spCopy, spOk, spRows = [], spSel = 0, spName = "";
   const spSelect = () => {
     const rows = spList.querySelectorAll(".sp-row");
     rows.forEach((d, i) => d.classList.toggle("sel", i === spSel));
@@ -9812,14 +9821,18 @@ function openHostTermWin(app, cmd, vm, termSess) {
     spList = el("div", { class: "sf-list sp-list vflush" });
     spText = el("div", { class: "sp-text" });
     spCount = el("span", { class: "sf-count" });
+    spArchive = el("button", { class: "ghost sp-archive" }, L("Archive…"));
     spCopy = el("button", { class: "ghost sp-copy" }, L("Copy"));
     spOk = el("button", { class: "ghost sf-open sp-ok" }, "OK");
     spVeil = el("div", { class: "sess-veil sp-veil", hidden: "" }, el("div", { class: "sf-dlg sp-dlg" }, bar,
-      el("div", { class: "sf-frame" }, spList, el("div", { class: "sp-box" }, spText), el("div", { class: "sf-btns" }, spCount, spCopy, spOk))));
+      el("div", { class: "sf-frame" }, spList, el("div", { class: "sp-box" }, spText), el("div", { class: "sf-btns sp-btns" }, spArchive, spCount, el("span", { class: "sp-end" }, spCopy, spOk)))));
     w.querySelector(".win-frame").append(spVeil);
     const close = () => { spVeil.hidden = true; spAsked++; term.focus(); };
     spOk.onclick = close;
     closeBox.onclick = e => { e.stopPropagation(); close(); };
+    // the session as the column knows it now, so the dialog that asks
+    // says whether it is still working
+    spArchive.onclick = () => { const s = sessions.find(x => x.name === spName); close(); if (s) archiveSession(s); };
     spCopy.onclick = () => { const p = spRows[spSel]; if (p) copyText(p.text, L("the prompt")); spOk.focus(); };
     // the text can be selected and copied; the keys come back to the
     // buttons afterwards, so Return and Escape still put the dialog away
@@ -9828,13 +9841,13 @@ function openHostTermWin(app, cmd, vm, termSess) {
       const page = Math.max(1, Math.floor(spList.clientHeight / 18) - 1);
       const step = { ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page }[e.key];
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
-      else if (e.key === "Enter" && e.target !== spCopy) { e.preventDefault(); close(); }
+      else if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); close(); }
       else if (step) {
         e.preventDefault();
         if (spRows.length) { spSel = Math.max(0, Math.min(spRows.length - 1, spSel + step)); spSelect(); }
       } else if (e.key === "Tab") {
         e.preventDefault();
-        const stops = [spCopy, spOk].filter(b => !b.disabled);
+        const stops = [spArchive, spCopy, spOk].filter(b => !b.disabled);
         const at = stops.indexOf(document.activeElement);
         stops[(at + (e.shiftKey ? stops.length - 1 : 1) + stops.length) % stops.length].focus();
       }
@@ -9863,6 +9876,10 @@ function openHostTermWin(app, cmd, vm, termSess) {
       return d;
     }) : [el("div", { class: "muted sf-hint" }, L("No prompts yet."))]));
     spCount.textContent = spRows.length ? count(spRows.length, L("prompt"), L("prompts")) : "";
+    // Archive… as the row's menu offers it: once there is a conversation
+    // to keep, greyed before, so the row keeps its shape
+    spName = name;
+    spArchive.disabled = !sessions.some(x => x.name === name && x.resumable);
     spSel = Math.max(0, spRows.length - 1);
     spVeil.hidden = false; // laid out before the latest row is brought into view
     spSelect();

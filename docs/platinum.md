@@ -877,8 +877,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   the first line, the time at the right — fourteen from the first paint,
   a 1px line that is the list's last arrow's, then the selected prompt
   whole in a sunken white box six lines tall (98px, selectable,
-  scrolling), and the button row with the count, Copy and OK in the
-  ring. `~/tools/playwright/exe-claude-prompts-test.js` walks it, the
+  scrolling), and the button row in three columns, the outer two equal:
+  Archive… at the left, as wide as its word (Get Info's), the count
+  centred on the dialog, and Copy and OK in the ring at the right. On a
+  phone the count gives way a few pixels where the buttons need them.
+  `~/tools/playwright/exe-claude-prompts-test.js` walks it, the
   phone's layout too.
 
 ## The Workspace as a list
