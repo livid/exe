@@ -2356,6 +2356,11 @@ Publishing one does three things:
 
 Routes survive a daemon restart.
 
+The proxy gzips text a backend sends uncompressed, such as HTML, CSS,
+scripts, JSON and SVG, so a page goes up the tunnel at about a quarter of
+its size. Images, video, byte ranges and event streams pass through as they
+are.
+
 ### Set up Cloudflare once
 
 Publishing needs three things at Cloudflare:

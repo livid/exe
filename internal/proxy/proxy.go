@@ -187,7 +187,9 @@ func (p *Proxy) Handler() http.Handler {
 			}
 		},
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Gzip wraps every route — VM, builtin and directory alike — so text
+	// goes up the tunnel compressed whichever backend wrote it.
+	return Gzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		backend, ok := p.lookup(r.Host)
 		if !ok {
 			http.Error(w, "exe proxy: no route for host "+r.Host, http.StatusBadGateway)
@@ -223,5 +225,5 @@ func (p *Proxy) Handler() http.Handler {
 			return
 		}
 		rp.ServeHTTP(w, r)
-	})
+	}))
 }
