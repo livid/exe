@@ -204,6 +204,9 @@ func claudePromptText(s string) string {
 	if s == "" || strings.HasPrefix(s, "<") {
 		return ""
 	}
+	if said, ok := watcherPromptInput(s); ok { // the posts in a hub watcher's build prompt (claudeprompts.go)
+		s = said
+	}
 	return firstLine(s, 60)
 }
 

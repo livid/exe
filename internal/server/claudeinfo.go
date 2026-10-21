@@ -250,6 +250,9 @@ func claudeTurnText(s string) string {
 	if s == "" || claudeOwnText(s) { // the CLI's own words (claudeprompts.go), not a prompt that opens with pasted markup
 		return ""
 	}
+	if said, ok := watcherPromptInput(s); ok { // the posts in a hub watcher's build prompt (claudeprompts.go)
+		s = said
+	}
 	return firstLine(s, claudeInfoLine)
 }
 

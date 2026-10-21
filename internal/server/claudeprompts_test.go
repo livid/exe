@@ -105,6 +105,82 @@ func TestClaudeTurnTextOwn(t *testing.T) {
 	}
 }
 
+// the hub watcher's build prompts, in the shapes ~/.claude/hub/watch
+// writes them: build.md for a reply on the hub, projbuild.md for a
+// comment in Projects, and a later turn pasted behind its own line
+const (
+	watcherHubPrompt = "You are Claude's hub watcher, in build mode: Livid replied on the exe hub with feedback or an instruction about something you built. Nobody is at the keyboard.\n\n" +
+		"New post(s):\n" +
+		"- Post 03f354ac46b09f2d by Livid\n" +
+		"  A reply in the thread of post e5aed1effceeb7aa (read that thread: http://hub.example/v1/post/e5aed1effceeb7aa)\n" +
+		"  JSON: http://hub.example/v1/post/03f354ac46b09f2d   page: http://hub.example/p/03f354ac46b09f2d\n" +
+		"  Picture: http://hub.example/v1/embed/bafy (image/png) — curl it to a file and Read it when it matters.\n" +
+		"  Text:\n" +
+		"    Let's continue. Here is what I want:\n" +
+		"    \n" +
+		"    - two sizes\n" +
+		"  Post d4c535d5 under it is the watcher's own notice or \"On it\", not a session's reply: yours is still owed\n" +
+		"- Post 77aa01 by Codex on Spark\n" +
+		"  JSON: http://hub.example/v1/post/77aa01   page: http://hub.example/p/77aa01\n" +
+		"  Text:\n" +
+		"    I can take the palette part.\n\n" +
+		"The thread starts at post e5aed1effceeb7aa. Read it first.\n\n" +
+		"What to do:\n\n1. Read the feedback.\n"
+	watcherProjPrompt = "You are Claude's watcher, in build mode. Livid commented on issue ROTK5-44 in Projects, and the comment is for you.\n\n" +
+		"- Comment e4f8f6ff on issue ROTK5-44 by Livid\n" +
+		"  The issue: \"68K music: silent after a track ends\", open, filed by Claude (read it whole: exe-projects show ROTK5-44)\n" +
+		"  Text:\n" +
+		"    Claude, handle this.\n" +
+		"  Comment 5fa4626b after it is the watcher's own notice or \"On it\", not a session's comment: yours is still owed\n\n" +
+		"The screener's reading, to check against the issue: a go-ahead.\n\n" +
+		"    exe-projects show ROTK5-44\n"
+)
+
+func TestWatcherPromptInput(t *testing.T) {
+	paste := "Hub watcher, Livid's automation: Livid replied in this thread on the hub. The pasted prompt below is your next build turn; do what it says. \n\n" +
+		"<pasted_content id=\"5612\">\n" + watcherProjPrompt + "</pasted_content id=\"5612\">\n"
+	for _, c := range []struct{ in, want string }{
+		{watcherHubPrompt, "Let's continue. Here is what I want:\n\n- two sizes\n\nI can take the palette part."},
+		{watcherProjPrompt, "Claude, handle this."},
+		{paste, "Claude, handle this."},
+	} {
+		if got, ok := watcherPromptInput(c.in); !ok || got != c.want {
+			t.Errorf("%.40q: got %q ok=%v, want %q", c.in, got, ok, c.want)
+		}
+	}
+	// whole: a person's prompt, one that only quotes the orders, orders
+	// with no item, and a pasted line of the watcher's with no prompt
+	for _, s := range []string{
+		"add a tornado to the city",
+		"why does this say \"You are Claude's hub watcher\"?\n- Post 1 by Livid\n  Text:\n    hi",
+		"You are Claude's hub watcher, in build mode.\n\nNew post(s):\n(none)\n",
+		"You are Claude's helper.\n- Post 1 by Livid\n  Text:\n    hi",
+		"Hub watcher, Livid's automation: do it.",
+	} {
+		if got, ok := watcherPromptInput(s); ok || got != s {
+			t.Errorf("%.40q: want it whole, got %q ok=%v", s, got, ok)
+		}
+	}
+	// the readers: Prompts and the line, Get Info, and a title
+	if got := claudeTurnText(watcherProjPrompt); got != "Claude, handle this." {
+		t.Errorf("Get Info: %q", got)
+	}
+	if got := claudePromptText(watcherHubPrompt); got != "Let's continue. Here is what I want:" {
+		t.Errorf("title: %q", got)
+	}
+	home := t.TempDir()
+	now := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+	path := writeClaudeTranscript(t, home, "-www-exe", "5d6c0a1e-3f9b-4c2e-9a77-0e1f2b3c4d5e", "cli", "/www/exe", "a person's first words", now)
+	in, _ := json.Marshal(watcherProjPrompt)
+	pasted, _ := json.Marshal(paste)
+	appendLine(t, path, promptLine("2026-10-21T08:00:00Z", string(in), `,"origin":{"kind":"human"}`), now)
+	appendLine(t, path, promptLine("2026-10-21T08:30:00Z", string(pasted), ""), now)
+	ps := claudePromptsOf(path)
+	if len(ps) != 3 || ps[1].Text != "Claude, handle this." || ps[2].Text != "Claude, handle this." {
+		t.Errorf("prompts: %+v", ps)
+	}
+}
+
 func TestAgentLastPromptAndHandler(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", home)

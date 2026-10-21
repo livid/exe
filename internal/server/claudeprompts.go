@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -121,6 +122,9 @@ func claudePromptLine(line []byte) (claudePromptEntry, bool) {
 	if text == "" || claudeOwnText(text) {
 		return claudePromptEntry{}, false
 	}
+	if said, ok := watcherPromptInput(text); ok {
+		text = said
+	}
 	p := claudePromptEntry{Text: text, At: trailTime(u.Timestamp)}
 	if utf8.RuneCountInString(text) > claudePromptMax {
 		r := []rune(text)
@@ -168,6 +172,69 @@ func claudeOwnText(s string) bool {
 	}
 	return strings.HasPrefix(s, "[Request interrupted") ||
 		strings.HasPrefix(s, "This session is being continued from a previous conversation")
+}
+
+// The hub watcher (~/.claude/hub/watch, agentapi.go) opens a column
+// session on a build prompt of its own: a page of standing orders —
+// "You are Claude's hub watcher, in build mode: …", "You are Claude's
+// watcher, in build mode. …" for a comment in Projects — around the posts
+// or comments that woke it, each an item — "- Comment <id> on issue
+// <address> by <name>" for a comment — with its facts two spaces in and
+// what the person wrote four spaces in, under "Text:":
+//
+//	New post(s):
+//	- Post <id> by <name>
+//	  JSON: …
+//	  Text:
+//	    what the person wrote
+//
+// It pastes a later one into the same session behind a line of its
+// own ("Hub watcher, …"), which the CLI keeps with the paste wrapped in
+// <pasted_content …>. What the person said is the text of those items, so
+// the line over the terminal, Prompts and Get Info show that, one item
+// under another, and a title read from the first prompt is its first
+// line. A prompt in which no item is found stays whole.
+var watcherItem = regexp.MustCompile(`^- (Post \S+|Comment \S+ on issue \S+) by .`)
+
+func watcherPromptInput(s string) (string, bool) {
+	const orders = "You are Claude's "
+	body := s
+	if strings.HasPrefix(s, "Hub watcher") {
+		_, paste, ok := strings.Cut(s, "<pasted_content")
+		if !ok {
+			return s, false
+		}
+		_, body, _ = strings.Cut(paste, ">")
+		body = strings.TrimLeft(body, "\n")
+	}
+	if first, _, _ := strings.Cut(body, "\n"); !strings.HasPrefix(first, orders) || !strings.Contains(first, " watcher") {
+		return s, false
+	}
+	var said []string
+	lines := strings.Split(body, "\n")
+	for i := 0; i < len(lines); i++ {
+		if !watcherItem.MatchString(lines[i]) {
+			continue
+		}
+		for i++; i < len(lines) && strings.HasPrefix(lines[i], "  ") && lines[i] != "  Text:"; i++ {
+		}
+		if i == len(lines) || lines[i] != "  Text:" {
+			i--
+			continue
+		}
+		var text []string
+		for i++; i < len(lines) && (strings.HasPrefix(lines[i], "    ") || strings.TrimSpace(lines[i]) == ""); i++ {
+			text = append(text, strings.TrimPrefix(lines[i], "    "))
+		}
+		i-- // the line that ended the text may open the next item
+		if t := strings.TrimSpace(strings.Join(text, "\n")); t != "" {
+			said = append(said, t)
+		}
+	}
+	if len(said) == 0 {
+		return s, false
+	}
+	return strings.Join(said, "\n\n"), true
 }
 
 // agentLastPrompt is what the column's frame says of the session on
