@@ -2,11 +2,15 @@ package peer
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -428,7 +432,7 @@ func TestScanLocalInventoriesWorkspace(t *testing.T) {
 	os.WriteFile(filepath.Join(ws, "readme.txt"), []byte("hello"), 0o644)
 	os.WriteFile(filepath.Join(ws, "sub", "a.bin"), []byte("aa"), 0o644)
 	os.WriteFile(filepath.Join(ws, ".Trash", "gone.txt"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(ws, "huge.bin"), make([]byte, maxSyncFile+1), 0o644)
+	writeHuge(t, dir, "huge.bin")
 	os.WriteFile(filepath.Join(dir, "appdata", "stray.txt"), []byte("x"), 0o644)
 
 	eng.ScanLocal()
@@ -498,6 +502,12 @@ func TestStrayWorkspaceFilesMigrateOnScan(t *testing.T) {
 // and returns its key and the fingerprint a stamp of it would record.
 func writeHuge(t *testing.T, dir, rel string) (key string, size, mtime int64) {
 	t.Helper()
+	return writeSparse(t, dir, rel, maxSyncFile+1)
+}
+
+// writeSparse makes a workspace file of n bytes without writing them.
+func writeSparse(t *testing.T, dir, rel string, n int64) (key string, size, mtime int64) {
+	t.Helper()
 	p := filepath.Join(dir, "workspace", filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
@@ -505,7 +515,7 @@ func writeHuge(t *testing.T, dir, rel string) (key string, size, mtime int64) {
 	if err := os.WriteFile(p, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Truncate(p, maxSyncFile+1); err != nil {
+	if err := os.Truncate(p, n); err != nil {
 		t.Fatal(err)
 	}
 	fi, err := os.Stat(p)
@@ -517,7 +527,7 @@ func writeHuge(t *testing.T, dir, rel string) (key string, size, mtime int64) {
 
 func TestLocalWriteLeavesOversizedFileLocal(t *testing.T) {
 	// A workspace move calls LocalWrite on a file of any size; the PUT that
-	// caps a write at 10 MB is not in its way.
+	// caps a write at 100 MB is not in its way.
 	eng, dir := newWorkspaceEngine(t)
 	key, _, _ := writeHuge(t, dir, "Disk Images/huge.toast")
 	eng.LocalWrite(WorkspaceNS, "Disk Images/huge.toast")
@@ -541,10 +551,10 @@ func TestOversizedFileIsNeitherPushedNorServed(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "workspace", "small.txt"), []byte("hello"), 0o644)
 	eng.man.Bump("@workspace/small.txt", self, false, 5, 1)
 
-	if _, _, err := eng.FileForPeer(WorkspaceNS, "huge.bin"); !errors.Is(err, errTooLarge) {
+	if _, _, err := eng.FileForPeer(WorkspaceNS, "huge.bin", maxSyncFile); !errors.Is(err, errTooLarge) {
 		t.Fatalf("serving a file over the cap: want errTooLarge, got %v", err)
 	}
-	if b, _, err := eng.FileForPeer(WorkspaceNS, "small.txt"); err != nil || string(b) != "hello" {
+	if b, _, err := eng.FileForPeer(WorkspaceNS, "small.txt", maxSyncFile); err != nil || string(b) != "hello" {
 		t.Fatalf("serving a file under the cap: %q %v", b, err)
 	}
 
@@ -563,6 +573,136 @@ func TestOversizedFileIsNeitherPushedNorServed(t *testing.T) {
 	defer mu.Unlock()
 	if len(puts) != 1 || puts[0] != "PUT /v1/peer/file/@workspace/small.txt" {
 		t.Fatalf("only the file under the cap is pushed, got %v", puts)
+	}
+}
+
+func TestPushesWhatThePeerSaysItTakes(t *testing.T) {
+	// A peer's manifest names the biggest file it takes; an older release
+	// names none, and gets nothing over the 10 MB it always took.
+	for _, tc := range []struct {
+		name    string
+		maxFile int64
+		want    []string
+	}{
+		{"older release", 0, []string{"@workspace/small.txt"}},
+		{"this release", maxSyncFile, []string{"@workspace/mid.bin", "@workspace/small.txt"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			eng, dir := newWorkspaceEngine(t)
+			self := eng.cfg.Self.ID
+			mid, size, mtime := writeSparse(t, dir, "mid.bin", legacySyncFile+1)
+			eng.man.Bump(mid, self, false, size, mtime)
+			os.WriteFile(filepath.Join(dir, "workspace", "small.txt"), []byte("hello"), 0o644)
+			eng.man.Bump("@workspace/small.txt", self, false, 5, 1)
+
+			const id = "ffffffffffffffff"
+			var mu sync.Mutex
+			got := map[string]int64{}
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/peer/manifest" {
+					m := map[string]any{"id": id, "files": map[string]Version{}}
+					if tc.maxFile > 0 {
+						m["max_file"] = tc.maxFile
+					}
+					json.NewEncoder(w).Encode(m)
+					return
+				}
+				n, _ := io.Copy(io.Discard, r.Body)
+				mu.Lock()
+				got[strings.TrimPrefix(r.URL.Path, "/v1/peer/file/")] = n
+				mu.Unlock()
+			}))
+			defer ts.Close()
+			eng.reconcile(&Peer{ID: id, Name: "b", Addr: strings.TrimPrefix(ts.URL, "http://")})
+			mu.Lock()
+			defer mu.Unlock()
+			keys := slices.Sorted(maps.Keys(got))
+			if !slices.Equal(keys, tc.want) {
+				t.Fatalf("pushed %v, want %v", keys, tc.want)
+			}
+			if n, ok := got[mid]; ok && n != size {
+				t.Fatalf("mid.bin arrived with %d bytes of %d", n, size)
+			}
+		})
+	}
+}
+
+func TestServesWhatTheAskerSaysItTakes(t *testing.T) {
+	eng, dir := newWorkspaceEngine(t)
+	mid, size, mtime := writeSparse(t, dir, "mid.bin", legacySyncFile+1)
+	eng.man.Bump(mid, eng.cfg.Self.ID, false, size, mtime)
+
+	ask := func(maxFile string) int64 {
+		r := httptest.NewRequest("GET", "/v1/peer/file/@workspace/mid.bin", nil)
+		if maxFile != "" {
+			r.Header.Set(hdrMaxFile, maxFile)
+		}
+		return Takes(r)
+	}
+	for in, want := range map[string]int64{
+		"": legacySyncFile, "lots": legacySyncFile, "-1": legacySyncFile,
+		"4096": 4096, strconv.Itoa(maxSyncFile): maxSyncFile, "99999999999999": maxSyncFile,
+	} {
+		if got := ask(in); got != want {
+			t.Errorf("X-Exe-Max-File %q takes %d, want %d", in, got, want)
+		}
+	}
+	if _, _, err := eng.FileForPeer(WorkspaceNS, "mid.bin", ask("")); !errors.Is(err, errTooLarge) {
+		t.Fatalf("an older release asking: want errTooLarge, got %v", err)
+	}
+	if b, _, err := eng.FileForPeer(WorkspaceNS, "mid.bin", ask(strconv.Itoa(maxSyncFile))); err != nil || int64(len(b)) != size {
+		t.Fatalf("this release asking: %d bytes, %v", len(b), err)
+	}
+}
+
+func TestFileTransferGivesUpOnlyWhenItStalls(t *testing.T) {
+	stall, answer := stallTimeout, answerTimeout
+	stallTimeout, answerTimeout = 200*time.Millisecond, 2*time.Second
+	t.Cleanup(func() { stallTimeout, answerTimeout = stall, answer })
+	eng, _ := newWorkspaceEngine(t)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/moving": // longer than the stall timeout, never still for it
+			for range 8 {
+				w.Write([]byte("chunk"))
+				w.(http.Flusher).Flush()
+				time.Sleep(40 * time.Millisecond)
+			}
+		case "/stalled":
+			w.Write([]byte("chunk"))
+			w.(http.Flusher).Flush()
+			time.Sleep(800 * time.Millisecond)
+			w.Write([]byte("late"))
+		case "/put": // the whole body, then a slow answer
+			io.Copy(io.Discard, r.Body)
+			time.Sleep(400 * time.Millisecond)
+			w.Write([]byte("saved"))
+		}
+	}))
+	defer ts.Close()
+	do := func(req *http.Request) (string, error) {
+		resp, answer, done, err := eng.doFile(req)
+		if err != nil {
+			return "", err
+		}
+		defer done()
+		defer resp.Body.Close()
+		b, err := io.ReadAll(answer)
+		return string(b), err
+	}
+	get := func(path string) (string, error) {
+		req, _ := http.NewRequest("GET", ts.URL+path, nil)
+		return do(req)
+	}
+	if b, err := get("/moving"); err != nil || b != strings.Repeat("chunk", 8) {
+		t.Fatalf("a transfer that keeps moving outlasts the stall timeout: %q %v", b, err)
+	}
+	if b, err := get("/stalled"); err == nil {
+		t.Fatalf("a transfer that stops moving is given up, got %q", b)
+	}
+	req, _ := http.NewRequest("PUT", ts.URL+"/put", bytes.NewReader([]byte("body")))
+	if b, err := do(req); err != nil || b != "saved" {
+		t.Fatalf("a push waits answerTimeout for its answer: %q %v", b, err)
 	}
 }
 

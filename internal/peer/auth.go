@@ -26,6 +26,7 @@ const (
 	hdrSig     = "X-Exe-Sig"
 	hdrVer     = "X-Exe-Ver" // base64(json) of the file's version vector
 	hdrDeleted = "X-Exe-Deleted"
+	hdrMaxFile = "X-Exe-Max-File" // the biggest file a fetching peer takes
 
 	// Personal machines (laptops that sleep) drift; a generous window keeps
 	// sync working across modest skew. Replay is already defanged by the

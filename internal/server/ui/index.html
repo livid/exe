@@ -2199,7 +2199,7 @@ body.mobile th.sorted {
       <div class="stripe"></div></div>
     <div class="win-frame">
       <div class="win-body">
-        <div class="muted" style="margin-bottom:8px">Lands in the Workspace folder shared with apps and VMs. 10 MB max.</div>
+        <div class="muted" style="margin-bottom:8px">Lands in the Workspace folder shared with apps and VMs. 100 MB max.</div>
         <div class="row" style="flex-wrap:nowrap">
           <button class="ghost" id="up-choose">Choose File…</button>
           <span class="muted" id="up-name" style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">no file selected</span>
@@ -8856,7 +8856,7 @@ async function wsUpload(dir, files) {
   let done = 0, last = "";
   const fresh = [], abs = [];
   for (const f of files) {
-    if (f.size > 10 << 20) { toast(L`${f.name} exceeds 10 MB`); continue; }
+    if (f.size > 100 << 20) { toast(L`${f.name} exceeds 100 MB`); continue; }
     const rel = dir ? dir + "/" + f.name : f.name;
     try {
       const r = await (await api(wsUrl(rel), { method: "PUT", body: f })).json();

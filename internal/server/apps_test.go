@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"exe/internal/config"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -260,6 +261,45 @@ func TestWorkspaceFileGetServesRanges(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Range"); got != "bytes 2-5/10" {
 		t.Fatalf("Content-Range: %q", got)
+	}
+}
+
+// zeros reads as an endless run of zero bytes.
+type zeros struct{}
+
+func (zeros) Read(b []byte) (int, error) { clear(b); return len(b), nil }
+
+// A PUT stores up to 100 MB, streamed to disk as it arrives, and refuses
+// one byte more — by its Content-Length when it says one, else by the
+// count — leaving no file or temp file behind.
+func TestWorkspacePutTakes100MB(t *testing.T) {
+	s := New(&config.Config{APIToken: "test-secret"}, nil, nil, "", t.TempDir())
+	h := s.Handler()
+	put := func(body io.Reader, length int64) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("PUT", "http://exe.test/v1/workspace/big.bin", body)
+		r.Header.Set("Authorization", "Bearer test-secret")
+		r.ContentLength = length
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	p := filepath.Join(s.workspaceDir(), "big.bin")
+	if w := put(io.LimitReader(zeros{}, fileMax), -1); w.Code != 200 {
+		t.Fatalf("PUT of 100 MB: %d %s", w.Code, w.Body.String())
+	}
+	if fi, err := os.Stat(p); err != nil || fi.Size() != fileMax {
+		t.Fatalf("stored: %v %v", fi, err)
+	}
+	os.Remove(p)
+	if w := put(io.LimitReader(zeros{}, fileMax+1), -1); w.Code != 413 {
+		t.Fatalf("PUT of 100 MB and a byte, unannounced: %d %s", w.Code, w.Body.String())
+	}
+	if w := put(strings.NewReader("x"), fileMax+1); w.Code != 413 {
+		t.Fatalf("PUT announcing 100 MB and a byte: %d %s", w.Code, w.Body.String())
+	}
+	left, _ := os.ReadDir(s.workspaceDir())
+	if len(left) != 0 {
+		t.Fatalf("a refused PUT left %v", left)
 	}
 }
 

@@ -2,6 +2,7 @@ package peer
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -16,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,10 +43,32 @@ func ParseVersion(verB64 string, deleted bool) Version {
 // ("@workspace/rel") can never collide with app-data keys ("App/rel").
 const WorkspaceNS = "@workspace"
 
-// maxSyncFile caps what sync will carry per file — the same 10 MB the file
+// maxSyncFile caps what sync will carry per file — the same 100 MB the file
 // APIs enforce, so nothing is versioned, pushed or served that the receiving
-// side rejects.
-const maxSyncFile = 10 << 20
+// side rejects. A peer says its own cap (manifest max_file, the X-Exe-Max-File
+// of a fetch); one that says none is an older release and takes
+// legacySyncFile, the 10 MB every release held files to before.
+const (
+	maxSyncFile    = 100 << 20
+	legacySyncFile = 10 << 20
+)
+
+// stallTimeout gives up a file transfer that has moved no bytes for this
+// long — connecting, sending or receiving — in place of the client's flat
+// 15 s, which would fail a 100 MB file on a slow link every time; the next
+// reconcile tries again. Once a push has handed over its last byte, the
+// answer gets answerTimeout: the last MB still drain from the socket
+// buffers, and then the peer writes the file. Vars so a test can shorten
+// them.
+var (
+	stallTimeout  = 15 * time.Second
+	answerTimeout = time.Minute
+)
+
+// bigPushes is how many pushes of a file over legacySyncFile run at once: a
+// scan that finds many starts a push for each, and every push holds its
+// whole file in memory. Smaller files never wait for them.
+const bigPushes = 2
 
 // errTooLarge is readSyncFile's refusal of a file over maxSyncFile.
 var errTooLarge = errors.New("file exceeds the sync cap")
@@ -75,6 +99,8 @@ type Engine struct {
 	man   *Manifest
 
 	client *http.Client
+	files  *http.Client  // file transfers, under the stall timer (doFile)
+	big    chan struct{} // slots for pushes of a big file (bigPushes)
 
 	fileMu sync.Mutex // serializes apply/scan against each other
 
@@ -122,6 +148,8 @@ type Status struct {
 	LatencyMS int64  `json:"latency_ms"`
 	Error     string `json:"error,omitempty"`
 	LastSeen  int64  `json:"last_seen,omitempty"` // unix ms
+
+	takes int64 // the max_file its last manifest named; 0 for none
 }
 
 // PeerInfo is the wire form of a peer entry (pairing + mesh gossip).
@@ -154,6 +182,8 @@ type manifestResponse struct {
 	Port  string             `json:"port"`
 	Files map[string]Version `json:"files"`
 	Peers []PeerInfo         `json:"peers"`
+	// MaxFile is the biggest file the peer takes; an older release omits it
+	MaxFile int64 `json:"max_file"`
 }
 
 const (
@@ -179,6 +209,8 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 		peers:  store,
 		man:    man,
 		client: &http.Client{Timeout: 15 * time.Second},
+		files:  &http.Client{},
+		big:    make(chan struct{}, bigPushes),
 		codes:  map[string]time.Time{},
 		status: map[string]*Status{},
 		kick:   make(chan struct{}, 1),
@@ -244,6 +276,30 @@ func (e *Engine) LockFiles(fn func()) {
 }
 
 func (e *Engine) ManifestSnapshot() map[string]Version { return e.man.Snapshot() }
+
+// MaxFile is the biggest file this node takes from a peer, for its manifest.
+func (e *Engine) MaxFile() int64 { return maxSyncFile }
+
+// Takes is the biggest file the asker of r takes, by its X-Exe-Max-File;
+// an older release sends none and takes legacySyncFile.
+func Takes(r *http.Request) int64 {
+	n, err := strconv.ParseInt(r.Header.Get(hdrMaxFile), 10, 64)
+	if err != nil || n <= 0 {
+		return legacySyncFile
+	}
+	return min(n, maxSyncFile)
+}
+
+// takes is the biggest file peer id takes, by its last manifest: what it
+// named, or legacySyncFile while it has named nothing.
+func (e *Engine) takes(id string) int64 {
+	e.statusMu.Lock()
+	defer e.statusMu.Unlock()
+	if st := e.status[id]; st != nil && st.takes > 0 {
+		return min(st.takes, maxSyncFile)
+	}
+	return legacySyncFile
+}
 
 // ---- pairing ----------------------------------------------------------------
 
@@ -578,19 +634,63 @@ func peerFileURL(addr, key string) string {
 	return "http://" + addr + "/v1/peer/file/" + strings.Join(parts, "/")
 }
 
-// readSyncFile reads key's file for the wire. One over maxSyncFile is refused
-// on its size alone, before any of it is read or sent: the other side takes
-// the first 10 MB, turns it down, and the next reconcile would send it again.
-func (e *Engine) readSyncFile(key string) ([]byte, error) {
+// readSyncFile reads key's file for the wire, to a peer that takes up to
+// max. One bigger is refused on its size alone, before any of it is read or
+// sent: the other side takes the first max bytes, turns it down, and the
+// next reconcile would send it again.
+func (e *Engine) readSyncFile(key string, max int64) ([]byte, error) {
 	p := e.filePath(key)
 	fi, err := os.Stat(p)
 	if err != nil {
 		return nil, err
 	}
-	if fi.Size() > maxSyncFile {
+	if fi.Size() > max {
 		return nil, errTooLarge
 	}
 	return os.ReadFile(p)
+}
+
+// progress passes reads through, putting off the transfer's stall timer on
+// each one, and by answerTimeout at the end of a body.
+type progress struct {
+	r io.Reader
+	t *time.Timer
+}
+
+func (p progress) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if err == io.EOF {
+		p.t.Reset(answerTimeout)
+	} else {
+		p.t.Reset(stallTimeout)
+	}
+	return n, err
+}
+
+// doFile runs a file request under the stall timer: sending its body and
+// reading the returned answer both put the timer off. Call done once the
+// answer is read.
+func (e *Engine) doFile(req *http.Request) (resp *http.Response, answer io.Reader, done func(), err error) {
+	ctx, cancel := context.WithCancel(req.Context())
+	t := time.AfterFunc(stallTimeout, cancel)
+	done = func() { t.Stop(); cancel() }
+	if get := req.GetBody; get != nil && req.ContentLength > 0 {
+		// GetBody too, as the transport rewinds with it to resend
+		req.GetBody = func() (io.ReadCloser, error) {
+			b, err := get()
+			if err != nil {
+				return nil, err
+			}
+			return io.NopCloser(progress{b, t}), nil
+		}
+		req.Body, _ = req.GetBody()
+	}
+	resp, err = e.files.Do(req.WithContext(ctx))
+	if err != nil {
+		done()
+		return nil, nil, nil, err
+	}
+	return resp, progress{resp.Body, t}, done, nil
 }
 
 func (e *Engine) pushAll(key string) {
@@ -601,7 +701,8 @@ func (e *Engine) pushAll(key string) {
 
 // pushTo sends our current version of key to one peer. The receiving side
 // answers "stale" when it already has something newer — that's fine, its
-// own push or the next reconcile settles it.
+// own push or the next reconcile settles it. A file bigger than the peer
+// takes is not sent: it waits here until the peer's release takes it.
 func (e *Engine) pushTo(p *Peer, key string) {
 	v, ok := e.man.Get(key)
 	if !ok {
@@ -609,11 +710,18 @@ func (e *Engine) pushTo(p *Peer, key string) {
 	}
 	var body []byte
 	if !v.Deleted {
-		b, err := e.readSyncFile(key)
-		if err != nil {
+		max := e.takes(p.ID)
+		fi, err := os.Stat(e.filePath(key))
+		if err != nil || fi.Size() > max {
 			return
 		}
-		body = b
+		if fi.Size() > legacySyncFile {
+			e.big <- struct{}{}
+			defer func() { <-e.big }()
+		}
+		if body, err = e.readSyncFile(key, max); err != nil {
+			return
+		}
 	}
 	req, err := http.NewRequest("PUT", peerFileURL(p.Addr, key), bytes.NewReader(body))
 	if err != nil {
@@ -624,12 +732,13 @@ func (e *Engine) pushTo(p *Peer, key string) {
 		req.Header.Set(hdrDeleted, "1")
 	}
 	SignRequest(e.cfg.Self, req, body, p.ID)
-	resp, err := e.client.Do(req)
+	resp, answer, done, err := e.doFile(req)
 	if err != nil {
 		e.cfg.Logf("peer: push %s to %s: %v", key, p.Name, err)
 		return
 	}
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	defer done()
+	io.Copy(io.Discard, io.LimitReader(answer, 4096))
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		e.cfg.Logf("peer: push %s to %s: HTTP %d", key, p.Name, resp.StatusCode)
@@ -647,17 +756,19 @@ func (e *Engine) fetchFrom(p *Peer, key string, rv Version) {
 	if err != nil {
 		return
 	}
+	req.Header.Set(hdrMaxFile, strconv.FormatInt(maxSyncFile, 10))
 	SignRequest(e.cfg.Self, req, nil, p.ID)
-	resp, err := e.client.Do(req)
+	resp, answer, done, err := e.doFile(req)
 	if err != nil {
 		e.cfg.Logf("peer: fetch %s from %s: %v", key, p.Name, err)
 		return
 	}
+	defer done()
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSyncFile+1))
+	body, err := io.ReadAll(io.LimitReader(answer, maxSyncFile+1))
 	if err != nil || len(body) > maxSyncFile {
 		return
 	}
@@ -670,14 +781,17 @@ func (e *Engine) fetchFrom(p *Peer, key string, rv Version) {
 	}
 }
 
-// FileForPeer serves a peer's GET: content plus our version of it.
-func (e *Engine) FileForPeer(app, rel string) ([]byte, Version, error) {
+// FileForPeer serves a peer's GET: content plus our version of it, to an
+// asker that takes files up to max (Takes). A bigger one is refused, so an
+// older release that lists it in our manifest asks for it in vain without
+// fetching any of it.
+func (e *Engine) FileForPeer(app, rel string, max int64) ([]byte, Version, error) {
 	key := app + "/" + rel
 	v, ok := e.man.Get(key)
 	if !ok || v.Deleted {
 		return nil, Version{}, os.ErrNotExist
 	}
-	b, err := e.readSyncFile(key)
+	b, err := e.readSyncFile(key, max)
 	if err != nil {
 		return nil, Version{}, err
 	}
@@ -956,6 +1070,11 @@ func (e *Engine) reconcile(p *Peer) {
 		return
 	}
 	e.setStatus(p, latency, nil)
+	e.statusMu.Lock()
+	if st := e.status[p.ID]; st != nil {
+		st.takes = mr.MaxFile
+	}
+	e.statusMu.Unlock()
 	if mr.Name != "" && mr.Name != p.Name {
 		e.peers.Upsert(&Peer{ID: p.ID, Name: mr.Name, PubKey: p.PubKey})
 	}

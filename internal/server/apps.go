@@ -407,8 +407,8 @@ func (s *Server) appStatic() http.Handler {
 
 // ---- scoped file stores (per-app data + shared workspace) ----
 
-// fileMax caps a single stored file.
-const fileMax = 10 << 20
+// fileMax caps a single stored file, the same 100 MB sync carries.
+const fileMax = 100 << 20
 
 // scopedPath resolves rel inside root, rejecting absolute paths and any
 // traversal outside root.
@@ -521,13 +521,9 @@ func handleFilePut(w http.ResponseWriter, r *http.Request, root, rel string) boo
 		writeErr(w, http.StatusBadRequest, err)
 		return false
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, fileMax+1))
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err)
-		return false
-	}
-	if len(body) > fileMax {
-		writeErr(w, http.StatusRequestEntityTooLarge, errors.New("file exceeds 10 MB"))
+	tooBig := errors.New("file exceeds 100 MB")
+	if r.ContentLength > fileMax {
+		writeErr(w, http.StatusRequestEntityTooLarge, tooBig)
 		return false
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -536,28 +532,34 @@ func handleFilePut(w http.ResponseWriter, r *http.Request, root, rel string) boo
 	}
 	_, statErr := os.Lstat(p)
 	created := os.IsNotExist(statErr)
-	// Atomic-ish: temp file in the same directory, then rename over.
+	// Atomic-ish: temp file in the same directory, then rename over. The
+	// body goes there as it arrives, not through memory: it can be 100 MB.
 	tmp, err := os.CreateTemp(filepath.Dir(p), ".put-*")
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return false
 	}
-	if _, err := tmp.Write(body); err == nil {
-		err = tmp.Close()
-	} else {
-		tmp.Close()
+	size, err := io.Copy(tmp, io.LimitReader(r.Body, fileMax+1))
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
 	}
-	if err == nil {
-		err = os.Rename(tmp.Name(), p)
+	if err != nil || size > fileMax {
+		os.Remove(tmp.Name())
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+		} else {
+			writeErr(w, http.StatusRequestEntityTooLarge, tooBig)
+		}
+		return false
 	}
-	if err != nil {
+	if err := os.Rename(tmp.Name(), p); err != nil {
 		os.Remove(tmp.Name())
 		writeErr(w, http.StatusInternalServerError, err)
 		return false
 	}
 	// abs is where the file sits on this machine, for a caller that hands
 	// the path to a program running here (a file dropped on an agent window)
-	writeJSON(w, http.StatusOK, map[string]any{"status": "saved", "path": rel, "abs": p, "size": len(body), "created": created})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "saved", "path": rel, "abs": p, "size": size, "created": created})
 	return true
 }
 

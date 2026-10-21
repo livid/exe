@@ -175,6 +175,7 @@ func (s *Server) handlePeerManifest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": e.SelfID(), "name": e.SelfName(), "port": e.Port(),
 		"files": e.ManifestSnapshot(), "peers": e.PeerInfos(),
+		"max_file": e.MaxFile(),
 	})
 }
 
@@ -218,7 +219,7 @@ func (s *Server) handlePeerFileGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	body, ver, err := e.FileForPeer(app, rel)
+	body, ver, err := e.FileForPeer(app, rel, peer.Takes(r))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, errors.New("not found"))
 		return
