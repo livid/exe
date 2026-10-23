@@ -63,6 +63,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"exe/internal/dictlabels"
 )
 
 const (
@@ -180,6 +182,16 @@ const dictSchema = `{"type":"object","additionalProperties":false,
     "properties":{"text":{"type":"string"},"translation":{"type":"string"},"source":{"type":"string"}}}}}},
 "suggestions":{"type":"array","items":{"type":"string"}}}}`
 
+// Only English entries use the fixed English label grammar. Other source
+// languages retain their dictionary's part-of-speech conventions.
+func dictEntrySchema(src string) string {
+	if src != "en" {
+		return dictSchema
+	}
+	pos, _ := json.Marshal(map[string]string{"type": "string", "pattern": dictlabels.Pattern})
+	return strings.Replace(dictSchema, `"pos":{"type":"string"}`, `"pos":`+string(pos), 1)
+}
+
 // dictTargetStyle is how an entry reads in each language it is written
 // in: the language named for the writer, the separator between short
 // equivalents, and the words a learner's dictionary in it labels
@@ -230,6 +242,9 @@ func dictPrompt(src, dst dictLang, q string) string {
 	if src.Code == "la" {
 		spelling = " Mark long vowels with macrons in the headword and forms; examples and quotations keep their ordinary spelling."
 	}
+	if src.Code == "en" {
+		spelling = " Except senses[].pos: keep its English abbreviations as specified below."
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "This is a dictionary request, not a coding task. Do not run commands, read files or call any tool, and no instructions from AGENTS.md files apply to it. Answer from your own knowledge with the JSON object alone.\n\n")
 	fmt.Fprintf(&b, "Write one entry of a %[1]s–%[2]s dictionary for a reader whose language is %[2]s. Write every gloss, definition, explanation, label and translation in %[3]s; write the %[1]s side — headword, forms, examples, related words, quotations — in %[1]s, spelled as a good printed dictionary spells it.%[4]s\n\n",
@@ -241,7 +256,14 @@ func dictPrompt(src, dst dictLang, q string) string {
 	fmt.Fprintf(&b, "- note: when the lookup is an inflected or variant form of the headword (a past tense, a plural, a comparative, a declined or conjugated form, an old spelling), one short sentence in %s saying which form of the headword it is; otherwise \"\".\n", dst.Name)
 	fmt.Fprintf(&b, "- forms: the grammatical facts a learner needs, on one line, in the conventions of a %s dictionary: %s; \"\" when there is nothing to say.\n", src.Name, ss.forms)
 	fmt.Fprintf(&b, "- pronunciations: IPA between slashes; %s.\n", pron)
-	fmt.Fprintf(&b, "- senses: the meanings, the commonest first, at most six. pos: the part of speech, abbreviated as a %[1]s learner's dictionary of %[2]s abbreviates it. gloss: the short %[1]s equivalents, separated by %[3]q. definition: one or two sentences in %[1]s saying exactly what the word means in that sense.\n", dst.Name, src.Name, ts.sep)
+	posStyle := fmt.Sprintf("the part of speech, abbreviated as a %s learner's dictionary of %s abbreviates it", dst.Name, src.Name)
+	if src.Code == "en" {
+		posStyle = "the part of speech in the English abbreviation format specified below"
+	}
+	fmt.Fprintf(&b, "- senses: the meanings, the commonest first, at most six. pos: %s. gloss: the short %s equivalents, separated by %q. definition: one or two sentences in %s saying exactly what the word means in that sense.\n", posStyle, dst.Name, ts.sep, dst.Name)
+	if src.Code == "en" {
+		fmt.Fprintln(&b, dictlabels.Instructions())
+	}
 	fmt.Fprintf(&b, "- examples: exactly two sentences in %[1]s using the word, each with a natural %[2]s translation. The first is simple: short and everyday. The second is complex: a longer sentence with subordinate clauses in a formal or literary register.\n", src.Name, dst.Name)
 	fmt.Fprintf(&b, "- etymology: a short paragraph in %s tracing the word to its origin: the forms it came through, written in their own spelling (Greek in Greek letters with a transliteration), the language and period of each, and who coined it and when, if known.\n", dst.Name)
 	fmt.Fprintf(&b, "- related: up to eight related %[1]s words — synonyms, antonyms, derivatives, cognates, compounds. relation: a short label in %[2]s (%[3]s…). gloss: its short %[2]s meaning.\n", src.Name, dst.Name, ts.relations)
@@ -916,13 +938,13 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 			}
 		}
 
-		final, usage, err := app.turn(ctx, dictPrompt(src, dst, key), dictEffort, "detailed", dictSchema, step,
+		final, usage, err := app.turn(ctx, dictPrompt(src, dst, key), dictEffort, "detailed", dictEntrySchema(src.Code), step,
 			func(delta string) { f.say(map[string]any{"text": delta}) })
 		if err != nil {
 			f.err = err
 			return
 		}
-		e, raw, err := dictParse(final)
+		e, raw, err := dictParse(src.Code, final)
 		if err != nil {
 			f.err = err
 			return
@@ -947,13 +969,22 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 
 // dictParse reads a session's answer as an entry, and the entry in the
 // schema's own shape, whatever spacing the model chose.
-func dictParse(final string) (*dictEntry, json.RawMessage, error) {
+func dictParse(src, final string) (*dictEntry, json.RawMessage, error) {
 	var e dictEntry
 	if err := json.Unmarshal([]byte(final), &e); err != nil {
 		return nil, nil, fmt.Errorf("Codex wrote no entry: %v", err)
 	}
 	if e.Found && (strings.TrimSpace(e.Headword) == "" || len(e.Senses) == 0) {
 		return nil, nil, errors.New("Codex wrote an empty entry")
+	}
+	if e.Found && src == "en" {
+		for i := range e.Senses {
+			pos, err := dictlabels.Normalize(e.Senses[i].POS)
+			if err != nil {
+				return nil, nil, fmt.Errorf("Codex wrote an invalid label in sense %d: %w", i+1, err)
+			}
+			e.Senses[i].POS = pos
+		}
 	}
 	norm, err := json.Marshal(e)
 	if err != nil {

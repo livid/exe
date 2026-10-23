@@ -11,5 +11,5 @@ before it said is kept in CHANGELOG.md.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.
 - **Windows → Configuration → General** sets the language of the desk: English, 简体中文 or 日本語.
 - **Configuration → Cloudflare** shows the account, zone and tunnel by name; **Change…** opens the wizard.
-- **Configuration → Hub** shows this node's hub ID and the hub it joined; **Join a Hub…** joins another.
+- **Dict** uses English labels like **n.** and **adj.** consistently, preserving grammar such as **[U]**.
 - **Upload to Workspace…** takes files up to 100 MB, up from 10 MB, and joined desks sync them at that size.

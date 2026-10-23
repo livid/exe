@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"exe/internal/config"
+	"exe/internal/dictlabels"
 )
 
 // The test binary is its own stand-in for the Codex CLI: run with
@@ -263,6 +264,10 @@ func TestDictWritesThenKeeps(t *testing.T) {
 	json.Unmarshal(b, &turn)
 	if turn.Effort != "xhigh" || turn.Summary != "detailed" || turn.OutputSchema["type"] != "object" || len(turn.Input) != 1 {
 		t.Fatalf("turn/start = %s", b)
+	}
+	posSchema := turn.OutputSchema["properties"].(map[string]any)["senses"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["pos"].(map[string]any)
+	if posSchema["pattern"] != dictlabels.Pattern {
+		t.Fatalf("English label constraint not sent to Codex: %v", posSchema)
 	}
 	b, _ = os.ReadFile(filepath.Join(dir, "spellturn"))
 	if !strings.Contains(string(b), `"effort":"medium"`) || !strings.Contains(string(b), `They typed: \"serendipity\"`) {

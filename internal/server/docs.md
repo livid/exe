@@ -4451,6 +4451,12 @@ Under the headword an entry gives, from the top:
 
 A Chinese entry is written in Simplified Chinese.
 
+For English words, the part-of-speech labels stay in English abbreviations:
+`n.`, `adj.`, `adv.`, `v.`, `vt.` (transitive) and `vi.` (intransitive),
+for example. `[C]` and `[U]` mean countable and uncountable; `sing.` and
+`pl.` mean singular and plural, and `usu.` means usually. The definitions
+and explanations remain in the language you chose.
+
 ### Inflected forms and typos
 
 Look up an inflected form (*ran*, *ging*, *amāvī*) and you get the
