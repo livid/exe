@@ -39,6 +39,11 @@ type system struct {
 	// 10.4.11) the HID driver drops 15%, 7.5% at each edge, and has no
 	// setting for it. The viewer finds out which and tells the daemon.
 	trims []float64
+	// gpu: the Mac gets the qegl device when the emulator has it, OpenGL
+	// passed through to this machine's GPU. With the guest's drivers Tiger
+	// composites with Quartz Extreme and runs Core Image there; without them
+	// the device sits unused. Mac OS 9 has nothing that would use it.
+	gpu bool
 }
 
 // A forward is a service inside the Mac that this machine, and nothing
@@ -110,6 +115,7 @@ var macOSX = &system{
 	forwards: []forward{{"ssh", 22}, {"vnc", 5900}},
 	ethernet: "52:54:00:10:04:00",
 	trims:    []float64{0, 0.15},
+	gpu:      true,
 }
 
 func macOSXMachine(installer bool) []string {

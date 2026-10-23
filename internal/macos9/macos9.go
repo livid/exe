@@ -347,6 +347,36 @@ func (m *Manager) hasAudioRuntime() bool {
 	}
 	return true
 }
+// The qegl device (OpenGL on this machine's GPU for Mac OS X) is not in
+// upstream QEMU either: an emulator has it when it lists its options. Asked
+// once per emulator file.
+var qeglChecked struct {
+	sync.Mutex
+	key string
+	has bool
+}
+
+func (m *Manager) hasQegl() bool {
+	bin := m.binary("qemu-system-ppc")
+	info, err := os.Stat(bin)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	key := fmt.Sprintf("%s %d %d", bin, info.Size(), info.ModTime().UnixNano())
+	qeglChecked.Lock()
+	defer qeglChecked.Unlock()
+	if qeglChecked.key != key {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, "-device", "qegl,help")
+		cmd.Env = m.env()
+		out, err := cmd.CombinedOutput()
+		qeglChecked.key = key
+		qeglChecked.has = err == nil && strings.Contains(string(out), "qegl options")
+	}
+	return qeglChecked.has
+}
+
 func (m *Manager) env() []string { return runtimeEnv(m.runtimePath("runtime")) }
 func runtimeEnv(dir string) []string {
 	env := os.Environ()
@@ -682,6 +712,9 @@ func (m *Manager) launchArgs(installer bool) []string {
 		args = append(args, "-cdrom", m.path("media/"+m.sys.media), "-boot", "d")
 	} else {
 		args = append(args, "-boot", "c", "-netdev", m.sys.network+m.hostForwards(), "-device", "sungem,netdev=net0,mac="+m.sys.ethernet)
+		if m.sys.gpu && m.hasQegl() {
+			args = append(args, "-device", "qegl")
+		}
 	}
 	return args
 }

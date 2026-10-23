@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -118,6 +119,34 @@ func TestMacOSXRunsTheSharedRuntime(t *testing.T) {
 		if !strings.Contains(sound, want) {
 			t.Errorf("sound launch lacks %q", want)
 		}
+	}
+}
+
+// An emulator with the qegl device (OpenGL on this machine's GPU) gives it
+// to Mac OS X's installed system: the guest's drivers make Quartz Extreme
+// and Core Image of it. Not to the install boot, not to Mac OS 9, and not
+// from an emulator that lacks it.
+func TestMacOSXGetsTheGPUDeviceWhenTheEmulatorHasIt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX emulator fixture")
+	}
+	root, shared := t.TempDir(), t.TempDir()
+	m := NewMacOSX(root, shared)
+	writeFixture(t, filepath.Join(shared, "audio/openbios-ppc"), "firmware", 0600)
+	writeFixture(t, filepath.Join(shared, "audio/qemu-system-ppc"), "#!/bin/sh\necho 'screamer options:'\n", 0700)
+	if strings.Contains(strings.Join(m.launchArgs(false), " "), "qegl") {
+		t.Fatal("the GPU device from an emulator without it")
+	}
+	// a new emulator file is asked again
+	writeFixture(t, filepath.Join(shared, "audio/qemu-system-ppc"), "#!/bin/sh\n[ \"$2\" = qegl,help ] && echo 'qegl options:' && echo '  apps=<uint32>'\n", 0700)
+	if !strings.Contains(" "+strings.Join(m.launchArgs(false), " ")+" ", " -device qegl ") {
+		t.Fatalf("an installed Mac OS X lacks the GPU device: %q", m.launchArgs(false))
+	}
+	if strings.Contains(strings.Join(m.launchArgs(true), " "), "qegl") {
+		t.Fatal("the install boot has the GPU device")
+	}
+	if strings.Contains(strings.Join(New(shared).launchArgs(false), " "), "qegl") {
+		t.Fatal("Mac OS 9 has the GPU device")
 	}
 }
 
