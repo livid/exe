@@ -222,6 +222,9 @@ function connect() {
   const client = new RFB(display, url.href, {wsProtocols: ['binary']});
   rfb = client; client.scaleViewport = true; client.resizeSession = false; client.background = '#333';
   client.pointerTrim = trim;
+  // three update requests in flight: exe's QEMU answers each, so frames keep coming while
+  // the last one crosses the network (core/rfb.js framesInFlight)
+  client.framesInFlight = 3;
   client.addEventListener('capabilities', () => {
     if (rfb !== client) return;
     updateSound();

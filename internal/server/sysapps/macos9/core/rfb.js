@@ -199,6 +199,11 @@ export default class RFB extends EventTargetMixin {
         this._mouseButtonMask = 0;
         this._mouseLastMoveTime = 0;
         this.pointerTrim = 0; // exe: see pointerTarget
+        // exe: update requests kept in flight. A server that answers each request (exe's
+        // QEMU counts them) then sends the next frame while this one is on the way, so a
+        // network round trip no longer allows only one frame; to any other server the
+        // extra requests are the same request again.
+        this.framesInFlight = 1;
         this._viewportDragging = false;
         this._viewportDragPos = {};
         this._viewportHasMoved = false;
@@ -2278,6 +2283,9 @@ export default class RFB extends EventTargetMixin {
         RFB.messages.pixelFormat(this._sock, this._fbDepth, true);
         this._sendEncodings();
         RFB.messages.fbUpdateRequest(this._sock, false, 0, 0, this._fbWidth, this._fbHeight);
+        for (let i = 1; i < this.framesInFlight; i++) {
+            RFB.messages.fbUpdateRequest(this._sock, true, 0, 0, this._fbWidth, this._fbHeight);
+        }
 
         this._updateConnectionState('connected');
         return true;
