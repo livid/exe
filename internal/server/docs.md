@@ -850,7 +850,24 @@ sessions, one row for each tmux session. Each is a conversation of its own.
   The width is kept with the window's layout.
 
 The list runs newest first, so the session the icon first opened is normally
-at the bottom. On a phone the column is a strip of tabs above the terminal,
+at the bottom.
+
+In the Claude Code window, the sessions are grouped by the day they started.
+Each day has a row of its own, such as **Today**, **Yesterday** or **Tue,
+Oct 20**, with a triangle at its left and the number of sessions at its
+right.
+
+- **Show or hide a day.** Click the day's row. Option-click (Alt-click on
+  Windows) shows or hides every day.
+- **All days at once.** Right-click a day and choose **Expand All** or
+  **Collapse All**.
+
+Today is open and older days are closed. The day of the session on screen
+opens when the window comes to that session. This browser remembers the days
+you open or close. A closed day shows a black dot when one of its sessions
+waits for you, or a green dot when one is working.
+
+On a phone the column is a strip of tabs above the terminal,
 and a row of keys under it sends **Esc**, **Tab**, **Shift-Tab** and the
 arrows, which the phone's keyboard has not.
 

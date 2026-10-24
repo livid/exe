@@ -1293,6 +1293,22 @@ a.svc:hover { text-decoration: underline; }
 .sess-away { flex: none; width: 7px; height: 7px; display: block; }
 .sess-away svg { display: block; }
 .sess-row.pending .t { color: #777; }
+/* the Claude Code window's days: a row over each day's sessions, the
+   rows' 18px and their line, with the Finder's disclosure triangle 5px
+   in (FL_SHUT, FL_OPEN, darkened while pressed) and the day's count at
+   its right in the prompt line's 10px #777. A shut day wears its rows'
+   bell or green dot before the count; an open one's rows stand under
+   its date, 20px in, as an open folder's items stand in the Finder */
+.sess-day { display: flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 5px;
+  white-space: nowrap; border-bottom: 1px solid #efefef; }
+.sess-day .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sess-day .n { flex: none; font-size: 10px; color: #777; }
+.sess-tri { flex: none; width: 10px; height: 11px; }
+.sess-tri svg { display: block; }
+.sess-day:active .tf { fill: #333366; }
+.sess-day:active .ts { fill: #444; }
+.sess-day:active .tu { fill: #555; }
+.sess-row.in { padding-left: 20px; }
 .sess-btns { flex: none; border-top: 1px solid var(--black); padding: 12px; display: flex; justify-content: center; gap: 12px; }
 /* New, and in the Claude Code window Search beside it: one width for the
    set, the HIG's 58px, 12px apart. A column dragged too narrow for both
@@ -1723,6 +1739,7 @@ body.mobile .agent-main { flex: 1; min-height: 0; }
 body.mobile .sess-col { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--black); contain: none; }
 body.mobile .sess-list { display: flex; overflow-x: auto; overflow-y: hidden; }
 body.mobile .sess-row { flex: none; max-width: 150px; height: auto; padding: 0 8px; border-bottom: 0; border-right: 1px solid #efefef; }
+body.mobile .sess-day { flex: none; height: auto; padding: 0 8px 0 5px; border-bottom: 0; border-right: 1px solid #efefef; }
 body.mobile .sess-sep { height: auto; width: 0; border-top: 0; border-left: 1px solid var(--black); }
 body.mobile .sess-btns { border-top: 0; border-left: 1px solid var(--black); padding: 6px 8px; gap: 8px; }
 body.mobile .sess-new { flex: none; width: 58px; } /* the strip's cell is as wide as its buttons: New keeps its 58px */
@@ -9525,29 +9542,124 @@ function openHostTermWin(app, cmd, vm, termSess) {
       : d.toLocaleDateString(UI_LOCALE, { year: "numeric", month: "short", day: "numeric" });
     return date + ", " + t;
   };
+  // the Claude Code window's sessions go under the day each started,
+  // the latest day first as the rows are: a row per day wears the
+  // Finder's disclosure triangle, and a click on it shows that day's
+  // sessions or puts them away (Option-click: every day's). Today is
+  // open, any other day shut, until a triangle is turned; the window
+  // landing on a session opens its day too, unless it was shut by hand,
+  // and moving to another session opens that one's. A turn that differs
+  // from the default is remembered in this browser (turned, by local
+  // date), and a day whose sessions have all gone is forgotten. A shut
+  // day wears its rows' bell or green dot, so a session that wants
+  // someone never hides in one
+  const byDay = app === "claude", daysKey = "exe_sessdays_" + app;
+  let turned = {}, dayKeys = [], dayCur = "";
+  try { turned = JSON.parse(localStorage.getItem(daysKey)) || {}; } catch (e) {}
+  const saveTurned = () => { try { localStorage.setItem(daysKey, JSON.stringify(turned)); } catch (e) {} };
+  const dayKey = unix => { const d = new Date(unix * 1000); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
+  const dayOf = name => { const s = sessions.find(x => x.name === name); return s && s.created ? dayKey(s.created) : ""; };
+  const isToday = k => k === dayKey(Date.now() / 1000);
+  const dayOpen = k => Object.hasOwn(turned, k) ? turned[k] : isToday(k);
+  const turnDay = (k, open) => { if (open === isToday(k)) delete turned[k]; else turned[k] = open; };
+  // "Today", "Yesterday", "Wed, Oct 21", the year once it differs
+  const dayLabel = unix => {
+    const d = new Date(unix * 1000), now = new Date();
+    const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const ago = Math.round((day(now) - day(d)) / 864e5);
+    return ago === 0 ? L("Today") : ago === 1 ? L("Yesterday")
+      : d.toLocaleDateString(UI_LOCALE, d.getFullYear() === now.getFullYear()
+        ? { weekday: "short", month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
+  };
+  function turnDays(keys, open) {
+    for (const k of keys) turnDay(k, open);
+    saveTurned();
+    renderSessions();
+  }
+  // a day's menu: every day opened or shut at once, then the list's own
+  function dayMenu(e) {
+    e.preventDefault(); e.stopPropagation();
+    focusWin(w);
+    term.blur();
+    showCtxMenu(e.clientX, e.clientY, [
+      { label: L("Expand All"), dis: dayKeys.every(dayOpen), act: () => turnDays(dayKeys, true) },
+      { label: L("Collapse All"), dis: !dayKeys.some(dayOpen), act: () => turnDays(dayKeys, false) },
+      "-",
+      { label: L("New Session"), act: sendNew },
+    ], () => term.focus());
+  }
+  function dayRow(k, group, open) {
+    // off screen, wanting someone outranks working, as on a row
+    const off = group.filter(s => s.name !== current);
+    const wants = !open && off.some(s => s.wants || s.bell), working = !open && !wants && off.some(s => s.working);
+    const d = new Date(group[0].created * 1000), n = group.length;
+    const row = el("div", { class: "sess-day",
+      title: d.toLocaleDateString(UI_LOCALE, { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+        + L`\n${n} session${n === 1 ? "" : "s"} started this day`
+        + (wants ? L("\na session in it is waiting for you") : working ? L("\na session in it is still working") : "") });
+    const tri = el("span", { class: "sess-tri" });
+    tri.innerHTML = open ? FL_OPEN : FL_SHUT;
+    row.append(tri, el("span", { class: "t" }, dayLabel(group[0].created)));
+    if (wants) row.append(sessBell());
+    else if (working) row.append(el("span", { class: "sess-live" }));
+    row.append(el("span", { class: "n" }, n.toLocaleString(UI_LOCALE)));
+    row.onclick = e => { turnDays(e.altKey ? dayKeys : [k], !open); term.focus(); };
+    row.addEventListener("contextmenu", dayMenu);
+    return row;
+  }
+  function sessRow(s, inDay) {
+    // the current row carries no mark: the terminal itself shows its
+    // state. Off screen, wanting someone outranks working — the hooks'
+    // word (finished at its prompt, or a permission or question; Codex
+    // says "done" through its notify command), or the bell, which
+    // Codex rings for a finished turn and an approval
+    const off = s.name !== current;
+    const wants = off && (s.wants || s.bell), working = off && s.working && !wants;
+    const why = !wants ? (working ? L("\nstill working") : "")
+      : s.state === "waiting" ? L("\nwaiting for you: a permission, or a question")
+      : s.state === "done" ? L("\nfinished its turn — waiting for you")
+      : L("\nrang the bell while no window was showing it");
+    const row = el("div", { class: "sess-row" + (inDay ? " in" : "") + (s.name === current ? " sel" : "") + (s.title ? "" : " untitled"),
+      title: sessTitle(s) + (s.name ? "\n" + s.name : "") + why + (s.created ? L`\nstarted ${new Date(s.created * 1000).toLocaleString(UI_LOCALE)}` : "") });
+    if (wants) row.append(sessBell());
+    else if (working) row.append(el("span", { class: "sess-live" }));
+    row.append(el("span", { class: "t" }, sessTitle(s)));
+    row.onclick = () => { if (s.name && s.name !== current) switchSession(s.name); term.focus(); };
+    row.addEventListener("contextmenu", e => sessMenu(e, s));
+    return row;
+  }
+  // the column's rows: the sessions, under their days in the Claude Code
+  // window — the latest first, so a day's are together. The row the
+  // window opens on, before the first frame, has no day yet and stands alone
+  function sessRows() {
+    if (!byDay) return sessions.map(s => sessRow(s));
+    const days = [];
+    for (const s of sessions) {
+      const k = s.created ? dayKey(s.created) : "";
+      if (!days.length || days[days.length - 1].k !== k) days.push({ k, group: [] });
+      days[days.length - 1].group.push(s);
+    }
+    dayKeys = days.map(d => d.k).filter(Boolean);
+    if (dayKeys.length) {
+      // the window landed on a session, or moved to another: its day opens
+      const k = dayOf(current), was = JSON.stringify(turned);
+      if (k && current !== dayCur) {
+        if (!dayOpen(k) && (dayCur || !Object.hasOwn(turned, k))) turnDay(k, true);
+        dayCur = current;
+      }
+      // and a turn that is the default now (yesterday was today) or whose day has gone is let go
+      for (const t of Object.keys(turned)) if (!dayKeys.includes(t) || turned[t] === isToday(t)) delete turned[t];
+      if (JSON.stringify(turned) !== was) saveTurned();
+    }
+    return days.flatMap(({ k, group }) => {
+      if (!k) return group.map(s => sessRow(s));
+      const open = dayOpen(k);
+      return [dayRow(k, group, open), ...(open ? group.map(s => sessRow(s, true)) : [])];
+    });
+  }
   function renderSessions() {
     if (!list) return;
-    list.replaceChildren(...sessions.map(s => {
-      // the current row carries no mark: the terminal itself shows its
-      // state. Off screen, wanting someone outranks working — the hooks'
-      // word (finished at its prompt, or a permission or question; Codex
-      // says "done" through its notify command), or the bell, which
-      // Codex rings for a finished turn and an approval
-      const off = s.name !== current;
-      const wants = off && (s.wants || s.bell), working = off && s.working && !wants;
-      const why = !wants ? (working ? L("\nstill working") : "")
-        : s.state === "waiting" ? L("\nwaiting for you: a permission, or a question")
-        : s.state === "done" ? L("\nfinished its turn — waiting for you")
-        : L("\nrang the bell while no window was showing it");
-      const row = el("div", { class: "sess-row" + (s.name === current ? " sel" : "") + (s.title ? "" : " untitled"),
-        title: sessTitle(s) + (s.name ? "\n" + s.name : "") + why + (s.created ? L`\nstarted ${new Date(s.created * 1000).toLocaleString(UI_LOCALE)}` : "") });
-      if (wants) row.append(sessBell());
-      else if (working) row.append(el("span", { class: "sess-live" }));
-      row.append(el("span", { class: "t" }, sessTitle(s)));
-      row.onclick = () => { if (s.name && s.name !== current) switchSession(s.name); term.focus(); };
-      row.addEventListener("contextmenu", e => sessMenu(e, s));
-      return row;
-    }), ...(threads.length ? [el("div", { class: "sess-sep" })] : []), ...threads.map(t => {
+    list.replaceChildren(...sessRows(), ...(threads.length ? [el("div", { class: "sess-sep" })] : []), ...threads.map(t => {
       // a thread from elsewhere: the green dot while a turn runs there,
       // the hollow dot otherwise — it is not here yet
       const row = el("div", { class: "sess-row" + (t.title ? "" : " untitled") + (t.thread === pending ? " pending" : ""),

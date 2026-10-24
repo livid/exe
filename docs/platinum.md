@@ -829,7 +829,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
   current one the same way. A row's mark sits left of its
   title: the 7px black dot when the session wants someone (a hook's word,
   or the bell), or the Chat list's 6px pulsing green dot while it works
-  unwatched — green means "live" everywhere.
+  unwatched — green means "live" everywhere. In the Claude Code window
+  the sessions go under the day each started (`.sess-day`): a row of
+  the same 18px and line, the Finder's disclosure triangle (`FL_SHUT`,
+  `FL_OPEN`, darkened while the row is pressed) 5px in and 3px down,
+  the day ("Today", "Yesterday", "Tue, Oct 20", the year once it
+  differs) and its count at the right in 10px `#777`. An open day's rows
+  stand 20px in, under its date; a shut day wears its rows' black or
+  green dot before the count. Today is open by default; the browser
+  keeps the turns that differ (`exe_sessdays_claude`).
 
 - A terminal window's key row on a phone (`.keyrow`, `keyRowButtons`):
   the keys a phone's keyboard has not, in a row of their own under the

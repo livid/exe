@@ -9,7 +9,7 @@ before it said is kept in CHANGELOG.md.
 - In Mac OS X, **Go → Connect to Server…** mounts the Workspace, with the address under **Setup…**.
 - On a phone, a key row under the terminal windows sends **Esc**, **Tab**, **Shift-Tab** and the arrows.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.
+- The **Claude Code** window groups its sessions by the day they started; click a day to show or hide it.
 - **Windows → Configuration → General** sets the language of the desk: English, 简体中文 or 日本語.
 - **Configuration → Cloudflare** shows the account, zone and tunnel by name; **Change…** opens the wizard.
-- **Dict** uses English labels like **n.** and **adj.** consistently, preserving grammar such as **[U]**.
 - **Upload to Workspace…** takes files up to 100 MB, up from 10 MB, and joined desks sync them at that size.
