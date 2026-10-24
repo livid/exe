@@ -352,15 +352,32 @@ func (m *Manager) hasAudioRuntime() bool {
 // once per emulator file.
 var qeglChecked struct {
 	sync.Mutex
-	key string
-	has bool
+	key      string
+	has, log bool // the device, and its logfile property
 }
 
-func (m *Manager) hasQegl() bool {
+// qeglDevice is the -device argument for the Mac's GPU device, "" without
+// one. Its log goes to qegl.log in the Mac's folder: a daemonized emulator
+// writes its own messages nowhere.
+func (m *Manager) qeglDevice() string {
+	if !m.sys.gpu {
+		return ""
+	}
+	has, log := m.qeglSupport()
+	if !has {
+		return ""
+	}
+	if !log {
+		return "qegl"
+	}
+	return "qegl,logfile=" + strings.ReplaceAll(m.path("qegl.log"), ",", ",,")
+}
+
+func (m *Manager) qeglSupport() (has, log bool) {
 	bin := m.binary("qemu-system-ppc")
 	info, err := os.Stat(bin)
 	if err != nil || !info.Mode().IsRegular() {
-		return false
+		return false, false
 	}
 	key := fmt.Sprintf("%s %d %d", bin, info.Size(), info.ModTime().UnixNano())
 	qeglChecked.Lock()
@@ -373,8 +390,9 @@ func (m *Manager) hasQegl() bool {
 		out, err := cmd.CombinedOutput()
 		qeglChecked.key = key
 		qeglChecked.has = err == nil && strings.Contains(string(out), "qegl options")
+		qeglChecked.log = qeglChecked.has && strings.Contains(string(out), "logfile=")
 	}
-	return qeglChecked.has
+	return qeglChecked.has, qeglChecked.log
 }
 
 func (m *Manager) env() []string { return runtimeEnv(m.runtimePath("runtime")) }
@@ -712,8 +730,8 @@ func (m *Manager) launchArgs(installer bool) []string {
 		args = append(args, "-cdrom", m.path("media/"+m.sys.media), "-boot", "d")
 	} else {
 		args = append(args, "-boot", "c", "-netdev", m.sys.network+m.hostForwards(), "-device", "sungem,netdev=net0,mac="+m.sys.ethernet)
-		if m.sys.gpu && m.hasQegl() {
-			args = append(args, "-device", "qegl")
+		if dev := m.qeglDevice(); dev != "" {
+			args = append(args, "-device", dev)
 		}
 	}
 	return args

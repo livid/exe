@@ -148,6 +148,11 @@ func TestMacOSXGetsTheGPUDeviceWhenTheEmulatorHasIt(t *testing.T) {
 	if strings.Contains(strings.Join(New(shared).launchArgs(false), " "), "qegl") {
 		t.Fatal("Mac OS 9 has the GPU device")
 	}
+	// an emulator whose device can log: to the Mac's folder
+	writeFixture(t, filepath.Join(shared, "audio/qemu-system-ppc"), "#!/bin/sh\n[ \"$2\" = qegl,help ] && echo 'qegl options:' && echo '  logfile=<str>'\n", 0700)
+	if want := " -device qegl,logfile=" + filepath.Join(root, "qegl.log") + " "; !strings.Contains(" "+strings.Join(m.launchArgs(false), " ")+" ", want) {
+		t.Fatalf("the GPU device does not log to the Mac's folder: %q", m.launchArgs(false))
+	}
 }
 
 // An install DVD is gigabytes: a download that stopped goes on from the
