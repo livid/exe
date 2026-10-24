@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	"exe/internal/macos9"
+	"exe/internal/vncpace"
 	"github.com/coder/websocket"
 )
 
@@ -128,10 +128,15 @@ func (s *Server) handleMacOS9Console(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	conn := websocket.NetConn(ctx, ws, websocket.MessageBinary)
-	done := make(chan struct{}, 1)
-	go func() { _, _ = io.Copy(tcp, conn); done <- struct{}{} }()
-	go func() { _, _ = io.Copy(conn, tcp); done <- struct{}{} }()
-	<-done
+	// The relay paces the screen updates: it keeps a request waiting at the emulator, next to
+	// it, and sends on what the viewer asked for, so a network round trip does not hold up
+	// each frame (internal/vncpace).
+	done := make(chan struct{})
+	go func() { _ = vncpace.Relay(conn, tcp); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 	cancel()
 	_ = tcp.Close()
 	_ = ws.CloseNow()

@@ -64,6 +64,9 @@ func TestMacOS9APIAuthAndOrigin(t *testing.T) {
 		}
 	}
 }
+
+// The console carries the Mac's VNC session to the browser unchanged, through the relay that
+// paces it (internal/vncpace): a handshake, a request, an update.
 func TestMacOS9ConsoleBinaryProxy(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "mac-os9")
@@ -73,13 +76,27 @@ func TestMacOS9ConsoleBinaryProxy(t *testing.T) {
 		t.Skip(err)
 	}
 	defer ln.Close()
+	update := []byte{0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 2, 3, 4} // one raw pixel
+	requests := make(chan []byte, 2)
 	go func() {
 		c, e := ln.Accept()
 		if e != nil {
 			return
 		}
 		defer c.Close()
-		io.Copy(c, c)
+		c.Write([]byte("RFB 003.008\n"))
+		io.ReadFull(c, make([]byte, 12))
+		c.Write([]byte{1, 1})
+		io.ReadFull(c, make([]byte, 1))
+		c.Write([]byte{0, 0, 0, 0})
+		io.ReadFull(c, make([]byte, 1))
+		c.Write([]byte{0, 1, 0, 1, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0, 0, 0, 0, 0})
+		req := make([]byte, 10)
+		if _, e := io.ReadFull(c, req); e == nil {
+			requests <- req
+			c.Write(update)
+		}
+		io.Copy(io.Discard, c)
 	}()
 	srv := httptest.NewServer(New(&config.Config{APIToken: "test-secret"}, nil, nil, "", root).Handler())
 	defer srv.Close()
@@ -90,16 +107,42 @@ func TestMacOS9ConsoleBinaryProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ws.CloseNow()
-	payload := []byte{0, 1, 2, 255, 128, 0, 10}
-	if err = ws.Write(ctx, websocket.MessageBinary, payload); err != nil {
-		t.Fatal(err)
+	var got []byte
+	read := func(n int) []byte {
+		for len(got) < n {
+			typ, data, err := ws.Read(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if typ != websocket.MessageBinary {
+				t.Fatalf("message type %v", typ)
+			}
+			got = append(got, data...)
+		}
+		b := got[:n]
+		got = got[n:]
+		return b
 	}
-	typ, data, err := ws.Read(ctx)
-	if err != nil {
-		t.Fatal(err)
+	send := func(b []byte) {
+		if err := ws.Write(ctx, websocket.MessageBinary, b); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if typ != websocket.MessageBinary || string(data) != string(payload) {
-		t.Fatalf("corrupt VNC transport: %v %v", typ, data)
+	if v := read(12); string(v) != "RFB 003.008\n" {
+		t.Fatalf("corrupt VNC transport: %q", v)
+	}
+	send([]byte("RFB 003.008\n"))
+	read(2)
+	send([]byte{1})
+	read(4)
+	send([]byte{1})
+	read(24)
+	send([]byte{3, 0, 0, 0, 0, 0, 0, 1, 0, 1})
+	if r := <-requests; r[0] != 3 || r[1] != 0 {
+		t.Fatalf("the request reached the Mac as %v", r)
+	}
+	if u := read(len(update)); string(u) != string(update) {
+		t.Fatalf("corrupt VNC transport: %v", u)
 	}
 }
 func TestMacOS9BuiltInAssets(t *testing.T) {

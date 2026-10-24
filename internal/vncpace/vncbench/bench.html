@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>vncbench</title>
+<style>body { margin: 0; background: #333 } #screen { width: 1024px; height: 768px }</style>
+<div id="screen"></div>
+<script type="module">
+// exe's viewer as the Mac apps set it up (sysapps/macos9/app.js connect()), counting each
+// framebuffer update it finishes reading, and the time between them.
+import RFB from './core/rfb.js';
+const st = window.stats = { frames: 0, gaps: [], t0: 0, connected: false };
+const read = RFB.prototype._framebufferUpdate;
+let last = 0;
+RFB.prototype._framebufferUpdate = function () {
+  const done = read.call(this);
+  if (done) {
+    const now = performance.now();
+    st.frames++;
+    if (last) st.gaps.push(now - last);
+    last = now;
+  }
+  return done;
+};
+const url = new URL('/console', location.href);
+url.protocol = 'ws:';
+const rfb = new RFB(document.getElementById('screen'), url.href, { wsProtocols: ['binary'] });
+rfb.scaleViewport = true; rfb.resizeSession = false; rfb.background = '#333';
+rfb.framesInFlight = Number(new URLSearchParams(location.search).get('inflight') || 1);
+rfb.addEventListener('connect', () => { st.connected = true; });
+window.restart = () => { st.frames = 0; st.gaps = []; last = 0; st.t0 = performance.now(); };
+</script>
