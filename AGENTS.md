@@ -60,7 +60,7 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   own — /www/exe-stats, `replace`d locally until it is published) into
   `~/.exe/stats.db`, and read back at exe.v2core.com/stats.
 - Test: `go test ./...`. Check UI in headless Chromium
-  (`~/tools/playwright`, node at `~/.nvm/versions/node/v24.15.0/bin`);
+  (`~/tools/playwright`, node at `~/.nvm/versions/node/v24.22.1/bin`);
   screenshot and look at every UI change at device pixel ratios 1, 1.5
   (Livid uses Windows at 150 percent) and 2. A desk page loaded against
   the live daemon reopens Livid's unattached Terminal sessions (real
