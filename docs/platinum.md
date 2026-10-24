@@ -836,8 +836,8 @@ restyling: `internal/server/ui/index.html` (the desktop),
   the day ("Today", "Yesterday", "Tue, Oct 20", the year once it
   differs) and its count at the right in 10px `#777`. An open day's rows
   stand 20px in, under its date; a shut day wears its rows' black or
-  green dot before the count. Today is open by default; the browser
-  keeps the turns that differ (`exe_sessdays_claude`).
+  green dot before the count. Every day is open by default; the browser
+  keeps the days shut by hand (`exe_sessdays_claude`).
 
 - A terminal window's key row on a phone (`.keyrow`, `keyRowButtons`):
   the keys a phone's keyboard has not, in a row of their own under the

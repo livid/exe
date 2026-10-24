@@ -862,10 +862,10 @@ right.
 - **All days at once.** Right-click a day and choose **Expand All** or
   **Collapse All**.
 
-Today is open and older days are closed. The day of the session on screen
-opens when the window comes to that session. This browser remembers the days
-you open or close. A closed day shows a black dot when one of its sessions
-waits for you, or a green dot when one is working.
+Every day is open until you close it. A closed day opens again when the
+window moves to one of its sessions. This browser remembers the days you
+close. A closed day shows a black dot when one of its sessions waits for
+you, or a green dot when one is working.
 
 On a phone the column is a strip of tabs above the terminal,
 and a row of keys under it sends **Esc**, **Tab**, **Shift-Tab** and the

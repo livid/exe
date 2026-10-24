@@ -1298,7 +1298,8 @@ a.svc:hover { text-decoration: underline; }
    in (FL_SHUT, FL_OPEN, darkened while pressed) and the day's count at
    its right in the prompt line's 10px #777. A shut day wears its rows'
    bell or green dot before the count; an open one's rows stand under
-   its date, 20px in, as an open folder's items stand in the Finder */
+   its date, 20px in, as an open folder's items stand in the Finder.
+   Every day is open until shut by hand */
 .sess-day { display: flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 5px;
   white-space: nowrap; border-bottom: 1px solid #efefef; }
 .sess-day .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -9545,23 +9546,21 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // the Claude Code window's sessions go under the day each started,
   // the latest day first as the rows are: a row per day wears the
   // Finder's disclosure triangle, and a click on it shows that day's
-  // sessions or puts them away (Option-click: every day's). Today is
-  // open, any other day shut, until a triangle is turned; the window
-  // landing on a session opens its day too, unless it was shut by hand,
-  // and moving to another session opens that one's. A turn that differs
-  // from the default is remembered in this browser (turned, by local
-  // date), and a day whose sessions have all gone is forgotten. A shut
-  // day wears its rows' bell or green dot, so a session that wants
-  // someone never hides in one
+  // sessions or puts them away (Option-click: every day's). Every day
+  // is open until its triangle is turned; a day shut by hand stays shut
+  // when the window lands on a session of it, and opens when the window
+  // moves to one. This browser remembers the days shut (turned, by local
+  // date) and forgets a day whose sessions have all gone. A shut day
+  // wears its rows' bell or green dot, so a session that wants someone
+  // never hides in one
   const byDay = app === "claude", daysKey = "exe_sessdays_" + app;
   let turned = {}, dayKeys = [], dayCur = "";
   try { turned = JSON.parse(localStorage.getItem(daysKey)) || {}; } catch (e) {}
   const saveTurned = () => { try { localStorage.setItem(daysKey, JSON.stringify(turned)); } catch (e) {} };
   const dayKey = unix => { const d = new Date(unix * 1000); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
   const dayOf = name => { const s = sessions.find(x => x.name === name); return s && s.created ? dayKey(s.created) : ""; };
-  const isToday = k => k === dayKey(Date.now() / 1000);
-  const dayOpen = k => Object.hasOwn(turned, k) ? turned[k] : isToday(k);
-  const turnDay = (k, open) => { if (open === isToday(k)) delete turned[k]; else turned[k] = open; };
+  const dayOpen = k => turned[k] !== false;
+  const turnDay = (k, open) => { if (open) delete turned[k]; else turned[k] = false; };
   // "Today", "Yesterday", "Wed, Oct 21", the year once it differs
   const dayLabel = unix => {
     const d = new Date(unix * 1000), now = new Date();
@@ -9641,14 +9640,14 @@ function openHostTermWin(app, cmd, vm, termSess) {
     }
     dayKeys = days.map(d => d.k).filter(Boolean);
     if (dayKeys.length) {
-      // the window landed on a session, or moved to another: its day opens
+      // the window moved to another session: its day opens
       const k = dayOf(current), was = JSON.stringify(turned);
       if (k && current !== dayCur) {
-        if (!dayOpen(k) && (dayCur || !Object.hasOwn(turned, k))) turnDay(k, true);
+        if (dayCur) turnDay(k, true);
         dayCur = current;
       }
-      // and a turn that is the default now (yesterday was today) or whose day has gone is let go
-      for (const t of Object.keys(turned)) if (!dayKeys.includes(t) || turned[t] === isToday(t)) delete turned[t];
+      // and a day that has gone is let go, as is anything but a shut day
+      for (const t of Object.keys(turned)) if (!dayKeys.includes(t) || turned[t] !== false) delete turned[t];
       if (JSON.stringify(turned) !== was) saveTurned();
     }
     return days.flatMap(({ k, group }) => {
