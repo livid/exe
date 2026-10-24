@@ -347,7 +347,7 @@ func (m *Manager) hasAudioRuntime() bool {
 	}
 	return true
 }
-// The qegl device (OpenGL on this machine's GPU for Mac OS X) is not in
+// The qegl device (OpenGL on this machine's GPU for the Macs) is not in
 // upstream QEMU either: an emulator has it when it lists its options. Asked
 // once per emulator file.
 var qeglChecked struct {

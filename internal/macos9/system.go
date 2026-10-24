@@ -41,8 +41,9 @@ type system struct {
 	trims []float64
 	// gpu: the Mac gets the qegl device when the emulator has it, OpenGL
 	// passed through to this machine's GPU. With the guest's drivers Tiger
-	// composites with Quartz Extreme and runs Core Image there; without them
-	// the device sits unused. Mac OS 9 has nothing that would use it.
+	// composites with Quartz Extreme and runs Core Image there, and Mac OS 9's
+	// OpenGL gets a renderer on the GPU from the QEGL Engine extension;
+	// without them the device sits unused.
 	gpu bool
 }
 
@@ -73,6 +74,7 @@ var macOS9 = &system{
 	machine:   macOS9Machine,
 	network:   "user,id=net0",
 	ethernet:  "52:54:00:09:02:22",
+	gpu:       true,
 }
 
 func macOS9Machine(installer bool) []string {
