@@ -3,7 +3,9 @@
 package macos9
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"syscall"
 )
 
@@ -24,3 +26,10 @@ func qemuPIDLocked(path string) (bool, error) {
 	}
 	return lock.Type != syscall.F_UNLCK, nil
 }
+
+// startEmulator starts the Mac: QEMU puts itself in the background (-daemonize)
+func (m *Manager) startEmulator(ctx context.Context, bin string, args []string) error {
+	return m.command(ctx, bin, args...)
+}
+
+func hideWindow(*exec.Cmd) {}

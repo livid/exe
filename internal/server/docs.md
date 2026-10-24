@@ -1571,8 +1571,8 @@ control panels and the software written for it.
   running, and opening it again returns to the same Mac.
 - **A Mac on the network.** Once installed it reaches the internet through
   this machine, and classic HTTP browsers work in it.
-- **The whole screen, and sound.** The Mac can fill your screen, and on a
-  node with the optional audio runtime its sound plays in your browser.
+- **The whole screen, and sound.** The Mac can fill your screen, and its
+  sound plays in your browser.
 
 The Mac is not one of exe's Linux virtual machines. It is emulated in
 software and needs no hypervisor, so it also runs on a node that cannot run
@@ -1580,13 +1580,14 @@ VMs.
 
 ### What it needs
 
-- **An emulator.** Automatic emulator installation supports Ubuntu 24.04.
-  Other hosts need `qemu-system-ppc` and `qemu-img` installed first (on
-  macOS, `brew install qemu`).
+- **An emulator.** exe sets up its own PowerPC emulator, a download of
+  about 6 MB, on Linux (x86-64 or ARM64, glibc 2.35 or later), macOS 11 or
+  later and Windows 10 or later (x86-64). It is QEMU with the Mac's sound
+  hardware and a screen paced for your browser. A Mac set up with an earlier
+  emulator gets it the next time it starts. On other systems, install
+  `qemu-system-ppc` and `qemu-img` first.
 - **Room on this node.** The installer is a 497 MiB download, and the Mac's
   hard disk is 2 GB.
-- **For sound**, an optional audio runtime that exe does not fetch by
-  itself; see **Sound** in this chapter.
 
 ### Set it up the first time
 
@@ -1719,22 +1720,17 @@ visible in Finder; restart the Mac if that happens.
 
 ### Sound
 
-If this node has the optional Mac audio runtime installed, click
-**Sound off** to enable sound in your browser; the button changes to
+Click **Sound off** to enable sound in your browser; the button changes to
 **Sound on**. Click it again to mute. Browser playback needs this first
 click.
 
 - Sound stops when the window is closed or hidden, and an enabled session
   resumes after reconnecting.
-- The button is disabled on nodes without audio support: without the runtime
-  the Mac has no sound.
+- The button is disabled when the Mac runs on an emulator without its sound
+  hardware: one this system supplied, not exe's own.
 - On narrow screens the button shows a speaker glyph.
 - Sound travels through the existing authenticated display connection; it
   does not play through the server's speakers.
-
-exe does not install that runtime by itself; its
-[build and reuse guide](https://github.com/livid/exe/blob/main/docs/macos9-audio.md)
-says how to.
 
 ### Clock and network
 
@@ -1847,9 +1843,8 @@ describes them. What differs:
 - **CD…** takes images up to 9 GiB, so a dual-layer DVD fits. The Mac
   starts with its drive empty: the install DVD stays in the list, to mount
   when you want Xcode from it.
-- **Sound** needs the same optional audio runtime as Mac OS 9's, and the
-  one installation serves both Macs. With it, **Sound off** turns Tiger's
-  sound on in your browser.
+- **Sound** comes from the emulator both Macs share: **Sound off** turns
+  Tiger's sound on in your browser.
 
 ### Restart, shut down and sleep
 

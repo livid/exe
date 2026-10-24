@@ -11,5 +11,5 @@ before it said is kept in CHANGELOG.md.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.
 - The **Claude Code** window groups its sessions by the day they started; click a day to show or hide it.
 - **Windows → Configuration → General** sets the language of the desk: English, 简体中文 or 日本語.
-- **Configuration → Cloudflare** shows the account, zone and tunnel by name; **Change…** opens the wizard.
 - **Upload to Workspace…** takes files up to 100 MB, up from 10 MB, and joined desks sync them at that size.
+- **Mac OS 9** and **Mac OS X** get exe's own emulator everywhere: sound, and a smoother screen remotely.

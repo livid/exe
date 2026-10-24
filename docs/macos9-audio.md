@@ -1,5 +1,9 @@
 # Build and reuse the Mac OS 9 sound runtime
 
+**Superseded (2026-10-24):** exe now fetches its own emulator, Screamer included, for every
+system it runs on ([emulator.md](emulator.md)). This recipe is how the first sound runtime was
+built by hand; a runtime it put in `audio/` is still used where the runtime is not exe's own.
+
 This is the recipe behind the working Mac OS 9 sound setup on Spark, verified
 on **2026-09-08**. Use the pinned source and matching firmware below to reproduce
 it. The tested host is **Ubuntu 24.04, Linux aarch64/arm64**. Native builds on

@@ -5,6 +5,7 @@
 package macos9
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha1"
 	_ "embed"
@@ -13,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -327,18 +329,25 @@ func (m *Manager) binary(name string) string {
 	if name == "qemu-system-ppc" && m.hasAudioRuntime() {
 		return m.runtimePath("audio/qemu-system-ppc")
 	}
-	local := m.runtimePath(filepath.Join("runtime", "usr", "bin", name))
+	local := m.runtimePath(filepath.Join("runtime", "usr", "bin", exeName(name)))
 	if _, err := os.Stat(local); err == nil {
 		return local
 	}
 	return name
 }
 
-// Screamer is not in upstream QEMU. An optional locally installed build and
-// its matching OpenBIOS must be present together before selecting it. It is
-// part of the runtime both Macs run: Mac OS X plays through it as Mac OS 9
-// does.
+// ownEmulator: the runtime is exe's own emulator (emulator.go), Screamer included
+func (m *Manager) ownEmulator() *exeEmulator { return emulatorInfo(m.runtimePath("runtime")) }
+
+// Screamer is not in upstream QEMU. exe's own emulator has it. Before it, an
+// optional locally built Screamer QEMU and its matching OpenBIOS could be put
+// in audio/ (docs/macos9-audio.md); both must be there before it is chosen,
+// and exe's own emulator, when it is the runtime, comes first. It is part of
+// the runtime both Macs run: Mac OS X plays through it as Mac OS 9 does.
 func (m *Manager) hasAudioRuntime() bool {
+	if m.ownEmulator() != nil {
+		return false
+	}
 	for _, name := range []string{"audio/qemu-system-ppc", "audio/openbios-ppc"} {
 		info, err := os.Stat(m.runtimePath(name))
 		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
@@ -347,6 +356,12 @@ func (m *Manager) hasAudioRuntime() bool {
 	}
 	return true
 }
+
+// hasScreamer: the Mac's sound device is in the emulator the Macs run
+func (m *Manager) hasScreamer() bool {
+	return m.hasAudioRuntime() || m.ownEmulator().has("screamer")
+}
+
 // The qegl device (OpenGL on this machine's GPU for the Macs) is not in
 // upstream QEMU either: an emulator has it when it lists its options. Asked
 // once per emulator file.
@@ -445,7 +460,7 @@ func repairRuntimeFirmware(dir string) error {
 }
 
 func validateRuntime(ctx context.Context, dir string) error {
-	for _, name := range []string{"usr/bin/qemu-system-ppc", "usr/bin/qemu-img", "usr/share/qemu/openbios-ppc", "usr/share/qemu/vgabios-stdvga.bin"} {
+	for _, name := range []string{"usr/bin/" + exeName("qemu-system-ppc"), "usr/bin/" + exeName("qemu-img"), "usr/share/qemu/openbios-ppc", "usr/share/qemu/vgabios-stdvga.bin"} {
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil {
 			return err
@@ -456,23 +471,71 @@ func validateRuntime(ctx context.Context, dir string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	img := exec.CommandContext(ctx, filepath.Join(dir, "usr/bin/qemu-img"), "--version")
+	img := exec.CommandContext(ctx, filepath.Join(dir, "usr/bin", exeName("qemu-img")), "--version")
 	img.Env = runtimeEnv(dir)
 	if out, err := img.CombinedOutput(); err != nil {
 		return fmt.Errorf("qemu-img: %w: %.2000s", err, out)
 	}
 	// Actually initialize the machine: --version cannot detect missing firmware
 	// or device modules. This paused probe has no guest disk and exits via QMP.
-	cmd := exec.CommandContext(ctx, filepath.Join(dir, "usr/bin/qemu-system-ppc"),
-		"-L", filepath.Join(dir, "usr/share/qemu"), "-machine", "mac99", "-cpu", "G4",
+	args := []string{"-L", filepath.Join(dir, "usr/share/qemu"), "-machine", "mac99", "-cpu", "G4",
 		"-m", "32", "-usb", "-device", "usb-tablet", "-vga", "std", "-display", "none",
-		"-nic", "none", "-S", "-qmp", "stdio")
+		"-nic", "none", "-S"}
+	bin := filepath.Join(dir, "usr/bin", exeName("qemu-system-ppc"))
+	if runtime.GOOS == "windows" {
+		// QEMU on Windows does not read QMP from a pipe on standard input
+		return probeOverSocket(ctx, bin, args, runtimeEnv(dir))
+	}
+	cmd := exec.CommandContext(ctx, bin, append(args, "-qmp", "stdio")...)
 	cmd.Env = runtimeEnv(dir)
 	cmd.Stdin = strings.NewReader("{\"execute\":\"qmp_capabilities\"}\n{\"execute\":\"quit\"}\n")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("Emulator startup check: %w: %.2000s", err, out)
 	}
 	return nil
+}
+
+// probeOverSocket runs the startup check with QMP on a Unix socket
+func probeOverSocket(ctx context.Context, bin string, args, env []string) error {
+	tmp, err := os.MkdirTemp("", "exe-qemu-probe-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	sock := filepath.Join(tmp, "qmp.sock")
+	var out bytes.Buffer
+	cmd := exec.CommandContext(ctx, bin, append(args, "-qmp", "unix:"+sock+",server=on,wait=off")...)
+	cmd.Env = env
+	cmd.Stdout, cmd.Stderr = &out, &out
+	hideWindow(cmd)
+	if err = cmd.Start(); err != nil {
+		return err
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	var conn net.Conn
+	for conn == nil {
+		select {
+		case err := <-exited:
+			return fmt.Errorf("Emulator startup check: %v: %.2000s", err, out.String())
+		case <-ctx.Done():
+			return fmt.Errorf("Emulator startup check: %w", ctx.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
+		conn, _ = net.Dial("unix", sock)
+	}
+	defer conn.Close()
+	_, _ = io.WriteString(conn, "{\"execute\":\"qmp_capabilities\"}\n{\"execute\":\"quit\"}\n")
+	select {
+	case err := <-exited:
+		if err != nil {
+			return fmt.Errorf("Emulator startup check: %v: %.2000s", err, out.String())
+		}
+		return nil
+	case <-ctx.Done():
+		_ = cmd.Process.Kill()
+		return fmt.Errorf("Emulator startup check: %w", ctx.Err())
+	}
 }
 
 func (m *Manager) recoverRuntime() error {
@@ -502,6 +565,19 @@ func (m *Manager) activateRuntime(staging string) error {
 	return os.RemoveAll(previous)
 }
 
+// installEmulator fetches exe's own emulator, checks it and makes it the runtime
+func (m *Manager) installEmulator(ctx context.Context) error {
+	staging := m.runtimePath("runtime.staging")
+	defer os.RemoveAll(staging)
+	if err := m.fetchEmulator(ctx, staging); err != nil {
+		return err
+	}
+	if err := validateRuntime(ctx, staging); err != nil {
+		return err
+	}
+	return m.activateRuntime(staging)
+}
+
 // Both Macs run one runtime: only one of them checks or unpacks it at a time.
 var runtimeMu sync.Mutex
 
@@ -512,15 +588,36 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 		return err
 	}
 	dir := m.runtimePath("runtime")
+	have := false // a runtime here that works, of an older build or of the system's packages
 	if _, err := os.Stat(dir); err == nil {
-		if repairRuntimeFirmware(dir) == nil && validateRuntime(ctx, dir) == nil {
-			return nil
+		if e := emulatorInfo(dir); e != nil && e.Version == emulatorVersion {
+			if validateRuntime(ctx, dir) == nil {
+				return nil
+			}
+		} else if repairRuntimeFirmware(dir) == nil && validateRuntime(ctx, dir) == nil {
+			have = true
 		}
 	} else if os.IsNotExist(err) && m.command(ctx, "qemu-system-ppc", "--version") == nil && m.command(ctx, "qemu-img", "--version") == nil {
-		return nil
+		have = true
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	// exe's own emulator, where there is a build for this system. One that cannot be fetched
+	// leaves the runtime that works as it is.
+	if _, _, ok := emulatorBuildHere(); ok {
+		err := m.installEmulator(ctx)
+		if err == nil || ctx.Err() != nil {
+			return err
+		}
+		if have {
+			log.Printf("%s: exe's emulator %s not installed, using the one here: %v", m.sys.name, emulatorVersion, err)
+			return nil
+		}
+		return err
+	}
+	if have {
+		return nil
 	}
 	if runtime.GOOS != "linux" {
 		return errors.New("Install QEMU (qemu-system-ppc and qemu-img) on this computer, then Continue. On macOS: brew install qemu.")
@@ -714,10 +811,15 @@ func (m *Manager) launchArgs(installer bool) []string {
 	if _, err := os.Stat(m.runtimePath("runtime/usr/share/qemu/openbios-ppc")); err == nil {
 		args = append(args, "-L", m.runtimePath("runtime/usr/share/qemu"))
 	}
-	if m.hasAudioRuntime() {
+	if m.hasScreamer() {
 		// The dummy host backend still supplies PCM to VNC's capture channel.
 		// Playback stays in the authenticated browser, never on host speakers.
-		args = append(args, "-bios", m.runtimePath("audio/openbios-ppc"), "-audiodev", "none,id=mac-audio", "-global", "screamer.audiodev=mac-audio")
+		// Screamer's OpenBIOS is the one beside its emulator.
+		bios := m.runtimePath("runtime/usr/share/qemu/openbios-ppc")
+		if m.hasAudioRuntime() {
+			bios = m.runtimePath("audio/openbios-ppc")
+		}
+		args = append(args, "-bios", bios, "-audiodev", "none,id=mac-audio", "-global", "screamer.audiodev=mac-audio")
 		for i := range args {
 			if args[i] == "-vnc" {
 				args[i+1] += ",audiodev=mac-audio"
@@ -755,7 +857,7 @@ func (m *Manager) launch(ctx context.Context, installer bool) error {
 	m.ports = ports
 	m.mu.Unlock()
 	args := m.launchArgs(installer)
-	if err := m.command(ctx, m.binary("qemu-system-ppc"), args...); err != nil {
+	if err := m.startEmulator(ctx, m.binary("qemu-system-ppc"), args); err != nil {
 		return err
 	}
 	for i := 0; i < 20; i++ {
