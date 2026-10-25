@@ -4516,7 +4516,7 @@ Entries are kept in the node's own dictionary, `~/.exe/dict.db`
 (SQLite), so a word looked up before opens at once.
 
 A word the dictionary does not have yet is written by Codex: an
-ephemeral session of the Codex CLI on this host, on `gpt-6-astra` at
+ephemeral session of the Codex CLI on this host, on `gpt-6.1-sol` at
 extra-high reasoning.
 
 - The session is a thread of `codex app-server` that is never saved and

@@ -3,7 +3,7 @@
 // An entry is looked up in the node's own dictionary, ~/.exe/dict.db, and
 // written when it is not there: an ephemeral Codex session (threads of
 // codex app-server's that are never saved and never join the resume list)
-// on gpt-6-astra, its answer held to a JSON schema, then kept, so every
+// on gpt-6.1-sol, its answer held to a JSON schema, then kept, so every
 // later lookup of the same word in the same pair of languages is answered
 // from the database. Before the entry, a quick spelling pass (medium
 // effort, a few seconds) reads an obvious typo as the word it stands for:
@@ -68,7 +68,7 @@ import (
 )
 
 const (
-	dictModel  = "gpt-6-astra"
+	dictModel  = "gpt-6.1-sol"
 	dictEffort = "xhigh"
 	// a session that has not answered by then is stopped
 	dictTimeout = 10 * time.Minute

@@ -187,7 +187,7 @@ const dictAnswer = `{"found":true,"headword":"serendipity","note":"","forms":"",
 "literary":{"note":"书面色彩。","quotes":[]},"suggestions":[]}`
 
 // A word the dictionary does not keep is written by one ephemeral Codex
-// session on Astra at xhigh, kept, and answered from the database after.
+// session on Sol 6.1 at xhigh, kept, and answered from the database after.
 func TestDictWritesThenKeeps(t *testing.T) {
 	dir := t.TempDir()
 	fakeDictCodex(t, dir, dictAnswer)
@@ -204,7 +204,7 @@ func TestDictWritesThenKeeps(t *testing.T) {
 		t.Fatalf("content-type = %q", ct)
 	}
 	lines := dictLines(t, resp)
-	if len(lines) < 3 || lines[0]["writing"] != true || lines[0]["model"] != "gpt-6-astra" || lines[0]["effort"] != "xhigh" {
+	if len(lines) < 3 || lines[0]["writing"] != true || lines[0]["model"] != "gpt-6.1-sol" || lines[0]["effort"] != "xhigh" {
 		t.Fatalf("lines = %v", lines)
 	}
 	// on the way: the session's steps, and the entry a fragment at a time
@@ -231,7 +231,7 @@ func TestDictWritesThenKeeps(t *testing.T) {
 		t.Errorf("streamed text = %q", text.String())
 	}
 	got, _ := lines[len(lines)-1]["entry"].(map[string]any)
-	if got == nil || got["q"] != "serendipity" || got["written"] != true || got["model"] != "gpt-6-astra" {
+	if got == nil || got["q"] != "serendipity" || got["written"] != true || got["model"] != "gpt-6.1-sol" {
 		t.Fatalf("entry line = %v", lines[len(lines)-1])
 	}
 	if e, _ := got["entry"].(map[string]any); e == nil || e["headword"] != "serendipity" {
@@ -257,7 +257,7 @@ func TestDictWritesThenKeeps(t *testing.T) {
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "thread"))
 	json.Unmarshal(b, &thread)
-	if !thread.Ephemeral || thread.Model != "gpt-6-astra" || thread.Sandbox != "read-only" || thread.ApprovalPolicy != "never" {
+	if !thread.Ephemeral || thread.Model != "gpt-6.1-sol" || thread.Sandbox != "read-only" || thread.ApprovalPolicy != "never" {
 		t.Errorf("thread/start = %s", b)
 	}
 	b, _ = os.ReadFile(filepath.Join(dir, "turn"))
@@ -663,7 +663,7 @@ func TestDictSharedStream(t *testing.T) {
 	st.until(t, func(m map[string]any) bool { return m["ready"] == true })
 	got := dictStartFlight(t, ts.URL, `{"from":"en","to":"zh","q":"Serendipity"}`)
 	fid, _ := got["flight"].(string)
-	if fid == "" || got["key"] != "serendipity" || got["q"] != "serendipity" || got["model"] != "gpt-6-astra" {
+	if fid == "" || got["key"] != "serendipity" || got["q"] != "serendipity" || got["model"] != "gpt-6.1-sol" {
 		t.Fatalf("start = %v", got)
 	}
 	lines := st.until(t, func(m map[string]any) bool { return m["flight"] == fid && m["entry"] != nil })
