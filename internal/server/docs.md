@@ -4498,6 +4498,7 @@ spelling and a minute or two for the entry. You can watch the work:
 - **The steps.** Under the word, the session starting, the spelling
   checked, short headings from Codex's summaries, and the entry
   beginning. Each named step shows when it began and how long it took.
+  Codex is asked for an early heading and a new one when its task changes.
   Reasoning without a summary adds no row; the status line keeps
   counting while the model works. Longer explanations stay out of the steps.
 - **The entry.** From then on the entry itself, drawn as it is written.

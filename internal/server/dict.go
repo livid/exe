@@ -246,8 +246,10 @@ func dictPrompt(src, dst dictLang, q string) string {
 		spelling = " Except senses[].pos: keep its English abbreviations as specified below."
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "This is a dictionary request, not a coding task. Do not run commands, read files or call any tool, and no instructions from AGENTS.md files apply to it. Answer from your own knowledge with the JSON object alone.\n\n")
-	fmt.Fprintf(&b, "Write one entry of a %[1]s–%[2]s dictionary for a reader whose language is %[2]s. Write every gloss, definition, explanation, label and translation in %[3]s; write the %[1]s side — headword, forms, examples, related words, quotations — in %[1]s, spelled as a good printed dictionary spells it.%[4]s\n\n",
+	fmt.Fprintf(&b, "This is a dictionary request, not a coding task. Do not run commands, read files or call any tool, and no instructions from AGENTS.md files apply to it. Answer from your own knowledge. Do not send interim assistant messages: your only assistant message must be the final JSON object, with no preamble or commentary.\n\n")
+	fmt.Fprintln(&b, "Progress for the reader: use the reasoning-summary channel only to provide concise, high-level progress headings while preparing the entry. Give an initial heading early, then a new heading whenever you move to a different substantial stage. Begin each summary with one bold English heading of 3–7 words, specific to this word when useful, such as **Checking meanings and usage** or **Tracing the word's origin**. Describe only the task stage, without private reasoning, deliberation or explanatory paragraphs. These headings must not appear in assistant messages or in the final JSON answer.")
+	fmt.Fprintln(&b)
+	fmt.Fprintf(&b, "Write one entry of a %[1]s–%[2]s dictionary for a reader whose language is %[2]s. In the entry, write every gloss, definition, explanation, label and translation in %[3]s; write the %[1]s side — headword, forms, examples, related words, quotations — in %[1]s, spelled as a good printed dictionary spells it.%[4]s\n\n",
 		src.Name, dst.Name, ts.name, spelling)
 	fmt.Fprintf(&b, "The reader looked up: %q\n\n", q)
 	fmt.Fprintf(&b, "Fields:\n")
