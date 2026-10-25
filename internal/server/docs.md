@@ -4498,8 +4498,8 @@ spelling and a minute or two for the entry. You can watch the work:
 - **The steps.** Under the word, a line for each step as it comes, with
   the time it began: the session starting, the spelling checked, each
   pass of reasoning, the entry beginning. A pass of reasoning shows
-  Codex's one-line summary of it once there is one, and how long it took
-  at its end.
+  the short heading of Codex's summary once there is one, and how long
+  it took at its end. Longer explanations stay out of the steps.
 - **The entry.** From then on the entry itself, drawn as it is written.
   The page follows the writing down while you stay at its foot.
 - **The status line.** It counts the time and the characters written,

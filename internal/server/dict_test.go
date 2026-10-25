@@ -136,6 +136,11 @@ func fakeCodexAppServer(dir string) {
 			say("item/started", map[string]any{"item": map[string]any{"type": "reasoning", "id": "r1"}})
 			time.Sleep(pace)
 			say("item/reasoning/summaryTextDelta", map[string]any{"itemId": "r1", "summaryIndex": 0, "delta": "**Checking the senses**"})
+			// Sol may follow the heading with a detailed paragraph. It must
+			// never reach the progress stream, even one fragment at a time.
+			for _, delta := range []string{"\n\n", "A detailed explanation", " of the dictionary research."} {
+				say("item/reasoning/summaryTextDelta", map[string]any{"itemId": "r1", "summaryIndex": 0, "delta": delta})
+			}
 			time.Sleep(pace)
 			say("item/completed", map[string]any{"item": map[string]any{"type": "reasoning", "id": "r1"}})
 			time.Sleep(pace)
@@ -151,6 +156,31 @@ func fakeCodexAppServer(dir string) {
 				"totalTokens": 100, "inputTokens": 80, "cachedInputTokens": 0, "outputTokens": 20, "reasoningOutputTokens": 5}}})
 			say("turn/completed", map[string]any{"turn": map[string]any{"status": "completed"}})
 		}
+	}
+}
+
+func TestDictSummaryHeading(t *testing.T) {
+	for _, tc := range []struct{ name, text, want string }{
+		{"empty", " \n ", ""},
+		{"opening marker", "**", ""},
+		{"split opening marker", "*", ""},
+		{"partial heading", "**Checking the", "Checking the"},
+		{"split closing marker", "**Checking the senses*", "Checking the senses"},
+		{"heading", "**Checking the senses**", "Checking the senses"},
+		{"paragraph", "**Checking the senses**\n\nA detailed explanation.", "Checking the senses"},
+		{"inline paragraph", "**Checking the senses** A detailed explanation.", "Checking the senses"},
+		{"plain", "Checking the senses\n\nA detailed explanation.", "Checking the senses"},
+		{"CRLF", "Checking the senses\r\nA detailed explanation.", "Checking the senses"},
+		{"unicode line", "Checking the senses\u2028A detailed explanation.", "Checking the senses"},
+		{"spacing", "  **Checking\tthe senses**  ", "Checking the senses"},
+		{"unbounded line", strings.Repeat("a", 120), strings.Repeat("a", 95) + "…"},
+		{"unicode limit", "**" + strings.Repeat("字", 120) + "**", strings.Repeat("字", 95) + "…"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dictSummaryHeading(tc.text); got != tc.want {
+				t.Errorf("heading = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

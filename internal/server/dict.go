@@ -24,7 +24,7 @@
 // "verdict" on the "typed" text: "word", "typo" with the "word" it stands
 // for — its key, and "shown", as the pass spelled it — or "unknown"),
 // "think" and "thought" (a reasoning pass, by "pass", began and ended),
-// "summary" (a line of a pass's summary as it stands: "pass", "part",
+// "summary" (a short heading of a pass's summary: "pass", "part",
 // "text"), "answer" (the entry begins), "usage" (the tokens spent,
 // "usage"), "retry" ("text") — and {"text":…} lines, the entry's JSON a
 // fragment at a time; a {"wait":seconds} line every few seconds besides, as
@@ -1052,7 +1052,7 @@ var dictFeaturesOff = []string{"shell_tool", "unified_exec", "apps", "plugins", 
 // codexAppServer is one `codex app-server` spoken to over stdio (JSON-RPC,
 // a line a message) rather than codex exec, because the app server tells
 // what a session is doing while it does it: each reasoning pass beginning
-// and ending, each summary line of it as it is written, the answer as it
+// and ending, each summary heading as it is written, the answer as it
 // streams, the tokens spent. One process runs a lookup's turns one after
 // another — the spelling pass, then the entry — each on an ephemeral
 // thread of its own: never saved, never in the resume list, read-only,
@@ -1182,9 +1182,33 @@ func (a *codexAppServer) await(ctx context.Context, id int, note func(codexMsg) 
 	return nil, a.failed(ctx, "")
 }
 
+// dictSummaryHeading keeps progress to the summary's leading heading.
+// Some models append paragraphs after it, even with the same summary
+// setting. Never forward those paragraphs to a window (or its replay).
+// A summary without a heading still gets a bounded first line. Partial
+// Markdown delimiters can arrive on either side of a streaming fragment.
+func dictSummaryHeading(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, "\r\n\u2028\u2029"); i >= 0 {
+		s = s[:i]
+	}
+	if strings.HasPrefix(s, "**") {
+		s = s[2:]
+		if i := strings.Index(s, "**"); i >= 0 {
+			s = s[:i]
+		}
+	}
+	s = strings.Join(strings.Fields(strings.Trim(s, "*")), " ")
+	const limit = 96
+	if r := []rune(s); len(r) > limit {
+		s = strings.TrimSpace(string(r[:limit-1])) + "…"
+	}
+	return s
+}
+
 // turn runs one prompt on a fresh ephemeral thread and returns the answer,
 // held to schema. step hears each reasoning pass begin and end ("think",
-// "thought"), each line of its summary as it stands ("summary"), the
+// "thought"), each short summary heading as it stands ("summary"), the
 // answer begin ("answer"), the tokens spent ("usage") and a retry; text
 // hears the answer a fragment at a time. Either may be nil.
 func (a *codexAppServer) turn(ctx context.Context, prompt, effort, summary, schema string,
@@ -1220,6 +1244,7 @@ func (a *codexAppServer) turn(ctx context.Context, prompt, effort, summary, sche
 		usage    *dictUsage
 		passes   = map[string]int{} // reasoning item → its pass number, from 1
 		summ     = map[string]string{}
+		headings = map[string]string{}
 		lastErr  string
 		finished bool
 	)
@@ -1252,8 +1277,11 @@ func (a *codexAppServer) turn(ctx context.Context, prompt, effort, summary, sche
 			json.Unmarshal(m.Params, &p)
 			k := p.ItemID + "/" + strconv.Itoa(p.SummaryIndex)
 			summ[k] += p.Delta
-			step("summary", map[string]any{"pass": passes[p.ItemID], "part": p.SummaryIndex,
-				"text": strings.TrimSpace(strings.ReplaceAll(summ[k], "**", ""))})
+			if heading := dictSummaryHeading(summ[k]); heading != "" && heading != headings[k] {
+				headings[k] = heading
+				step("summary", map[string]any{"pass": passes[p.ItemID], "part": p.SummaryIndex,
+					"text": heading})
+			}
 		case "item/agentMessage/delta":
 			var p struct{ Delta string }
 			json.Unmarshal(m.Params, &p)
