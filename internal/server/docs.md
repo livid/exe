@@ -4291,8 +4291,10 @@ Click the model name at the right end of the status line, and
   think out loud in the answer. A level a ChatGPT model rejects runs at
   its default. **Configured** keeps the effort set in Configuration.
 
-Another backend, model, thinking level or custom prompt is another
-opinion, so every draft is checked again, the open one first. The
+Another backend, model or thinking level takes over from where the
+pencil is: what was checked stays checked, and what you type or edit
+from then on goes to the new choice. Another custom prompt is new rules,
+so every draft is checked again under it, the open one first. The
 options are kept with the app's data: every desk on this node checks
 with them, and so does the Hub composer.
 

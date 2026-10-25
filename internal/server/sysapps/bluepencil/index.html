@@ -409,7 +409,7 @@ const EFFORTS = {
   openai: [["max", "Max"], ["xhigh", "Extra high"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["minimal", "Minimal"], ["none", "None"], ["default", ""]],
 };
 const effortOf = c => EFFORTS[providerOf(c)].some(([v]) => v === c.effort) ? c.effort : "max";
-const backendKey = c => providerOf(c) + "|" + (c.model || "") + "|" + effortOf(c) + "|" + promptOf(c); // what a change of opinion is
+const backendKey = c => providerOf(c) + "|" + (c.model || "") + "|" + effortOf(c) + "|" + promptOf(c); // what a check is asked of
 let blocked = "";        // why no check can run right now (unconfigured), or ""
 const cache = new Map(); // paragraph text → {fixed, ops}
 let current = null;      // the paragraph in flight: {id (its draft), text, ctrl, partial, el}
@@ -1002,10 +1002,10 @@ async function reloadFromDisk() {
 }
 async function reloadCfg() {
   if (!loaded) return;
-  const was = backendKey(cfg);
+  const was = backendKey(cfg), wasPrompt = promptOf(cfg);
   await loadCfg();
   syncBackend();
-  if (backendKey(cfg) !== was) { forget(); lastInput = 0; render(); kick(); }
+  if (rechose(was, wasPrompt)) { lastInput = 0; render(); kick(); }
   modelLabel();
   render();
 }
@@ -1023,8 +1023,20 @@ window.addEventListener("message", e => {
   if (e.data.path === "config.json") reloadCfg();
   else if (e.data.path === "drafts.json" && docLoaded) reloadFromDisk();
 });
-// another model, another thinking budget or another custom prompt is
-// another opinion: every draft goes back to the pencil, the open one first
+// What a change of options asks again. Another backend, model or thinking
+// budget takes over from where the pencil is: what was checked stays
+// checked, and only paragraphs not checked yet — the one in flight
+// included — go to the new choice; going back over every draft would cost
+// a model call a paragraph for the same corrections. Another custom prompt
+// is another opinion, rules of your own the old checks never heard, so
+// every draft goes back to the pencil, the open one first. Whether the
+// options changed at all.
+function rechose(was, wasPrompt) {
+  if (backendKey(cfg) === was) return false;
+  if (current) current.ctrl.abort();
+  if (promptOf(cfg) !== wasPrompt) forget();
+  return true;
+}
 function forget() {
   cache.clear();
   unseen.clear();
@@ -1364,14 +1376,14 @@ function options() {
   // the veil, would hold it for good
   const close = () => { $("#veil").classList.remove("on"); document.removeEventListener("keydown", keys); dlg.replaceChildren(); src.focus(); };
   const submit = () => {
-    const was = backendKey(cfg);
+    const was = backendKey(cfg), wasPrompt = promptOf(cfg);
     cfg.provider = prov.value === "openai" ? "openai" : "";
     cfg.model = sel.value;
     cfg.effort = eff.value;
     cfg.prompt = promptOf({ prompt: own.value });
     cfg.marks = chk.checked;
     syncBackend();
-    if (backendKey(cfg) !== was) forget(); // another backend, model, budget or custom prompt: another opinion
+    rechose(was, wasPrompt);
     saveCfg();
     modelLabel();
     close();
