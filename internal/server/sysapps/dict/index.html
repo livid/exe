@@ -781,19 +781,20 @@ function watch(tab, q, model, effort, word) {
         break;
       }
       case "think": {
-        const li = line(st.t, "Thinking…", true);
-        w.passes.set(st.pass, { t: st.t, li, last: li, parts: [] });
+        // A pass may have no summary. The status line's elapsed clock
+        // shows that work continues; only a named step belongs in the log.
+        for (const li of log.querySelectorAll("li.now")) li.classList.remove("now");
+        w.passes.set(st.pass, { t: st.t, last: null, parts: [] });
         break;
       }
       case "summary":
-        if (!p) break;
+        if (!p || !st.text) break;
         if (p.parts[st.part]) say(p.parts[st.part], st.text);
-        else if (st.part === 0 || !p.parts.length) { p.parts[st.part] = p.li; say(p.li, st.text); }
-        else p.parts[st.part] = p.last = line(st.t, st.text);
+        else p.parts[st.part] = p.last = line(p.last ? st.t : p.t, st.text);
         break;
       case "thought":
-        if (!p) break;
-        if (!p.parts.length) say(p.li, "Thought", true);
+        if (!p || !p.last) break;
+        p.last.classList.remove("now");
         p.last.querySelector(".b").append(el("span", { class: "d" }, secs(st.t - p.t))); // on the pass's last line
         break;
       case "answer": w.answering = true; line(st.t, "Writing the entry…"); break;
