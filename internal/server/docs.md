@@ -4596,8 +4596,12 @@ trackpad or a finger).
 
 The × on any tab closes it, including the last one. With no tabs open,
 Dict shows its welcome page: **Word of the Day** from the saved dictionary
-in the selected languages, and your **10 most recent words**, newest
+in large serif type on the window's gray background, and your **10 most
+recent words** in two columns, newest
 first. Click a word to open it; a recent word remembers its language pair.
+The welcome page has no separators or scrollbar; in a short window you
+can still scroll by touch, wheel or keyboard. The daily word follows the
+selected languages.
 Looking up the same word in the same languages moves it to the top.
 The recent list stays in this browser, alongside its tabs. Viewing the
 daily preview or restoring tabs does not add to the list.

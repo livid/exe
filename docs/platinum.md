@@ -89,7 +89,12 @@ restyling: `internal/server/ui/index.html` (the desktop),
   titles and buttons. 11px for status lines and icon labels, 10px for
   secondary meta. Never 13px, never a system font stack. There is one line
   of display type: the Welcome window's heading, 18px bold on a 22px line,
-  beside its 64px icon. Nothing else is set larger than 12px.
+  beside its 64px icon. Dict's welcome page is an exception requested by
+  Livid: its daily word is italic serif display type, up to 46px (38px on
+  a narrow phone), smaller for long words. It sits directly on the window's
+  grey, with a small ornament and date, no pane or section separators,
+  and no visible scrollbar. Recent words form two columns below it.
+  Touch, wheel and keyboard can still scroll a short window.
 - On a Mac that stack lands on Geneva, which has one weight: a browser
   only thickens it a little, and a bold heading reads as the text under
   it. The public site (`site/site.css`) and the Platinum site template

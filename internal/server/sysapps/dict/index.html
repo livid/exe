@@ -236,21 +236,50 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 /* what the page says when it holds no entry: centred, grey, in the page's
    own type */
 .entry .empty { padding: 40px 12px; text-align: center; color: #888; user-select: none; cursor: default; }
-/* The welcome page is not a tab. Its daily preview keeps the same room
-   while loading, empty or unavailable, so the recent words stay put. */
-#welcome .entry { cursor: default; }
-#welcome h1 { font-size: 12px; margin: 0 0 4px; }
-#welcome h2 { font-size: 12px; margin: 16px 0 6px; padding-bottom: 2px; border-bottom: 1px solid var(--g400); }
-#welcome .intro, #welcome .quiet { color: #666; }
-#daily { height: 76px; overflow: hidden; }
-#daily .daily-word { font-weight: bold; }
-#daily .daily-gloss { margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-#welcome button.link { background: none; border: 0; padding: 0; text-align: left; font: inherit; }
+/* The welcome page rests directly on the window's grey: no pane edge,
+   section rules or scrollbar. Small windows can still scroll by touch,
+   wheel or keyboard. The daily word is deliberately large serif display
+   type (Livid's welcome-page exception to the regular Platinum type). */
+body.welcoming #tabs { display: none; }
+body.welcoming #pages { border-top-color: transparent; background: var(--g200); }
+#welcome { background: var(--g200); overflow-y: auto; scrollbar-width: none; }
+#welcome::-webkit-scrollbar { display: none; }
+#welcome .entry { cursor: default; max-width: 540px; margin: 0 auto; padding: 24px 30px 28px; }
+#welcome .daily-feature { text-align: center; }
+#welcome .ornament { display: block; margin: 0 auto 12px; color: #8888aa; }
+#welcome h1 { font-size: 11px; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; margin: 0; }
+#welcome .daily-date { color: #777; font-size: 10px; margin-top: 5px; min-height: 15px; }
+#welcome h2 { font-size: 12px; font-weight: normal; color: #666; margin: 0 0 16px; }
+#welcome .quiet { color: #777; }
+/* Keep room for the word and two lines of meaning before either arrives. */
+#daily { height: 184px; padding: 20px 0 12px; overflow: hidden; }
+#daily .daily-word { min-height: 60px; display: grid; place-items: center; }
+#welcome button.link { background: none; border: 0; padding: 0; text-align: left; font: inherit; text-decoration: none; }
+#daily .daily-word button { max-width: 100%; text-align: center; overflow-wrap: anywhere;
+  font: italic var(--word-size, 46px)/1.1 "Iowan Old Style", "Palatino Linotype", "Baskerville", "Georgia", serif;
+  letter-spacing: -1px; color: var(--hl); }
+#daily .daily-gloss { margin: 12px auto 0; max-width: 360px; color: #555;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#daily .daily-gloss .pos { color: #777; }
+#welcome #daily .daily-open { display: inline-block; margin-top: 12px; color: #777; font-size: 10px; }
 #welcome button.link:focus-visible { outline: 1px dotted var(--black); outline-offset: 2px; }
-#recent { list-style: none; margin: 0; padding: 0; }
-#recent li { display: flex; align-items: baseline; gap: 12px; min-height: 25px; margin: 0; }
-#recent .link { min-width: 0; overflow-wrap: anywhere; }
-#recent .pair { margin-left: auto; color: #777; font-size: 11px; white-space: nowrap; }
+#welcome .recent-section { max-width: 400px; margin: 0 auto; }
+#recent { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+#recent li { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0; }
+#recent .number { flex: none; color: #999; font-size: 10px; font-variant-numeric: tabular-nums; }
+#recent .recent-word { min-width: 0; }
+#recent .link { max-width: 100%; overflow-wrap: anywhere; }
+#recent .pair { display: block; margin-top: 2px; color: #888; font-size: 10px; }
+@media (max-width: 399px) {
+  #welcome .entry { padding: 20px 20px 24px; }
+  #daily .daily-word button { font-size: min(var(--word-size, 46px), 38px); }
+  #recent { column-gap: 16px; }
+}
+@media (max-height: 460px) {
+  #welcome .entry { padding-top: 12px; }
+  #welcome .ornament { margin-bottom: 8px; }
+  #daily { height: 160px; padding-top: 12px; }
+}
 /* a session writing, watched: the word in grey, the model under it, then
    the session's steps as they come — the time each began in a column of
    its own, what it is, how long a reasoning pass took in grey at its end.
@@ -292,6 +321,7 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
 #st { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -1px; }
 #st.err { color: var(--red); }
+body.welcoming #status { border-top-color: transparent; background: var(--g200); box-shadow: none; color: #777; }
 #grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
   touch-action: none; z-index: 6; }
 body.mobile #grow { display: none; }
@@ -354,7 +384,7 @@ body.kb #status { --sab: 0px; }
 ::-webkit-scrollbar-corner { background: var(--g300); }
 </style>
 </head>
-<body>
+<body class="welcoming">
 
 <div id="bar">
   <span class="popup" id="from-pop"><select id="from" aria-label="From"></select><span class="well"><i><b></b></i></span></span>
@@ -371,14 +401,18 @@ body.kb #status { --sab: 0px; }
 
 <div id="tabs"></div>
 <div id="pages">
-  <div id="welcome" class="page off"><div class="entry">
-    <h1>Welcome to Dict</h1>
-    <p class="intro">Type a word or phrase above, or open a word below.</p>
-    <h2>Word of the Day</h2>
-    <div id="daily" aria-live="polite"><p class="quiet">Loading…</p></div>
-    <h2>Recent Words</h2>
-    <ol id="recent"></ol>
-    <p id="no-recent" class="quiet">Your last 10 lookups in this browser will appear here.</p>
+  <div id="welcome" class="page off" aria-label="Welcome to Dict"><div class="entry">
+    <section class="daily-feature" aria-labelledby="daily-heading">
+      <svg class="ornament" aria-hidden="true" width="35" height="19" viewBox="0 0 35 19" shape-rendering="crispEdges"><path fill="currentColor" d="M16 0h3v5h2v3h5v3h-5v3h-2v5h-3v-5h-2v-3H9V8h5V5h2zM2 6h1v3h3v1H3v3H2v-3H0V9h2zM32 6h1v3h2v1h-2v3h-1v-3h-3V9h3z"/></svg>
+      <h1 id="daily-heading">Word of the Day</h1>
+      <p id="daily-date" class="daily-date"></p>
+      <div id="daily" aria-live="polite"><p class="quiet">Loading…</p></div>
+    </section>
+    <section class="recent-section" aria-labelledby="recent-heading">
+      <h2 id="recent-heading">Recent Words</h2>
+      <ol id="recent"></ol>
+      <p id="no-recent" class="quiet">Your last 10 lookups in this browser will appear here.</p>
+    </section>
   </div></div>
 </div>
 
@@ -472,9 +506,10 @@ function welcomeLink(word, src, dst, exact, q = word) {
   return button;
 }
 function renderRecent() {
-  recentEl.replaceChildren(...recent.map(item => el("li", {},
-    welcomeLink(item.q, item.from, item.to, item.exact),
-    el("span", { class: "pair" }, pairOf(item.from, item.to)))));
+  recentEl.replaceChildren(...recent.map((item, i) => el("li", {},
+    el("span", { class: "number", "aria-hidden": "true" }, String(i + 1).padStart(2, "0")),
+    el("div", { class: "recent-word" }, welcomeLink(item.q, item.from, item.to, item.exact),
+      el("span", { class: "pair", title: pairOf(item.from, item.to) }, item.from.toUpperCase() + " → " + item.to.toUpperCase())))));
   $("#no-recent").hidden = recent.length > 0;
 }
 function stopDaily() {
@@ -486,6 +521,7 @@ async function loadDaily() {
   const ctrl = dailyCtrl = new AbortController(), src = from.value, dst = to.value;
   const now = new Date();
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+  $("#daily-date").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   daily.replaceChildren(el("p", { class: "quiet" }, "Loading…"));
   try {
     const r = await api("/v1/dict/daily?" + new URLSearchParams({ from: src, to: dst, date }), { signal: ctrl.signal });
@@ -497,10 +533,14 @@ async function loadDaily() {
       return;
     }
     const w = m.word;
+    const wordButton = welcomeLink(w.word, src, dst, true, w.q);
+    wordButton.style.setProperty("--word-size", w.word.length > 45 ? "22px" : w.word.length > 28 ? "28px" : w.word.length > 16 ? "36px" : "46px");
+    const open = welcomeLink("Explore this word →", src, dst, true, w.q);
+    open.classList.add("daily-open");
     daily.replaceChildren(
-      el("div", { class: "daily-word" }, welcomeLink(w.word, src, dst, true, w.q)),
+      el("div", { class: "daily-word" }, wordButton),
       el("p", { class: "daily-gloss", lang: LANG_TAG[dst] || dst },
-        w.pos ? el("span", { class: "pos" }, w.pos) : null, w.gloss || "Open the saved entry."));
+        w.pos ? el("span", { class: "pos" }, w.pos) : null, w.gloss || "Open the saved entry."), open);
   } catch (e) {
     if (ctrl !== dailyCtrl) return;
     const retry = el("button", { class: "ghost", type: "button" }, "Try Again");
@@ -669,6 +709,7 @@ function activate(tab) {
   closeSuggestions();
   stopSpeech();
   active = tab;
+  document.body.classList.toggle("welcoming", !tab);
   welcome.classList.toggle("off", !!tab);
   stopDaily();
   if (!tab) {
