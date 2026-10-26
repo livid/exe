@@ -5263,7 +5263,8 @@ const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="$
 //             #14b8a6 / #8ee8dc / #0b7a6e (the price module's coins),
 //             tailscale-lit #c8dcf8 / #f0f6ff (reserved — the Control
 //             Strip repaints exactly these per tailnet state), key-brass
-//             #e8b830 / #fff0a0 / #a87a10 (the SSH key)
+//             #e8b830 / #fff0a0 / #a87a10 (the SSH key, and the gold contacts
+//             of the activity module's memory stick, card and port)
 // Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
 // they darken whatever sits beneath. Write chromatic colors as 6-digit hex
 // (pure grays may shorthand). ICX_PALETTE in the Icon Editor carries the
@@ -5335,15 +5336,52 @@ const agentMini = mark => `<svg width="16" height="16" viewBox="0 0 16 16" shape
 let CLAUDE_MINI_ICON = agentMini(`<path fill="#D97757" d="M5 3h1v1H5zM7 3h2v1H7zM10 3h1v1H10zM6 4h4v1H6zM5 5h6v1H5zM6 6h4v1H6zM5 7h1v1H5zM7 7h2v1H7zM10 7h1v1H10z"/>`);
 let CODEX_MINI_ICON = agentMini(`<path fill="#FFFFFF" d="M6 3h4v1H6zM5 4h1v3H5zM10 4h1v3H10zM6 7h4v1H6z"/>`);
 let auLast = null; // the last /v1/agents/usage answer, for the same reason
-// the Control Strip's activity module: a little monitor on its stand, a
-// bar chart lit on its screen
-let ACTIVITY_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <path fill="#dad5ca" d="M13 2h1v1H13zM2 10h1v1H2zM7 12h2v1H7zM6 13h4v1H6zM4 14h8v1H4z"/>
-  <path fill="#edeae2" d="M2 2h11v1H2zM2 3h1v1H2zM2 4h1v1H2zM2 5h1v1H2zM2 6h1v1H2zM2 7h1v1H2zM2 8h1v1H2zM2 9h1v1H2z"/>
-  <path fill="#b7b2a7" d="M13 3h1v1H13zM13 4h1v1H13zM13 5h1v1H13zM13 6h1v1H13zM13 7h1v1H13zM13 8h1v1H13zM13 9h1v1H13zM3 10h11v1H3z"/>
-  <path fill="#222244" d="M3 3h10v1H3zM3 4h7v1H3zM12 4h1v1H12zM3 5h4v1H3zM9 5h1v1H9zM12 5h1v1H12zM3 6h4v1H3zM9 6h1v1H9zM12 6h1v1H12zM3 7h1v1H3zM6 7h1v1H6zM9 7h1v1H9zM12 7h1v1H12zM3 8h1v1H3zM6 8h1v1H6zM9 8h1v1H9zM12 8h1v1H12zM3 9h1v1H3zM6 9h1v1H6zM9 9h1v1H9zM12 9h1v1H12z"/>
-  <path fill="#33ff33" d="M10 4h2v1H10zM7 5h2v1H7zM10 5h2v1H10zM7 6h2v1H7zM10 6h2v1H10zM4 7h2v1H4zM7 7h2v1H7zM10 7h2v1H10zM4 8h2v1H4zM7 8h2v1H7zM10 8h2v1H10zM4 9h2v1H4zM7 9h2v1H7zM10 9h2v1H10z"/>
-  <path fill="#000" d="M1 1h14v1H1zM1 2h1v1H1zM14 2h1v1H14zM1 3h1v1H1zM14 3h1v1H14zM1 4h1v1H1zM14 4h1v1H14zM1 5h1v1H1zM14 5h1v1H14zM1 6h1v1H1zM14 6h1v1H14zM1 7h1v1H1zM14 7h1v1H14zM1 8h1v1H1zM14 8h1v1H14zM1 9h1v1H1zM14 9h1v1H14zM1 10h1v1H1zM14 10h1v1H14zM1 11h14v1H1zM6 12h1v1H6zM9 12h1v1H9zM4 13h2v1H4zM10 13h2v1H10zM3 14h1v1H3zM12 14h1v1H12zM3 15h10v1H3z"/>
+// the Control Strip's activity module: one object per measure, the tile
+// wearing the chosen one's — the CPU's chip, a memory stick, a graphics
+// card with its fan, an Ethernet port, a hard disk with its light. Each
+// carries its chart's hue: the violet die, the green board, the green fan
+// hub, the sky-blue port, the orange light
+let MON_CPU_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#444" d="M3 3h10v1H3zM3 4h1v1H3zM5 4h8v1H5zM3 5h2v1H3zM11 5h2v1H11zM3 6h2v1H3zM11 6h2v1H11zM3 7h2v1H3zM11 7h2v1H11zM3 8h2v1H3zM11 8h2v1H11zM3 9h2v1H3zM11 9h2v1H11zM3 10h2v1H3zM11 10h2v1H11zM3 11h10v1H3zM3 12h10v1H3z"/>
+  <path fill="#777" d="M4 0h1v1H4zM6 0h1v1H6zM9 0h1v1H9zM11 0h1v1H11zM4 1h1v1H4zM6 1h1v1H6zM9 1h1v1H9zM11 1h1v1H11zM0 4h2v1H0zM14 4h2v1H14zM0 6h2v1H0zM14 6h2v1H14zM0 9h2v1H0zM14 9h2v1H14zM0 11h2v1H0zM14 11h2v1H14zM4 14h1v1H4zM6 14h1v1H6zM9 14h1v1H9zM11 14h1v1H11zM4 15h1v1H4zM6 15h1v1H6zM9 15h1v1H9zM11 15h1v1H11z"/>
+  <path fill="#aaa" d="M4 4h1v1H4z"/>
+  <path fill="#6666be" d="M10 5h1v1H10zM6 6h4v1H6zM6 7h4v1H6zM6 8h4v1H6zM6 9h4v1H6zM5 10h1v1H5z"/>
+  <path fill="#9a9af4" d="M5 5h5v1H5zM5 6h1v1H5zM5 7h1v1H5zM5 8h1v1H5zM5 9h1v1H5z"/>
+  <path fill="#4c4c96" d="M10 6h1v1H10zM10 7h1v1H10zM10 8h1v1H10zM10 9h1v1H10zM6 10h5v1H6z"/>
+  <path fill="#000" d="M2 2h12v1H2zM2 3h1v1H2zM13 3h1v1H13zM2 4h1v1H2zM13 4h1v1H13zM2 5h1v1H2zM13 5h1v1H13zM2 6h1v1H2zM13 6h1v1H13zM2 7h1v1H2zM13 7h1v1H13zM2 8h1v1H2zM13 8h1v1H13zM2 9h1v1H2zM13 9h1v1H13zM2 10h1v1H2zM13 10h1v1H13zM2 11h1v1H2zM13 11h1v1H13zM2 12h1v1H2zM13 12h1v1H13zM2 13h12v1H2z"/>
+</svg>`;
+let MON_MEM_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#77bb77" d="M1 5h14v1H1zM1 6h1v1H1zM5 6h1v1H5zM10 6h1v1H10zM14 6h1v1H14zM1 7h1v1H1zM5 7h1v1H5zM10 7h1v1H10zM14 7h1v1H14zM1 8h14v1H1z"/>
+  <path fill="#336633" d="M1 9h1v1H1zM14 9h1v1H14zM1 10h1v1H1zM7 10h1v1H7zM14 10h1v1H14z"/>
+  <path fill="#e8b830" d="M2 9h1v1H2zM4 9h1v1H4zM6 9h1v1H6zM8 9h1v1H8zM10 9h1v1H10zM12 9h1v1H12zM2 10h1v1H2zM4 10h1v1H4zM10 10h1v1H10zM12 10h1v1H12z"/>
+  <path fill="#a87a10" d="M3 9h1v1H3zM5 9h1v1H5zM7 9h1v1H7zM9 9h1v1H9zM11 9h1v1H11zM13 9h1v1H13zM3 10h1v1H3zM5 10h1v1H5zM9 10h1v1H9zM11 10h1v1H11zM13 10h1v1H13z"/>
+  <path fill="#000" d="M1 4h14v1H1zM0 5h1v1H0zM15 5h1v1H15zM0 6h1v1H0zM2 6h3v1H2zM6 6h4v1H6zM11 6h3v1H11zM15 6h1v1H15zM0 7h1v1H0zM2 7h3v1H2zM6 7h4v1H6zM11 7h3v1H11zM15 7h1v1H15zM0 8h1v1H0zM15 8h1v1H15zM0 9h1v1H0zM15 9h1v1H15zM0 10h1v1H0zM6 10h1v1H6zM8 10h1v1H8zM15 10h1v1H15zM1 11h5v1H1zM9 11h6v1H9z"/>
+</svg>`;
+let MON_GPU_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#444" d="M7 4h2v1H7zM10 4h1v1H10zM6 5h3v1H6zM10 5h2v1H10zM10 6h2v1H10zM6 7h2v1H6zM6 8h2v1H6zM9 8h3v1H9zM7 9h1v1H7zM9 9h2v1H9z"/>
+  <path fill="#888" d="M3 4h3v1H3zM12 4h3v1H12zM3 5h2v1H3zM13 5h2v1H13zM3 6h2v1H3zM13 6h2v1H13zM3 7h2v1H3zM13 7h2v1H13zM3 8h2v1H3zM13 8h2v1H13zM3 9h3v1H3zM12 9h3v1H12zM3 10h4v1H3zM11 10h4v1H11z"/>
+  <path fill="#aaa" d="M3 3h4v1H3zM11 3h4v1H11zM9 4h1v1H9zM9 5h1v1H9zM6 6h2v1H6zM10 7h2v1H10zM8 8h1v1H8zM8 9h1v1H8z"/>
+  <path fill="#ccc" d="M1 2h1v1H1zM1 3h1v1H1zM1 4h1v1H1zM1 5h1v1H1zM1 6h1v1H1zM1 7h1v1H1zM1 8h1v1H1zM1 9h1v1H1zM1 10h1v1H1zM1 11h1v1H1zM1 12h1v1H1z"/>
+  <path fill="#77bb77" d="M8 6h2v1H8zM8 7h2v1H8z"/>
+  <path fill="#e8b830" d="M6 12h1v1H6zM8 12h1v1H8zM10 12h1v1H10z"/>
+  <path fill="#a87a10" d="M7 12h1v1H7zM9 12h1v1H9zM11 12h1v1H11z"/>
+  <path fill="#000" d="M0 1h3v1H0zM0 2h1v1H0zM2 2h14v1H2zM0 3h1v1H0zM2 3h1v1H2zM7 3h4v1H7zM15 3h1v1H15zM0 4h1v1H0zM2 4h1v1H2zM6 4h1v1H6zM11 4h1v1H11zM15 4h1v1H15zM0 5h1v1H0zM2 5h1v1H2zM5 5h1v1H5zM12 5h1v1H12zM15 5h1v1H15zM0 6h1v1H0zM2 6h1v1H2zM5 6h1v1H5zM12 6h1v1H12zM15 6h1v1H15zM0 7h1v1H0zM2 7h1v1H2zM5 7h1v1H5zM12 7h1v1H12zM15 7h1v1H15zM0 8h1v1H0zM2 8h1v1H2zM5 8h1v1H5zM12 8h1v1H12zM15 8h1v1H15zM0 9h1v1H0zM2 9h1v1H2zM6 9h1v1H6zM11 9h1v1H11zM15 9h1v1H15zM0 10h1v1H0zM2 10h1v1H2zM7 10h4v1H7zM15 10h1v1H15zM0 11h1v1H0zM2 11h14v1H2zM0 12h1v1H0zM2 12h1v1H2zM5 12h1v1H5zM12 12h1v1H12zM0 13h3v1H0zM5 13h8v1H5z"/>
+</svg>`;
+let MON_NET_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#444" d="M4 6h8v1H4zM4 7h8v1H4zM4 8h8v1H4zM6 9h4v1H6zM7 10h2v1H7z"/>
+  <path fill="#e8b830" d="M4 5h1v1H4zM6 5h1v1H6zM8 5h1v1H8zM10 5h1v1H10z"/>
+  <path fill="#a87a10" d="M5 5h1v1H5zM7 5h1v1H7zM9 5h1v1H9zM11 5h1v1H11z"/>
+  <path fill="#99ccff" d="M2 3h12v1H2zM2 4h1v1H2zM13 4h1v1H13zM2 5h1v1H2zM13 5h1v1H13zM2 6h1v1H2zM13 6h1v1H13zM2 7h1v1H2zM13 7h1v1H13zM2 8h1v1H2zM13 8h1v1H13zM2 9h1v1H2zM13 9h1v1H13zM2 10h4v1H2zM10 10h4v1H10zM2 11h4v1H2zM10 11h4v1H10zM2 12h12v1H2z"/>
+  <path fill="#000" d="M1 2h14v1H1zM1 3h1v1H1zM14 3h1v1H14zM1 4h1v1H1zM3 4h10v1H3zM14 4h1v1H14zM1 5h1v1H1zM3 5h1v1H3zM12 5h1v1H12zM14 5h1v1H14zM1 6h1v1H1zM3 6h1v1H3zM12 6h1v1H12zM14 6h1v1H14zM1 7h1v1H1zM3 7h1v1H3zM12 7h1v1H12zM14 7h1v1H14zM1 8h1v1H1zM3 8h1v1H3zM12 8h1v1H12zM14 8h1v1H14zM1 9h1v1H1zM3 9h3v1H3zM10 9h3v1H10zM14 9h1v1H14zM1 10h1v1H1zM6 10h1v1H6zM9 10h1v1H9zM14 10h1v1H14zM1 11h1v1H1zM6 11h4v1H6zM14 11h1v1H14zM1 12h1v1H1zM14 12h1v1H14zM1 13h14v1H1z"/>
+</svg>`;
+let MON_DISK_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#dad5ca" d="M1 7h14v1H1zM1 8h1v1H1zM4 8h11v1H4zM1 9h1v1H1zM4 9h1v1H4zM14 9h1v1H14z"/>
+  <path fill="#edeae2" d="M3 4h10v1H3zM2 5h12v1H2z"/>
+  <path fill="#b7b2a7" d="M1 10h14v1H1z"/>
+  <path fill="#8b867b" d="M5 9h9v1H5z"/>
+  <path fill="#ffb060" d="M2 8h2v1H2zM2 9h1v1H2z"/>
+  <path fill="#c8600a" d="M3 9h1v1H3z"/>
+  <path fill="#000" d="M3 3h10v1H3zM2 4h1v1H2zM13 4h1v1H13zM1 5h1v1H1zM14 5h1v1H14zM0 6h16v1H0zM0 7h1v1H0zM15 7h1v1H15zM0 8h1v1H0zM15 8h1v1H15zM0 9h1v1H0zM15 9h1v1H15zM0 10h1v1H0zM15 10h1v1H15zM0 11h16v1H0z"/>
 </svg>`;
 let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
@@ -6841,8 +6879,12 @@ const ICON_DEFS = [
   { key: "claude-mini", label: L("Claude Code (mini)"), size: 16, get: () => CLAUDE_MINI_ICON, set: s => CLAUDE_MINI_ICON = s,
     note: L("the Control Strip's usage meter wears the chosen agent's Mac") },
   { key: "codex-mini", label: L("Codex (mini)"), size: 16, get: () => CODEX_MINI_ICON, set: s => CODEX_MINI_ICON = s },
-  { key: "activity", label: L("Activity"), size: 16, get: () => ACTIVITY_ICON, set: s => ACTIVITY_ICON = s,
-    note: L("the Control Strip's activity module") },
+  { key: "mon-cpu", label: L("CPU chip"), size: 16, get: () => MON_CPU_ICON, set: s => MON_CPU_ICON = s,
+    note: L("the Control Strip's activity module wears the chosen chart's object") },
+  { key: "mon-mem", label: L("Memory stick"), size: 16, get: () => MON_MEM_ICON, set: s => MON_MEM_ICON = s },
+  { key: "mon-gpu", label: L("Graphics card"), size: 16, get: () => MON_GPU_ICON, set: s => MON_GPU_ICON = s },
+  { key: "mon-net", label: L("Network port"), size: 16, get: () => MON_NET_ICON, set: s => MON_NET_ICON = s },
+  { key: "mon-disk", label: L("Hard disk"), size: 16, get: () => MON_DISK_ICON, set: s => MON_DISK_ICON = s },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: L("Apple Menu"), size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -13165,11 +13207,12 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) auRe
 
 // ---- Control Strip: activity ----
 // This host's CPU, memory, GPU, network and disk, a sample every two
-// seconds (/v1/host/monitor, hostmon): a wide module wearing a little
-// monitor, the chosen measure's last minute as a chart and its figure now,
-// and a menu with all five as charts over the last few minutes. Picking a
-// row puts it on the tile, remembered per browser like the token and the
-// agent. The daemon samples only while a desktop reads, so the desk asks
+// seconds (/v1/host/monitor, hostmon): a wide module wearing the chosen
+// measure's object (a chip, a memory stick, a graphics card, a network
+// port, a disk), its last minute as a chart and its figure now, and a menu
+// with all five as charts over the last few minutes, each row wearing its
+// object. Picking a row puts it on the tile, remembered per browser like
+// the token and the agent. The daemon samples only while a desktop reads, so the desk asks
 // every two seconds while the strip is open and not at all while it is
 // folded away or the tab is hidden; it keeps ten minutes, and a page asks
 // only for what is newer than its last sample. A platform the daemon
@@ -13180,11 +13223,11 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) auRe
 // view, two-way rates stacked (in under out, read under write).
 const csMon = $("#cs-mon");
 const MON = {
-  cpu: { name: "CPU", colors: ["#6666be"], pct: true, vals: s => [s.cpu] },
-  mem: { name: "Memory", colors: ["#cc9933"], pct: true, vals: s => [s.mem] },
-  gpu: { name: "GPU", colors: ["#77bb77"], pct: true, vals: s => [s.gpu] },
-  net: { name: "Network", colors: ["#99ccff", "#30305e"], vals: s => [s.net_in, s.net_out] },
-  disk: { name: "Disk", colors: ["#ffb060", "#c8600a"], vals: s => [s.disk_read, s.disk_write] },
+  cpu: { name: "CPU", icon: "mon-cpu", colors: ["#6666be"], pct: true, vals: s => [s.cpu] },
+  mem: { name: "Memory", icon: "mon-mem", colors: ["#cc9933"], pct: true, vals: s => [s.mem] },
+  gpu: { name: "GPU", icon: "mon-gpu", colors: ["#77bb77"], pct: true, vals: s => [s.gpu] },
+  net: { name: "Network", icon: "mon-net", colors: ["#99ccff", "#30305e"], vals: s => [s.net_in, s.net_out] },
+  disk: { name: "Disk", icon: "mon-disk", colors: ["#ffb060", "#c8600a"], vals: s => [s.disk_read, s.disk_write] },
 };
 const MON_FLOOR = 10000; // a rate chart's top is never under 10 KB/s, so an idle line stays flat
 let monShown = "cpu", monSeen = "1", monInfo = null, monSamples = [], monT = 0, monInterval = 2000;
@@ -13194,7 +13237,9 @@ try {
   monSeen = localStorage.getItem("exe_cstrip_mon") || "1";
 } catch (e) {}
 const monKinds = () => Object.keys(MON).filter(k => k !== "gpu" || (monInfo && monInfo.gpu));
-const monKind = () => monKinds().includes(monShown) ? monShown : "cpu";
+// before the first answer the remembered pick holds: a GPU tile is not
+// drawn as the CPU's and then swapped
+const monKind = () => !monInfo || monKinds().includes(monShown) ? monShown : "cpu";
 const monNow = () => Date.now() - monFreshAt < 10000 && monSamples.length ? monSamples[monSamples.length - 1] : null;
 const monPct = v => v == null ? "—" : Math.round(v) + "%";
 const monSum = vs => vs.some(v => v != null) ? vs.reduce((a, v) => a + (v || 0), 0) : null;
@@ -13264,7 +13309,7 @@ function monFit() {
 }
 function monStripPaint() {
   csMon.hidden = !(monInfo ? true : monSeen === "1");
-  $("#cs-mon .cs-ico").innerHTML = iconCurrent("activity");
+  $("#cs-mon .cs-ico").innerHTML = iconCurrent(MON[monKind()].icon);
   $("#cs-mon .cs-txt").textContent = monFigure(monKind(), monNow());
   monDraw($("#cs-mon .cs-chart canvas"), monKind());
   if (monLive) {
@@ -13311,7 +13356,7 @@ function monStripMenu() {
     const cv = el("canvas"), val = el("span", { class: "v", "data-w": widest });
     monLive[kind] = { cv, val };
     return { label: el("span", { class: "mon-row" }, el("span", { class: "n" }, MON[kind].name), el("span", { class: "c" }, cv), val),
-      mark: kind === monKind(), act: () => monPick(kind) };
+      icon: iconCurrent(MON[kind].icon), mark: kind === monKind(), act: () => monPick(kind) };
   });
   const head = !i ? L("Activity: checking…") : L`${i.host || L("This machine")}: ${i.cores} cores · ${fmtBytes(i.memory_total)}${i.gpu ? " · " + i.gpu : ""}`;
   showCtxMenu(0, 0, [

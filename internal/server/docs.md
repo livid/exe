@@ -438,15 +438,16 @@ record**. With neither agent installed, the tile stays away.
 
 ### Control Strip: activity
 
-The **activity module**, a little monitor at the end of the strip, charts
-this machine: CPU, memory, GPU, network and disk, a sample every two
-seconds.
+The **activity module**, at the end of the strip, charts this machine:
+CPU, memory, GPU, network and disk, a sample every two seconds.
 
 - The tile shows the last minute of one of them and its figure now: `23%`,
-  or `1.2 MB/s` for network and disk, both directions added.
+  or `1.2 MB/s` for network and disk, both directions added. Its icon says
+  which: a chip for CPU, a memory stick, a graphics card, a network port,
+  a hard disk.
 - The menu shows all five as charts over the last four minutes (about two on
-  a phone's narrow screen), each with its words. Pick a row to put it on the
-  tile.
+  a phone's narrow screen), each with its icon and words. Pick a row to put
+  it on the tile.
 
 | Row | Its words |
 | --- | --- |
