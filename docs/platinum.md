@@ -185,6 +185,8 @@ restyling: `internal/server/ui/index.html` (the desktop),
   the field, at least 170px wide and clamped inside the app's safe area.
   Two to eight candidates appear after 600ms without input; a lone match
   shows no list. Typing again hides the list and restarts that wait.
+  Only text edits start the wait, including a completed IME composition;
+  restoring or switching tabs and focusing the field never start it.
   The page stays in place. The caret
   stays in the field; arrows move the menu's single inverted row, Return
   opens that row or looks up the typed text when none is selected, and

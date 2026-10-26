@@ -633,7 +633,8 @@ function suggestWords() {
 }
 // Keep the caret and phone keyboard while a candidate is pressed.
 suggestions.addEventListener("pointerdown", e => e.preventDefault());
-field.addEventListener("focus", suggestWords);
+// Only edits (input or a completed IME composition) start suggestions.
+// Restoring a tab or returning focus to its word is not a new search.
 field.addEventListener("blur", closeSuggestions);
 field.addEventListener("compositionstart", () => { completion.composing = true; closeSuggestions(); });
 field.addEventListener("compositionend", () => { completion.composing = false; suggestWords(); });

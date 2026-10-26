@@ -4453,6 +4453,8 @@ After you pause typing for just over half a second, up to eight saved
 words beginning with those letters appear under the field, in alphabetical
 order, for the selected language pair. Typing again hides the list until
 your next pause. The list stays hidden when there is only one match.
+Switching tabs or focusing the field does not open suggestions; edit the
+lookup text to start them.
 Click or tap one to open it, or use **↑ / ↓** and **Return**. **Escape**
 dismisses the list. Return without a selected candidate submits the text
 you typed. Suggestions only search the saved dictionary; typing does
