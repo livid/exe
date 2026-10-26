@@ -33,6 +33,7 @@ func TestMain(m *testing.M) {
 // answer ("" for a session that fails).
 func fakeDictCodex(t *testing.T, dir, answer string) {
 	t.Helper()
+	t.Setenv("EXE_DICT_TTS_URL", "") // never call the host's TTS from a unit test
 	if answer != "" {
 		if err := os.WriteFile(filepath.Join(dir, "answer.json"), []byte(answer), 0o600); err != nil {
 			t.Fatal(err)

@@ -358,6 +358,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/chat/send", s.handleChatSend)
 	mux.HandleFunc("POST /v1/chat/complete", s.handleChatComplete)
 	mux.HandleFunc("GET /v1/dict", s.handleDictGet)
+	mux.HandleFunc("GET /v1/dict/audio", s.handleDictAudio)
 	mux.HandleFunc("POST /v1/dict", s.handleDictLookup)
 	mux.HandleFunc("POST /v1/dict/start", s.handleDictStart)
 	mux.HandleFunc("GET /v1/dict/stream", s.handleDictStream)

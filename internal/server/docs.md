@@ -4519,6 +4519,22 @@ every step so far included, rather than starting another.
 Entries are kept in the node's own dictionary, `~/.exe/dict.db`
 (SQLite), so a word looked up before opens at once.
 
+New English entries also get an American English pronunciation from the
+host's TTS service. Press the **speaker beside the headword** to hear it.
+The MP3 is saved in the same SQLite database and later playback needs no
+TTS service. Existing entries keep their text; they are not regenerated.
+If TTS is unavailable, the entry is still saved and the speaker stays dim.
+Other source languages keep their written pronunciations only, since this
+TTS service is configured for English.
+
+The daemon calls `http://127.0.0.1:20262/speak/<headword>?v=Aiden`.
+Set `EXE_DICT_TTS_URL` in the daemon's environment to use another base URL,
+or set it to an empty string to disable synthesis. Requests wait at most
+90 seconds and accept MP3s up to 2 MB. An entry with saved audio has
+`"audio": true` in its API result; read the bytes with
+`GET /v1/dict/audio?from=en&to=zh&q=word`, using the returned entry's `q`.
+This endpoint takes the daemon's API token like other dictionary calls.
+
 A word the dictionary does not have yet is written by Codex: an
 ephemeral session of the Codex CLI on this host, on `gpt-6.1-sol` at
 extra-high reasoning.

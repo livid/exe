@@ -312,7 +312,8 @@ type dictKept struct {
 	Entry   json.RawMessage `json:"entry"`
 	Model   string          `json:"model"`
 	Effort  string          `json:"effort"`
-	Created int64           `json:"created"` // unix ms
+	Created int64           `json:"created"`         // unix ms
+	Audio   bool            `json:"audio,omitempty"` // MP3 kept in entry_audio
 	// Written is set on the answer of the lookup that wrote it, with what
 	// the session spent.
 	Written bool       `json:"written,omitempty"`
@@ -341,7 +342,11 @@ func (s *Server) dictDatabase() (*sql.DB, error) {
 		PRIMARY KEY (src, dst, key));
 	CREATE TABLE IF NOT EXISTS typos (
 		src TEXT NOT NULL, key TEXT NOT NULL, word TEXT NOT NULL, created INTEGER NOT NULL,
-		PRIMARY KEY (src, key))`); err != nil {
+		PRIMARY KEY (src, key));
+	CREATE TABLE IF NOT EXISTS entry_audio (
+		src TEXT NOT NULL, dst TEXT NOT NULL, key TEXT NOT NULL,
+		mp3 BLOB NOT NULL, created INTEGER NOT NULL,
+		PRIMARY KEY (src, dst, key))`); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -357,8 +362,10 @@ func (s *Server) dictGet(src, dst, key string) (*dictKept, error) {
 	}
 	k := &dictKept{From: src, To: dst, Q: key}
 	var entry string
-	err = db.QueryRow(`SELECT entry, model, effort, created FROM entries WHERE src = ? AND dst = ? AND key = ?`,
-		src, dst, key).Scan(&entry, &k.Model, &k.Effort, &k.Created)
+	err = db.QueryRow(`SELECT entry, model, effort, created,
+		EXISTS (SELECT 1 FROM entry_audio a WHERE a.src = e.src AND a.dst = e.dst AND a.key = e.key)
+		FROM entries e WHERE src = ? AND dst = ? AND key = ?`,
+		src, dst, key).Scan(&entry, &k.Model, &k.Effort, &k.Created, &k.Audio)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -371,15 +378,33 @@ func (s *Server) dictGet(src, dst, key string) (*dictKept, error) {
 	return k, nil
 }
 
-func (s *Server) dictPut(k *dictKept, headword string) error {
+func (s *Server) dictPut(k *dictKept, headword string, mp3 []byte) error {
 	db, err := s.dictDatabase()
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec(`INSERT OR REPLACE INTO entries (src, dst, key, headword, entry, model, effort, created, looked, lookups)
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`INSERT OR REPLACE INTO entries (src, dst, key, headword, entry, model, effort, created, looked, lookups)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
 		k.From, k.To, k.Q, headword, string(k.Entry), k.Model, k.Effort, k.Created, k.Created)
-	return err
+	if err != nil {
+		return err
+	}
+	if len(mp3) != 0 {
+		if _, err := tx.Exec(`INSERT OR REPLACE INTO entry_audio (src, dst, key, mp3, created) VALUES (?, ?, ?, ?, ?)`,
+			k.From, k.To, k.Q, mp3, k.Created); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	k.Audio = len(mp3) != 0
+	return nil
 }
 
 // dictTypo is the word a known typo stands for, "" when key is none.
@@ -957,7 +982,19 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 		}
 		kept := &dictKept{From: src.Code, To: dst.Code, Q: key, Entry: raw,
 			Model: dictModel, Effort: dictEffort, Created: time.Now().UnixMilli()}
-		if err := s.dictPut(kept, e.Headword); err != nil {
+		var mp3 []byte
+		// The host's TTS service currently speaks American English only.
+		// Synthesize the generated headword, never the original typo or
+		// an inflected form whose entry names a different headword.
+		if src.Code == "en" && dictTTSURL() != "" {
+			step("audio", nil)
+			mp3, err = dictSpeech(ctx, e.Headword)
+			if err != nil {
+				// Losing pronunciation must not lose the model's entry.
+				step("audio-unavailable", nil)
+			}
+		}
+		if err := s.dictPut(kept, e.Headword, mp3); err != nil {
 			f.err = err
 			return
 		}

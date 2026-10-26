@@ -194,6 +194,10 @@ body.lone .tab .tx { visibility: hidden; }
 .entry { padding: 12px 14px 16px; user-select: text; cursor: text; overflow-wrap: break-word; }
 .entry .hw { font-size: 18px; line-height: 24px; font-weight: bold; }
 .entry .hw.muted { color: #888; }
+.entry .head { display: flex; align-items: center; gap: 12px; min-height: 24px; }
+.entry .head .hw { min-width: 0; overflow-wrap: anywhere; }
+.entry .speak { flex: none; width: 30px; padding: 2px 7px; }
+.entry .speak svg { display: block; }
 .entry .prons { margin-top: 2px; }
 .entry .prons span + span { margin-left: 14px; }
 .entry .pl { color: #777; margin-right: 5px; }
@@ -473,6 +477,7 @@ function drawTabs() {
 }
 
 function activate(tab) {
+  stopSpeech();
   active = tab;
   tab.unseen = false;
   for (const t of tabs) t.page.classList.toggle("off", t !== tab);
@@ -500,6 +505,7 @@ tabsEl.addEventListener("wheel", e => {
 }, { passive: false });
 
 function closeTab(tab) {
+  if (tab === active) stopSpeech();
   stopTab(tab); // its session, if any, goes on in the daemon and is kept
   const i = tabs.indexOf(tab);
   tabs.splice(i, 1);
@@ -542,6 +548,7 @@ function paintStatus() {
 
 // ---- what a page shows ----
 function show(tab, ...kids) {
+  if (tab === active) stopSpeech();
   tab.filled = false;
   tab.entry.replaceChildren(...kids);
   tab.page.scrollTop = 0;
@@ -584,7 +591,17 @@ function renderEntry(tab, k, live = false) {
     });
     kids.push(el("div", { class: "fix" }, "Corrected from “", el("span", { lang: src }, k.corrected), "”. ", typed));
   }
-  kids.push(el("div", Object.assign({ class: "hw" }, S), e.headword || k.q));
+  const head = el("div", { class: "head" }, el("div", Object.assign({ class: "hw" }, S), e.headword || k.q));
+  if (src === "en") {
+    const label = "Play American English pronunciation";
+    const play = el("button", { class: "ghost speak", type: "button", "aria-label": label,
+      title: k.audio ? label : tab.busy ? "Preparing pronunciation…" : "No pronunciation saved" });
+    play.disabled = !k.audio;
+    play.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5h3l4-4v12l-4-4H1zM10 4h1v6h-1zM12 2h1v10h-1z"/></svg>';
+    play.addEventListener("click", () => playSpeech(tab, k, play));
+    head.append(play);
+  }
+  kids.push(head);
   const prons = (e.pronunciations || []).filter(p => p.ipa);
   if (prons.length) kids.push(el("div", { class: "prons" }, ...prons.map(p =>
     el("span", {}, p.label ? el("span", Object.assign({ class: "pl" }, T), p.label) : null, p.ipa))));
@@ -632,6 +649,35 @@ function renderEntry(tab, k, live = false) {
   tab.filled = true;
   if (follow) pg.scrollTop = pg.scrollHeight;
 }
+
+// One pronunciation at a time, started by a press (also on mobile).
+// Audio uses the same token query supported by the daemon's media APIs.
+let speech = null;
+function stopSpeech() {
+  if (!speech) return;
+  speech.audio.pause();
+  speech.button.disabled = false;
+  speech.button.removeAttribute("aria-busy");
+  speech = null;
+}
+function playSpeech(tab, k, button) {
+  stopSpeech();
+  const params = new URLSearchParams({ from: k.from, to: k.to, q: k.q });
+  if (TOKEN) params.set("token", TOKEN);
+  const audio = new Audio("/v1/dict/audio?" + params);
+  const current = speech = { audio, button };
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  audio.addEventListener("ended", () => { if (speech === current) stopSpeech(); });
+  audio.play().catch(() => {
+    if (speech !== current) return;
+    stopSpeech();
+    setStatus(tab, "Pronunciation could not be played. Press the speaker to try again.", true);
+  });
+}
+addEventListener("pagehide", stopSpeech);
+document.addEventListener("visibilitychange", () => { if (document.hidden) stopSpeech(); });
+addEventListener("message", e => { if (e.source === parent && e.data?.exe === "hide") stopSpeech(); });
 
 // partialJSON reads as much of a JSON text as has arrived: an object or a
 // list cut short ends where the text does, a string cut short keeps what
@@ -798,6 +844,8 @@ function watch(tab, q, model, effort, word) {
         p.last.querySelector(".b").append(el("span", { class: "d" }, secs(st.t - p.t))); // on the pass's last line
         break;
       case "answer": w.answering = true; line(st.t, "Writing the entry…"); break;
+      case "audio": w.audio = true; break;
+      case "audio-unavailable": w.audio = false; break;
       case "retry": line(st.t, "Retrying: " + (st.text || "")); break;
       case "usage": w.usage = st.usage; break;
     }
@@ -897,7 +945,7 @@ function tick(tab) {
   const w = tab.watcher;
   if (!w) return;
   const s = tab.base + Math.floor((Date.now() - tab.at) / 1000);
-  setStatus(tab, w.answering
+  setStatus(tab, w.audio ? "Preparing pronunciation for “" + w.q + "”… " + clock(s) : w.answering
     ? "Codex is writing “" + w.q + "”… " + num([...w.text].length) + " characters · " + clock(s)
     : w.spell && !w.spell.done ? "Codex is checking the spelling of “" + w.q + "”… " + clock(s)
     : "Codex is thinking about “" + w.q + "”… " + clock(s));
