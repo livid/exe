@@ -520,7 +520,9 @@ function sparkleDaily() {
     { opacity: 0 }, { opacity: .8, offset: .35 }, { opacity: 0 }
   ], { duration: 550, delay: i * 80, easing: "ease-out" }));
 }
-reducedMotion.addEventListener("change", () => { if (reducedMotion.matches) stopSparkle(); });
+reducedMotion.addEventListener("change", () => {
+  if (reducedMotion.matches) { stopSparkle(); finishTabMotion(); }
+});
 dailyStar.addEventListener("click", () => { if (!dailyCtrl && dailyWord) loadDaily(true); });
 function recentKey(item) { return [item.from, item.to, tidy(item.q).toLowerCase()].join(":"); }
 function recordLookup(q, src, dst, exact) {
@@ -613,12 +615,12 @@ async function loadDaily(another = false) {
 }
 // Refresh the calendar date after returning to an app left open overnight.
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) stopDaily();
+  if (document.hidden) { stopDaily(); finishTabMotion(); }
   else if (!active) loadDaily();
 });
 window.addEventListener("message", e => {
   if (e.source !== parent) return;
-  if (e.data?.exe === "hide") stopDaily();
+  if (e.data?.exe === "hide") { stopDaily(); finishTabMotion(); }
   if (e.data?.exe === "show" && !active) loadDaily();
 });
 
@@ -727,6 +729,26 @@ window.addEventListener("message", e => { if (e.source === parent && e.data?.exe
 // the tab bar scrolls sideways when they outgrow it.
 const tabs = [];
 let active = null;
+let tabMotion = null;
+// Only the welcome/first-tab boundary moves. Lookup work starts at once;
+// closing keeps the tab visible for its exit but stops following its work.
+function finishTabMotion() {
+  if (!tabMotion) return;
+  const motion = tabMotion;
+  tabMotion = null;
+  motion.animation.cancel();
+  motion.finish();
+}
+function slideTab(tab, closing, finish = () => {}) {
+  finishTabMotion();
+  if (reducedMotion.matches) { finish(); return; }
+  const animation = tab.el.animate(closing
+    ? [{ transform: "translateY(0)", opacity: 1 }, { transform: "translateY(18px)", opacity: 0 }]
+    : [{ transform: "translateY(18px)", opacity: 0 }, { transform: "translateY(0)", opacity: 1 }],
+    { duration: 150, easing: closing ? "cubic-bezier(.4,-.12,.8,.3)" : "cubic-bezier(.2,.8,.2,1.15)" });
+  const motion = tabMotion = { animation, finish };
+  animation.onfinish = () => { if (tabMotion === motion) finishTabMotion(); };
+}
 const CLOSE_CRISP = '<svg class="crisp" width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path fill="#262626" d="M0 0h1v1H0zM6 0h1v1H6zM1 1h1v1H1zM5 1h1v1H5zM2 2h1v1H2zM4 2h1v1H4zM3 3h1v1H3zM2 4h1v1H2zM4 4h1v1H4zM1 5h1v1H1zM5 5h1v1H5zM0 6h1v1H0zM6 6h1v1H6z"/></svg>';
 const CLOSE_FINE = '<svg class="fine" width="7" height="7" viewBox="0 0 7 7" shape-rendering="geometricPrecision"><path d="M0.5 0.5L6.5 6.5M6.5 0.5L0.5 6.5" stroke="#262626" stroke-width="1"/></svg>';
 const BELL = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1z" fill="currentColor"/></svg>';
@@ -814,14 +836,24 @@ tabsEl.addEventListener("wheel", e => {
 }, { passive: false });
 
 function closeTab(tab) {
+  if (tab.closing || !tabs.includes(tab)) return;
+  finishTabMotion();
   if (tab === active) stopSpeech();
+  tab.closing = true;
   stopTab(tab); // its session, if any, goes on in the daemon and is kept
-  const i = tabs.indexOf(tab);
-  tabs.splice(i, 1);
-  tab.el.remove();
-  tab.page.remove();
-  if (tab === active) activate(tabs[Math.min(i, tabs.length - 1)] || null);
-  else { drawTabs(); remember(); }
+  const remove = () => {
+    const i = tabs.indexOf(tab);
+    if (i < 0) return;
+    tabs.splice(i, 1);
+    tab.el.remove();
+    tab.page.remove();
+    if (tab === active) activate(tabs[Math.min(i, tabs.length - 1)] || null);
+    else { drawTabs(); remember(); }
+  };
+  if (tabs.length === 1) {
+    tab.el.style.pointerEvents = "none";
+    slideTab(tab, true, remove);
+  } else remove();
 }
 
 // the tab a lookup goes into: the open one, or — while that one writes, or
@@ -838,8 +870,9 @@ function tabFor(q, src, dst, exact) {
 
 // ---- this browser's own: the tabs, which is open, what the field holds ----
 function remember() {
-  const state = { tabs: tabs.map(t => ({ from: t.src, to: t.dst, q: t.q, exact: t.exact, pending: t.busy && !t.ask, unseen: t.unseen })),
-    active: tabs.indexOf(active), field: field.value, from: from.value, to: to.value, recent };
+  const kept = tabs.filter(t => !t.closing); // a reload during the exit must not reopen the closed tab
+  const state = { tabs: kept.map(t => ({ from: t.src, to: t.dst, q: t.q, exact: t.exact, pending: t.busy && !t.ask, unseen: t.unseen })),
+    active: kept.indexOf(active), field: field.value, from: from.value, to: to.value, recent };
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
 }
 
@@ -1318,8 +1351,10 @@ function lookup(exact = false) {
   closeSuggestions();
   const q = tidy(field.value);
   if (!q) { field.focus(); return; }
+  finishTabMotion();
   field.value = q;
   recordLookup(q, from.value, to.value, exact);
+  const first = tabs.length === 0;
   const pick = tabFor(q, from.value, to.value, exact);
   if (pick.open) { // (the open tab itself, asked twice, keeps the field as typed)
     if (pick.tab !== active) activate(pick.tab);
@@ -1327,6 +1362,7 @@ function lookup(exact = false) {
   }
   const tab = pick.tab;
   if (tab !== active) activate(tab);
+  if (first) slideTab(tab, false);
   run(tab, q, from.value, to.value, exact, true);
 }
 
@@ -1479,6 +1515,7 @@ $("#go").addEventListener("click", () => lookup());
 // or, while that tab writes, on a new one beside it
 for (const s of [from, to]) s.addEventListener("change", () => {
   closeSuggestions();
+  finishTabMotion();
   const q = tidy(field.value);
   let tab = active;
   if (!tab) {
