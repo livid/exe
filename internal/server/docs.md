@@ -4604,7 +4604,8 @@ connection, so a pile of writing tabs never ties up the browser. Tabs
 narrow as they crowd, and past that the bar scrolls sideways (a wheel, a
 trackpad or a finger).
 
-The × on any tab closes it, including the last one. With no tabs open,
+The × on any tab closes it, including the last one. Hover over it to see
+its circular click area fade in; moving away fades it out. With no tabs open,
 Dict shows its welcome page: **Word of the Day** from the saved dictionary
 in large serif type on the window's gray background, and your **10 most
 recent words** in two columns, newest

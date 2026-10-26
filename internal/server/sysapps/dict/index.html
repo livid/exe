@@ -179,15 +179,20 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
   animation: pulse 1.2s ease-in-out infinite; }
 .tab .lb { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .tab .lb.untitled { color: #666; }
-/* the close box: a crisp x in an 11px cell, inverted while pressed */
-.tab .tx { flex: none; width: 11px; height: 11px; margin-top: 2px; display: grid; place-items: center; border-radius: 2px; }
+/* A circular close target; its quiet hover wash fades without moving the X. */
+.tab .tx { flex: none; width: 15px; height: 15px; display: grid; place-items: center;
+  border-radius: 50%; background-color: transparent; transition: background-color 120ms ease-out; }
 .tab .tx svg { display: block; }
 .tab .tx .fine { display: none; }
 @media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
   .tab .tx .crisp { display: none; } .tab .tx .fine { display: block; }
 }
-.tab .tx:active { background: #666; }
+@media (hover: hover) {
+  .tab .tx:hover { background-color: rgba(38, 38, 38, .10); }
+}
+.tab .tx:active { background-color: #666; transition-duration: 0s; }
 .tab .tx:active svg { filter: invert(1); }
+@media (prefers-reduced-motion: reduce) { .tab .tx { transition: none; } }
 
 /* the pages: one a tab, white, under the tabs' line, flush with the window
    frame at the sides and with the status bar below (its top line is the

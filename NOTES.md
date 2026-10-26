@@ -6,7 +6,7 @@ before it said is kept in CHANGELOG.md.
 -->
 
 - **Help → Mount Workspace…** shows how your Mac, Windows or Linux computer mounts the Workspace as a drive.
-- **Dict** fetches missing pronunciations; tap its welcome star to sparkle and discover another saved word.
+- **Dict** fills missing MP3s, sparkles to reveal another word, and highlights circular tab close buttons.
 - On a phone, a key row under the terminal windows sends **Esc**, **Tab**, **Shift-Tab** and the arrows.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.
 - **Blue Pencil** keeps what it checked when you switch models: only new or edited text goes to the new one.
