@@ -1002,6 +1002,7 @@ function settle(tab) {
   if (tab.watcher) tab.watcher.stop();
   tab.watcher = null;
   tab.fid = "";
+  tab.audioOnly = false;
   tab.ask = null;
   if (tab.busy && tab !== active) tab.unseen = true;
   tab.busy = false;
@@ -1178,7 +1179,10 @@ function heard(m) {
 // begin starts a tab's page over on its flight: the log, the clock
 function begin(tab) {
   if (tab.watcher) tab.watcher.stop();
-  tab.watcher = watch(tab, tab.typed, tab.model, tab.effort, tab.word);
+  // A missing pronunciation keeps the saved definition on screen.
+  tab.watcher = tab.audioOnly
+    ? { q: tab.q, audio: true, drawn: true, step() {}, more() {}, stop() {} }
+    : watch(tab, tab.typed, tab.model, tab.effort, tab.word);
   clearInterval(tab.ticker);
   tab.ticker = setInterval(() => tick(tab), 1000);
   tick(tab);
@@ -1206,16 +1210,21 @@ function take(tab, m) {
     const typo = m.entry.corrected || (tab.key && m.entry.q !== tab.key);
     const k = Object.assign({}, m.entry, { corrected: typo ? q : "" });
     const drawn = !!(w && w.drawn);
+    const audioOnly = tab.audioOnly;
     // a typo: the tab takes its word, as the session showed it
     tab.q = !k.corrected ? q : w && w.q.toLowerCase() === k.q ? w.q : k.q;
-    if (tab === active) { closeSuggestions(); field.value = tab.q; }
+    if (tab === active && !audioOnly) { closeSuggestions(); field.value = tab.q; }
     settle(tab);
+    if (k.audio_flight) Object.assign(tab, { fid: k.audio_flight, key: k.corrected || k.q, audioOnly: true,
+      busy: true, base: 0, at: Date.now() });
     renderEntry(tab, k, drawn); // a page watched being written keeps its place
     const tok = k.tokens;
     setStatus(tab, k.written
       ? "Written by " + k.model + " (" + k.effort + ") in " + clock(elapsed) +
         (tok ? " · " + num(tok.totalTokens) + " tokens, " + num(tok.reasoningOutputTokens) + " of them reasoning" : "") + " · kept"
       : pairOf(src, dst) + " · in the dictionary since " + day(k.created));
+    if (audioOnly && !k.audio) setStatus(tab, "Pronunciation unavailable. Look up this word again to retry.");
+    if (k.audio_flight) { drawTab(tab); remember(); followFlight(tab); }
   } else if (m.notfound) {
     settle(tab);
     const sugg = m.suggestions || [];
@@ -1316,13 +1325,16 @@ async function run(tab, q, src, dst, exact, spare = false) {
   }
   Object.assign(tab, { fid: m.flight, key: m.key, word: m.q || "", model: m.model, effort: m.effort,
     base: m.wait || 0, at: Date.now() });
+  followFlight(tab);
+}
+function followFlight(tab) {
   begin(tab);
   const fl = flights.get(tab.fid);
   if (fl) { // what the stream already brought
     for (const line of fl.lines) take(tab, line);
     if (fl.final) take(tab, fl.final);
   }
-  if (!stream) openStream();
+  if (tab.fid && !stream) openStream();
 }
 function failed(tab, q, exact, msg, detail) {
   settle(tab);

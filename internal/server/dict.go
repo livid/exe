@@ -306,14 +306,15 @@ func dictQuery(from, to, q string) (src, dst dictLang, key string, err error) {
 
 // dictKept is an entry as the dictionary keeps it, and as the API sends it.
 type dictKept struct {
-	From    string          `json:"from"`
-	To      string          `json:"to"`
-	Q       string          `json:"q"`
-	Entry   json.RawMessage `json:"entry"`
-	Model   string          `json:"model"`
-	Effort  string          `json:"effort"`
-	Created int64           `json:"created"`         // unix ms
-	Audio   bool            `json:"audio,omitempty"` // MP3 kept in entry_audio
+	From        string          `json:"from"`
+	To          string          `json:"to"`
+	Q           string          `json:"q"`
+	Entry       json.RawMessage `json:"entry"`
+	Model       string          `json:"model"`
+	Effort      string          `json:"effort"`
+	Created     int64           `json:"created"`                // unix ms
+	Audio       bool            `json:"audio,omitempty"`        // MP3 kept in entry_audio
+	AudioFlight string          `json:"audio_flight,omitempty"` // missing MP3 being fetched on a lookup
 	// Written is set on the answer of the lookup that wrote it, with what
 	// the session spent.
 	Written bool       `json:"written,omitempty"`
@@ -640,6 +641,7 @@ func (s *Server) dictBegin(w http.ResponseWriter, r *http.Request) (k *dictKept,
 		return
 	}
 	if k != nil {
+		s.dictFetchAudio(k)
 		return k, nil, key, word, true
 	}
 	mode := dictPlain
@@ -901,6 +903,7 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 		// miss and its join — or, for a plain lookup, read as a typo
 		// meanwhile
 		if k, word, err := s.dictFind(src.Code, dst.Code, key, mode == dictExact); err == nil && k != nil {
+			s.dictFetchAudio(k)
 			f.kept = k
 			return
 		} else if word != key {
@@ -950,6 +953,7 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 				s.dictPutTypo(src.Code, key, word)
 				key = word
 				if k, err := s.dictGet(src.Code, dst.Code, key); err == nil && k != nil {
+					s.dictFetchAudio(k)
 					f.kept = k
 					return
 				}

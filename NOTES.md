@@ -6,7 +6,7 @@ before it said is kept in CHANGELOG.md.
 -->
 
 - **Help → Mount Workspace…** shows how your Mac, Windows or Linux computer mounts the Workspace as a drive.
-- **Dict** adds a serif welcome page, daily word and recent lookups; suggestions wait until you pause typing.
+- **Dict** adds a daily word and recent lookups, waits for typing pauses, and fetches missing pronunciations.
 - On a phone, a key row under the terminal windows sends **Esc**, **Tab**, **Shift-Tab** and the arrows.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.
 - **Blue Pencil** keeps what it checked when you switch models: only new or edited text goes to the new one.

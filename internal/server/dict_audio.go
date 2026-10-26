@@ -11,11 +11,96 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const dictMaxMP3 = 2 << 20
+
+// A lookup returns the saved definition immediately. Its audio flight runs
+// independently of the request and shares the existing stream, so closing
+// the tab does not lose the MP3 and concurrent lookups do not synthesize it
+// twice. GET previews and playback remain reads; a failed fetch is retried
+// only by another lookup.
+func (s *Server) dictFetchAudio(k *dictKept) {
+	if k.Audio || k.From != "en" || dictTTSURL() == "" {
+		return
+	}
+	id := "audio\x00" + k.From + "\x00" + k.To + "\x00" + k.Q
+	s.dictMu.Lock()
+	defer s.dictMu.Unlock()
+	if f := s.dictFlights[id]; f != nil {
+		k.AudioFlight = f.fid
+		return
+	}
+	if s.dictFlights == nil {
+		s.dictFlights = map[string]*dictFlight{}
+	}
+	if s.dictBoot == "" {
+		s.dictBoot = strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	s.dictSeq++
+	f := &dictFlight{began: time.Now(), changed: make(chan struct{}), ids: []string{id},
+		fid: s.dictBoot + "-" + strconv.Itoa(s.dictSeq), from: k.From, to: k.To, word: k.Q, poke: s.dictPoke}
+	s.dictFlights[id] = f
+	s.dictAll = append(s.dictAll, f)
+	kept := *k // the worker owns its result; never mutate the response being encoded
+	kept.AudioFlight = ""
+	k.AudioFlight = f.fid
+	go func() {
+		defer func() {
+			s.dictMu.Lock()
+			delete(s.dictFlights, id)
+			f.ended = time.Now()
+			s.dictMu.Unlock()
+			f.finish()
+		}()
+		// Failure leaves the saved definition intact, without a sticky
+		// failed job that could prevent the next lookup from retrying.
+		kept.Audio = s.dictFillAudio(&kept)
+		f.kept = &kept
+	}()
+}
+
+func (s *Server) dictFillAudio(k *dictKept) bool {
+	db, err := s.dictDatabase()
+	if err != nil {
+		return false
+	}
+	var headword string
+	var exists bool
+	err = db.QueryRow(`SELECT headword,
+		EXISTS (SELECT 1 FROM entry_audio a WHERE a.src=e.src AND a.dst=e.dst AND a.key=e.key)
+		FROM entries e WHERE src=? AND dst=? AND key=? AND entry=?`,
+		k.From, k.To, k.Q, string(k.Entry)).Scan(&headword, &exists)
+	if err != nil || strings.TrimSpace(headword) == "" {
+		return false
+	}
+	if exists {
+		return true
+	}
+	mp3, err := dictSpeech(context.Background(), headword)
+	if err != nil {
+		return false
+	}
+	// Recheck the entry in the write itself. A backfill may have supplied
+	// audio meanwhile, or another writer may have changed the headword.
+	// Never replace their audio or alter the entry and its metadata.
+	_, err = db.Exec(`INSERT INTO entry_audio (src,dst,key,mp3,created)
+		SELECT src,dst,key,?,? FROM entries
+		WHERE src=? AND dst=? AND key=? AND headword=? AND entry=?
+		ON CONFLICT(src,dst,key) DO NOTHING`, mp3, time.Now().UnixMilli(),
+		k.From, k.To, k.Q, headword, string(k.Entry))
+	if err != nil {
+		return false
+	}
+	err = db.QueryRow(`SELECT EXISTS (SELECT 1 FROM entries e JOIN entry_audio a
+		ON a.src=e.src AND a.dst=e.dst AND a.key=e.key
+		WHERE e.src=? AND e.dst=? AND e.key=? AND e.headword=? AND e.entry=?)`,
+		k.From, k.To, k.Q, headword, string(k.Entry)).Scan(&exists)
+	return err == nil && exists
+}
 
 // An explicit empty value disables synthesis on hosts without TTS.
 func dictTTSURL() string {

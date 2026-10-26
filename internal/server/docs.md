@@ -4534,8 +4534,12 @@ Entries are kept in the node's own dictionary, `~/.exe/dict.db`
 New English entries also get an American English pronunciation from the
 host's TTS service. Press the **speaker beside the headword** to hear it.
 The MP3 is saved in the same SQLite database and later playback needs no
-TTS service. Existing entries keep their text; they are not regenerated.
-If TTS is unavailable, the entry is still saved and the speaker stays dim.
+TTS service. Looking up a saved English entry without audio starts a
+pronunciation fetch in the background. Its definition appears immediately,
+and the speaker becomes available when the MP3 is saved. Existing entries
+keep their text and metadata; they are not regenerated. Concurrent lookups
+of the same entry share the fetch. If TTS is unavailable, the definition
+stays available and looking it up again retries the pronunciation.
 Other source languages keep their written pronunciations only, since this
 TTS service is configured for English.
 
@@ -4546,6 +4550,10 @@ or set it to an empty string to disable synthesis. Requests wait at most
 `"audio": true` in its API result; read the bytes with
 `GET /v1/dict/audio?from=en&to=zh&q=word`, using the returned entry's `q`.
 This endpoint takes the daemon's API token like other dictionary calls.
+When a lookup returns a saved entry whose pronunciation is being fetched,
+its `audio_flight` identifies that work on `GET /v1/dict/stream`. The final
+entry reports whether audio was saved. Preview GETs and playback do not
+start synthesis.
 
 A word the dictionary does not have yet is written by Codex: an
 ephemeral session of the Codex CLI on this host, on `gpt-6.1-sol` at
