@@ -149,6 +149,8 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 /* past what fits, the bar scrolls sideways (a wheel, a trackpad, a
    finger), its scroll bar hidden; the 3px it reaches below its line keep
    the open tab's foot inside the scrolled box, so it is not clipped */
+#tab-view { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+#tab-stage { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 #tabs { flex: none; display: flex; align-items: flex-start; padding: 0 6px 3px; margin-bottom: -3px;
   position: relative; z-index: 2; min-width: 0; min-height: 25px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 #tabs::-webkit-scrollbar { display: none; }
@@ -410,6 +412,7 @@ body.kb #status { --sab: 0px; }
 </div>
 <div id="suggestions" class="dropdown" role="listbox" aria-label="Dictionary words" hidden></div>
 
+<div id="tab-view"><div id="tab-stage">
 <div id="tabs"></div>
 <div id="pages">
   <div id="welcome" class="page off" aria-label="Welcome to Dict"><div class="entry">
@@ -434,6 +437,7 @@ body.kb #status { --sab: 0px; }
   </div></div>
 </div>
 
+</div></div>
 <div id="status"><span id="st">Ready</span></div>
 
 <!-- grow box sampled pixel-for-pixel from Mac OS 9 (Infinite Mac) -->
@@ -490,7 +494,7 @@ function el(tag, attrs = {}, ...kids) {
 }
 
 const from = $("#from"), to = $("#to"), field = $("#q"), st = $("#st");
-const tabsEl = $("#tabs"), pagesEl = $("#pages");
+const tabsEl = $("#tabs"), pagesEl = $("#pages"), tabStage = $("#tab-stage");
 for (const [c, n] of FROM) from.append(el("option", { value: c }, n));
 for (const [c, n] of TO) to.append(el("option", { value: c }, n));
 
@@ -730,8 +734,9 @@ window.addEventListener("message", e => { if (e.source === parent && e.data?.exe
 const tabs = [];
 let active = null;
 let tabMotion = null;
-// Only the welcome/first-tab boundary moves. Lookup work starts at once;
-// closing keeps the tab visible for its exit but stops following its work.
+// The tab strip and its whole page move as one panel at the welcome
+// boundary. Lookup work starts at once; closing keeps the panel visible
+// for its exit but stops following its work.
 function finishTabMotion() {
   if (!tabMotion) return;
   const motion = tabMotion;
@@ -739,10 +744,10 @@ function finishTabMotion() {
   motion.animation.cancel();
   motion.finish();
 }
-function slideTab(tab, closing, finish = () => {}) {
+function slideTab(closing, finish = () => {}) {
   finishTabMotion();
   if (reducedMotion.matches) { finish(); return; }
-  const animation = tab.el.animate(closing
+  const animation = tabStage.animate(closing
     ? [{ transform: "translateY(0)", opacity: 1 }, { transform: "translateY(18px)", opacity: 0 }]
     : [{ transform: "translateY(18px)", opacity: 0 }, { transform: "translateY(0)", opacity: 1 }],
     { duration: 150, easing: closing ? "cubic-bezier(.4,-.12,.8,.3)" : "cubic-bezier(.2,.8,.2,1.15)" });
@@ -852,7 +857,7 @@ function closeTab(tab) {
   };
   if (tabs.length === 1) {
     tab.el.style.pointerEvents = "none";
-    slideTab(tab, true, remove);
+    slideTab(true, remove);
   } else remove();
 }
 
@@ -1362,7 +1367,7 @@ function lookup(exact = false) {
   }
   const tab = pick.tab;
   if (tab !== active) activate(tab);
-  if (first) slideTab(tab, false);
+  if (first) slideTab(false);
   run(tab, q, from.value, to.value, exact, true);
 }
 

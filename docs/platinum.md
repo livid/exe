@@ -131,9 +131,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   Dict's tab close X: a 15px circular hit area with a subtle dark wash and
   a 120ms background-color fade. The X stays fixed; pressing darkens the
   circle immediately, and reduced motion removes the fade.
-  Opening Dict's first tab from its welcome page slides the tab up in
-  150ms with a slight spring settle. Closing the last tab slides it down
-  over the same time before returning to welcome. Other tab changes and
+  Opening Dict's first tab from its welcome page slides the entire panel
+  (tab strip and content together) up in 150ms with a slight spring settle.
+  Closing the last tab slides that whole panel down over the same time
+  before returning to welcome. Clip the moving panel between the toolbar
+  and status line. Other tab changes and
   restored tabs do not animate; reduced motion skips both slides.
 
 ## Controls, with the HIG's numbers

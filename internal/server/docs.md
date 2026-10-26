@@ -4606,8 +4606,9 @@ trackpad or a finger).
 
 The × on any tab closes it, including the last one. Hover over it to see
 its circular click area fade in; moving away fades it out. The first tab
-slides up with a brief spring motion when opened from welcome; closing
-the last tab slides it down. Each takes 0.15 seconds, or is immediate with
+and its full content slide up together with a brief spring motion when
+opened from welcome; closing the last tab slides the whole panel down.
+Each takes 0.15 seconds, or is immediate with
 reduced motion. With no tabs open,
 Dict shows its welcome page: **Word of the Day** from the saved dictionary
 in large serif type on the window's gray background, and your **10 most
