@@ -429,6 +429,7 @@ const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
 
 // ---- saved-word autocomplete ----
 const suggestions = $("#suggestions");
+const COMPLETION_IDLE_MS = 600; // show candidates only after a pause in typing
 const completion = { timer: 0, ctrl: null, revision: 0, items: [], index: -1, composing: false };
 function closeSuggestions() {
   clearTimeout(completion.timer);
@@ -499,7 +500,7 @@ function suggestWords() {
       field.setAttribute("aria-expanded", "true");
       placeSuggestions();
     } catch (e) { /* a failed completion never blocks a normal lookup */ }
-  }, 120);
+  }, COMPLETION_IDLE_MS);
 }
 // Keep the caret and phone keyboard while a candidate is pressed.
 suggestions.addEventListener("pointerdown", e => e.preventDefault());

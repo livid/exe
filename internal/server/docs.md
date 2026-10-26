@@ -4449,8 +4449,10 @@ For a script or a coding agent that talks to exe over HTTP:
 A lookup is one line of up to 80 characters. Capitals and extra spaces
 do not matter: *Serendipity* and *serendipity* are one entry.
 
-As you type, up to eight saved words beginning with those letters appear
-under the field, in alphabetical order, for the selected language pair.
+After you pause typing for just over half a second, up to eight saved
+words beginning with those letters appear under the field, in alphabetical
+order, for the selected language pair. Typing again hides the list until
+your next pause.
 Click or tap one to open it, or use **↑ / ↓** and **Return**. **Escape**
 dismisses the list. Return without a selected candidate submits the text
 you typed. Suggestions only search the saved dictionary; typing does
