@@ -6239,8 +6239,12 @@ window.addEventListener("message", async e => {
   const w = fr.closest(".window");
   if (e.data.exe === "focus") {
     // clicks inside the iframe never reach the window's own mousedown
-    // handler, so apps raise their window through the bridge
+    // handler, so apps raise their window through the bridge — nor the
+    // desk's, which closes an open menu (a title bar's, the menu bar's)
+    // on a press anywhere else, so the bridge closes it too
     focusWin(w);
+    hideCtxMenu();
+    if (openMenuEl) menuClose();
   } else if (e.data.exe === "reveal-ack") {
     // the app selected the item a search result named — stop repeating
     clearInterval(revealTimer);
