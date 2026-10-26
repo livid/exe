@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,8 +29,12 @@ func TestDictDaily(t *testing.T) {
 		}
 	}
 	h := s.Handler()
-	request := func(src, dst, date, token string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("GET", "/v1/dict/daily?"+url.Values{"from": {src}, "to": {dst}, "date": {date}}.Encode(), nil)
+	request := func(src, dst, date, token string, except ...string) *httptest.ResponseRecorder {
+		params := url.Values{"from": {src}, "to": {dst}, "date": {date}}
+		if len(except) > 0 {
+			params.Set("except", except[0])
+		}
+		r := httptest.NewRequest("GET", "/v1/dict/daily?"+params.Encode(), nil)
 		if token != "" {
 			r.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -37,9 +42,9 @@ func TestDictDaily(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	read := func(src, dst, date string) *dictDailyWord {
+	read := func(src, dst, date string, except ...string) *dictDailyWord {
 		t.Helper()
-		w := request(src, dst, date, "test-token")
+		w := request(src, dst, date, "test-token", except...)
 		var got struct {
 			Date string         `json:"date"`
 			Word *dictDailyWord `json:"word"`
@@ -79,6 +84,31 @@ func TestDictDaily(t *testing.T) {
 	}
 	if got := read("fr", "zh", "2026-10-26"); got != nil {
 		t.Fatalf("another language leaked: %+v", got)
+	}
+	// The star can include today's additions, but cannot repeat the
+	// displayed key or cross the selected language pair. No lookup runs.
+	for i := 0; i < 12; i++ {
+		got := read("en", "zh", "2026-10-26", "  "+strings.ToUpper(first.Q)+"  ")
+		if got == nil || got.Q == first.Q || (got.Q != "serene" && got.Q != "wander" && got.Q != "added-today") {
+			t.Fatalf("alternate word: %+v", got)
+		}
+	}
+	if got := read("de", "zh", "2026-10-26", "ärger"); got == nil || got.Word != "Abend" {
+		t.Fatalf("new dictionary cannot show another word: %+v", got)
+	}
+	if got := read("en", "ja", "2026-10-26", "went"); got != nil {
+		t.Fatalf("one-word dictionary repeated itself: %+v", got)
+	}
+	if got := read("fr", "zh", "2026-10-26", "missing"); got != nil {
+		t.Fatalf("empty dictionary found an alternate: %+v", got)
+	}
+	if got := read("en", "zh", "2026-10-26"); !reflect.DeepEqual(got, first) {
+		t.Fatalf("star changed the default daily word: %+v", got)
+	}
+	for _, except := range []string{strings.Repeat("a", 81), "two\x00words"} {
+		if w := request("en", "zh", "2026-10-26", "test-token", except); w.Code != 400 {
+			t.Errorf("invalid exclusion: %d", w.Code)
+		}
 	}
 	for _, tc := range []struct{ src, dst, date string }{
 		{"xx", "zh", "2026-10-26"}, {"en", "xx", "2026-10-26"}, {"en", "zh", "2026-02-30"}, {"en", "zh", "today"},

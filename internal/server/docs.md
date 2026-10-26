@@ -4611,7 +4611,10 @@ recent words** in two columns, newest
 first. Click a word to open it; a recent word remembers its language pair.
 The welcome page has no separators or scrollbar; in a short window you
 can still scroll by touch, wheel or keyboard. The daily word follows the
-selected languages.
+selected languages. Click or tap the star above it to show a different
+saved word, with a brief sparkle. The star also works with Return or Space
+when focused; reduced motion skips the sparkle. The current word stays
+visible while the next one loads. With only one saved word, it stays put.
 Looking up the same word in the same languages moves it to the top.
 The recent list stays in this browser, alongside its tabs. Viewing the
 daily preview or restoring tabs does not add to the list.
@@ -4676,6 +4679,10 @@ UTC. The daily rotation uses entries saved before that date's UTC midnight,
 or the oldest saved entry when the dictionary has only just started.
 An empty dictionary returns `"word":null`. Reading this preview neither
 generates an entry nor counts a lookup.
+Add `except=<current q>` to pick another saved word at random in the same
+language pair, including entries saved today. The displayed key is excluded;
+when there is no other word, the result is `"word":null`. This does not
+change the default daily selection.
 
 **Read a kept entry.** `GET /v1/dict?from=en&to=zh&q=word` answers a
 kept entry, and 404 when there is none. For a known typo it answers its

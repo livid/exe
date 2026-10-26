@@ -31,6 +31,14 @@ func (s *Server) handleDictDaily(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	except := q.Get("except")
+	if except != "" {
+		_, _, except, err = dictQuery(src.Code, dst.Code, except)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+	}
 	db, err := s.dictDatabase()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -52,6 +60,13 @@ func (s *Server) handleDictDaily(w http.ResponseWriter, r *http.Request) {
 		offset := (day.Unix()/86400%count + count) % count
 		query = `SELECT key, headword, entry FROM entries WHERE src = ? AND dst = ? AND created < ? ORDER BY key LIMIT 1 OFFSET ?`
 		args = append(args, day.UnixMilli(), offset)
+	}
+	if except != "" {
+		// The welcome star explores the whole saved dictionary, including
+		// today's additions, without repeating the word already on screen.
+		query = `SELECT key, headword, entry FROM entries
+			WHERE src = ? AND dst = ? AND key != ? ORDER BY RANDOM() LIMIT 1`
+		args = []any{src.Code, dst.Code, except}
 	}
 	rows, err := db.QueryContext(r.Context(), query, args...)
 	if err != nil {

@@ -246,7 +246,13 @@ body.welcoming #pages { border-top-color: transparent; background: var(--g200); 
 #welcome::-webkit-scrollbar { display: none; }
 #welcome .entry { cursor: default; max-width: 540px; margin: 0 auto; padding: 24px 30px 28px; }
 #welcome .daily-feature { text-align: center; }
-#welcome .ornament { display: block; margin: 0 auto 12px; color: #8888aa; }
+#daily-shuffle { position: relative; display: block; width: 59px; height: 43px;
+  margin: -12px auto 0; padding: 12px; border: 0; background: none; color: #8888aa; }
+#daily-shuffle:focus-visible { outline: 1px dotted var(--black); outline-offset: -4px; }
+#daily-shuffle:active { color: var(--hl); }
+#welcome .ornament { display: block; }
+#daily-shuffle .sparkles { position: absolute; inset: 0; pointer-events: none; color: #8888aa; }
+#daily-shuffle .sparkles path { opacity: 0; }
 #welcome h1 { font-size: 11px; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; margin: 0; }
 #welcome .daily-date { color: #777; font-size: 10px; margin-top: 5px; min-height: 15px; }
 #welcome h2 { font-size: 12px; font-weight: normal; color: #666; margin: 0 0 16px; }
@@ -277,7 +283,7 @@ body.welcoming #pages { border-top-color: transparent; background: var(--g200); 
 }
 @media (max-height: 460px) {
   #welcome .entry { padding-top: 12px; }
-  #welcome .ornament { margin-bottom: 8px; }
+  #daily-shuffle { margin-bottom: -4px; }
   #daily { height: 160px; padding-top: 12px; }
 }
 /* a session writing, watched: the word in grey, the model under it, then
@@ -403,7 +409,14 @@ body.kb #status { --sab: 0px; }
 <div id="pages">
   <div id="welcome" class="page off" aria-label="Welcome to Dict"><div class="entry">
     <section class="daily-feature" aria-labelledby="daily-heading">
-      <svg class="ornament" aria-hidden="true" width="35" height="19" viewBox="0 0 35 19" shape-rendering="crispEdges"><path fill="currentColor" d="M16 0h3v5h2v3h5v3h-5v3h-2v5h-3v-5h-2v-3H9V8h5V5h2zM2 6h1v3h3v1H3v3H2v-3H0V9h2zM32 6h1v3h2v1h-2v3h-1v-3h-3V9h3z"/></svg>
+      <button id="daily-shuffle" type="button" aria-label="Show another word of the day" title="Show another word of the day" aria-disabled="true">
+        <svg class="ornament" aria-hidden="true" width="35" height="19" viewBox="0 0 35 19" shape-rendering="crispEdges"><path fill="currentColor" d="M16 0h3v5h2v3h5v3h-5v3h-2v5h-3v-5h-2v-3H9V8h5V5h2zM2 6h1v3h3v1H3v3H2v-3H0V9h2zM32 6h1v3h2v1h-2v3h-1v-3h-3V9h3z"/></svg>
+        <svg class="sparkles" aria-hidden="true" width="59" height="43" viewBox="0 0 59 43" shape-rendering="crispEdges" fill="currentColor">
+          <path d="M12 6h1v2h2v1h-2v2h-1V9h-2V8h2zM46 31h1v2h2v1h-2v2h-1v-2h-2v-1h2z"/>
+          <path d="M44 5h1v3h3v1h-3v3h-1V9h-3V8h3zM16 32h1v2h2v1h-2v2h-1v-2h-2v-1h2z"/>
+          <path d="M5 27h2v2H5zM52 15h2v2h-2z"/>
+        </svg>
+      </button>
       <h1 id="daily-heading">Word of the Day</h1>
       <p id="daily-date" class="daily-date"></p>
       <div id="daily" aria-live="polite"><p class="quiet">Loading…</p></div>
@@ -488,7 +501,22 @@ const okFrom = c => FROM.some(([x]) => x === c), okTo = c => TO.some(([x]) => x 
 // ---- welcome: this browser's recent lookups and a saved daily word ----
 let recent = [];
 const welcome = $("#welcome"), daily = $("#daily"), recentEl = $("#recent");
+const dailyStar = $("#daily-shuffle"), reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 let dailyCtrl = null;
+let dailyWord = null, dailyStamp = "", dailyNotice = "";
+function stopSparkle() { for (const a of dailyStar.getAnimations({ subtree: true })) a.cancel(); }
+function sparkleDaily() {
+  stopSparkle();
+  if (reducedMotion.matches) return;
+  dailyStar.querySelector(".ornament").animate([
+    { color: "#8888aa" }, { color: "#bbbbdd", offset: .35 }, { color: "#8888aa" }
+  ], { duration: 650, easing: "ease-out" });
+  dailyStar.querySelectorAll(".sparkles path").forEach((p, i) => p.animate([
+    { opacity: 0 }, { opacity: .8, offset: .35 }, { opacity: 0 }
+  ], { duration: 550, delay: i * 80, easing: "ease-out" }));
+}
+reducedMotion.addEventListener("change", () => { if (reducedMotion.matches) stopSparkle(); });
+dailyStar.addEventListener("click", () => { if (!dailyCtrl && dailyWord) loadDaily(true); });
 function recentKey(item) { return [item.from, item.to, tidy(item.q).toLowerCase()].join(":"); }
 function recordLookup(q, src, dst, exact) {
   const item = { q, from: src, to: dst, exact };
@@ -515,24 +543,43 @@ function renderRecent() {
 function stopDaily() {
   if (dailyCtrl) dailyCtrl.abort();
   dailyCtrl = null;
+  dailyStar.setAttribute("aria-busy", "false");
+  dailyStar.setAttribute("aria-disabled", String(!dailyWord));
+  stopSparkle();
 }
-async function loadDaily() {
+async function loadDaily(another = false) {
   stopDaily();
-  const ctrl = dailyCtrl = new AbortController(), src = from.value, dst = to.value;
+  const src = from.value, dst = to.value;
   const now = new Date();
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+  const stamp = [src, dst, date].join(":");
+  if (stamp !== dailyStamp) { dailyWord = null; dailyStamp = stamp; }
+  dailyNotice = "";
+  paintStatus();
   $("#daily-date").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-  daily.replaceChildren(el("p", { class: "quiet" }, "Loading…"));
+  if (!another && dailyWord) return; // keep a chosen word when returning to the welcome page
+  const ctrl = dailyCtrl = new AbortController();
+  const params = new URLSearchParams({ from: src, to: dst, date });
+  dailyStar.setAttribute("aria-busy", "true");
+  dailyStar.setAttribute("aria-disabled", "true");
+  if (another && dailyWord) {
+    params.set("except", dailyWord.q);
+    sparkleDaily();
+    dailyNotice = "Choosing another saved word…";
+    paintStatus();
+  } else daily.replaceChildren(el("p", { class: "quiet" }, "Loading…"));
   try {
-    const r = await api("/v1/dict/daily?" + new URLSearchParams({ from: src, to: dst, date }), { signal: ctrl.signal });
+    const r = await api("/v1/dict/daily?" + params, { signal: ctrl.signal });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const m = await r.json();
     if (ctrl !== dailyCtrl) return;
     if (!m.word) {
-      daily.replaceChildren(el("p", { class: "quiet" }, "Look up a word in " + pairOf(src, dst) + " to start this dictionary."));
+      if (dailyWord) dailyNotice = "No other saved words in " + pairOf(src, dst) + " yet.";
+      else daily.replaceChildren(el("p", { class: "quiet" }, "Look up a word in " + pairOf(src, dst) + " to start this dictionary."));
       return;
     }
-    const w = m.word;
+    const w = dailyWord = m.word;
+    dailyNotice = "";
     const wordButton = welcomeLink(w.word, src, dst, true, w.q);
     wordButton.style.setProperty("--word-size", w.word.length > 45 ? "22px" : w.word.length > 28 ? "28px" : w.word.length > 16 ? "36px" : "46px");
     const open = welcomeLink("Explore this word →", src, dst, true, w.q);
@@ -543,17 +590,31 @@ async function loadDaily() {
         w.pos ? el("span", { class: "pos" }, w.pos) : null, w.gloss || "Open the saved entry."), open);
   } catch (e) {
     if (ctrl !== dailyCtrl) return;
+    if (dailyWord) {
+      dailyNotice = "Could not load another word. Press the star to try again.";
+      return;
+    }
     const retry = el("button", { class: "ghost", type: "button" }, "Try Again");
-    retry.addEventListener("click", loadDaily);
+    retry.addEventListener("click", () => loadDaily());
     daily.replaceChildren(el("p", { class: "quiet" }, "Word of the Day could not be loaded."), retry);
+  } finally {
+    if (ctrl === dailyCtrl) {
+      dailyCtrl = null;
+      dailyStar.setAttribute("aria-busy", "false");
+      dailyStar.setAttribute("aria-disabled", String(!dailyWord));
+      paintStatus();
+    }
   }
 }
 // Refresh the calendar date after returning to an app left open overnight.
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && !active) loadDaily();
+  if (document.hidden) stopDaily();
+  else if (!active) loadDaily();
 });
 window.addEventListener("message", e => {
-  if (e.source === parent && e.data?.exe === "show" && !active) loadDaily();
+  if (e.source !== parent) return;
+  if (e.data?.exe === "hide") stopDaily();
+  if (e.data?.exe === "show" && !active) loadDaily();
 });
 
 // ---- saved-word autocomplete ----
@@ -784,7 +845,7 @@ function setStatus(tab, text, err = false) {
   if (tab === active) paintStatus();
 }
 function paintStatus() {
-  st.textContent = active ? active.st : pairOf(from.value, to.value);
+  st.textContent = active ? active.st : dailyNotice || pairOf(from.value, to.value);
   st.classList.toggle("err", !!active?.stErr);
 }
 

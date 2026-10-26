@@ -95,6 +95,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   grey, with a small ornament and date, no pane or section separators,
   and no visible scrollbar. Recent words form two columns below it.
   Touch, wheel and keyboard can still scroll a short window.
+  The star ornament is a keyboard-accessible button with a larger invisible
+  hit area. Pressing it briefly brightens the star and fades small pixel
+  sparkles around it while another saved word loads; reduced motion skips
+  the animation. Keep the word and recent list in place during the request.
 - On a Mac that stack lands on Geneva, which has one weight: a browser
   only thickens it a little, and a bold heading reads as the text under
   it. The public site (`site/site.css`) and the Platinum site template
