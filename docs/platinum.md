@@ -178,8 +178,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   between 1x and 2x.
 - A field with autocomplete (Dict): the Platinum menu block, 2px below
   the field, at least 170px wide and clamped inside the app's safe area.
-  Up to eight candidates appear after 600ms without input; typing again
-  hides the list and restarts that wait. The page stays in place. The caret
+  Two to eight candidates appear after 600ms without input; a lone match
+  shows no list. Typing again hides the list and restarts that wait.
+  The page stays in place. The caret
   stays in the field; arrows move the menu's single inverted row, Return
   opens that row or looks up the typed text when none is selected, and
   Escape dismisses. A click or tap opens a candidate without blurring the

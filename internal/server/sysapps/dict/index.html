@@ -576,7 +576,7 @@ function suggestWords() {
       if (revision !== completion.revision || document.activeElement !== field ||
           q !== tidy(field.value) || src !== from.value || dst !== to.value) return;
       completion.items = m.suggestions || [];
-      if (!completion.items.length) return;
+      if (completion.items.length < 2) return;
       suggestions.replaceChildren(...completion.items.map((item, i) => {
         const row = el("div", { class: "dd-item", id: "dict-suggestion-" + i,
           role: "option", "aria-selected": "false", lang: src }, item.word);
