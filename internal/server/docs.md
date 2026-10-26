@@ -4448,6 +4448,13 @@ For a script or a coding agent that talks to exe over HTTP:
 A lookup is one line of up to 80 characters. Capitals and extra spaces
 do not matter: *Serendipity* and *serendipity* are one entry.
 
+As you type, up to eight saved words beginning with those letters appear
+under the field, in alphabetical order, for the selected language pair.
+Click or tap one to open it, or use **↑ / ↓** and **Return**. **Escape**
+dismisses the list. Return without a selected candidate submits the text
+you typed. Suggestions only search the saved dictionary; typing does
+not start a generation session.
+
 ### What an entry holds
 
 <img src="https://hub.v2core.com/v1/embed/bafybeic5ko7amlhalzkaoqu5qw5lakdmvvvklalvghfilwridvi4yhxlvm" alt="Dict open on serendipity, English into Chinese: the pronunciations, the sense with its definition, a simple and a complex example, the etymology and related words" width="562" height="647">
@@ -4627,6 +4634,12 @@ Two calls answer a lookup. Both name the languages by their codes and
 the word as `q`: `from` is `en`, `de`, `fr`, `es`, `it` or `la`, and
 `to` is `zh`, `ja` or `ko`. Like every `/v1/` call they take the
 daemon's API token where one is set.
+
+**Autocomplete saved words.** `GET /v1/dict/suggest?from=en&to=zh&q=ser`
+returns `{"suggestions":[{"q":"serendipity","word":"serendipity"},…]}`:
+up to eight prefix matches in the selected dictionary, alphabetically.
+`q` is the lookup key and `word` its display spelling. No match returns
+an empty list. It does not generate entries or increment lookup counts.
 
 **Read a kept entry.** `GET /v1/dict?from=en&to=zh&q=word` answers a
 kept entry, and 404 when there is none. For a known typo it answers its

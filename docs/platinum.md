@@ -176,6 +176,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   picture arrives. Pictures scale smoothly (a 180px touch icon at 16);
   glyphs of our own are pixels at whole scales and `geometricPrecision`
   between 1x and 2x.
+- A field with autocomplete (Dict): the Platinum menu block, 2px below
+  the field, at least 170px wide and clamped inside the app's safe area.
+  Up to eight candidates appear without moving the page. The caret
+  stays in the field; arrows move the menu's single inverted row, Return
+  opens that row or looks up the typed text when none is selected, and
+  Escape dismisses. A click or tap opens a candidate without blurring the
+  field. The list scrolls above the status line when a phone keyboard
+  leaves less room. Use combobox/listbox roles and an active descendant.
 - A field that grows with its text (the Hub composer, `fitField`): it
   opens at its shallow height and takes whole lines as the writing needs
   them, up to a limit cut from the window (half its height, a whole number
