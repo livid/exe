@@ -3919,7 +3919,8 @@ hub's public pages have the same list.
 
 **Attach…** picks the files, and a picture you paste into the window
 attaches the same way. Each becomes a chip under the field, with a × to
-take it off again. A post takes up to four attachments, a drawing among
+take it off again; rest the pointer on a picture's chip to see the
+picture bigger, with its whole name. A post takes up to four attachments, a drawing among
 them, and a picture or a file may be 8 MB at the most.
 
 A photo is cleaned before it leaves the browser: the place it was taken

@@ -140,6 +140,14 @@ textarea { resize: none; }
 .chip progress::-webkit-progress-bar { background: var(--g400); box-shadow: inset 1px 1px 0 var(--g600); }
 .chip progress::-webkit-progress-value { background: var(--hl); border-right: 1px solid var(--black); }
 .chip progress::-moz-progress-bar { background: var(--hl); }
+/* a picture's chip under the pointer: the picture at a size to see it by
+   (peekShow), in a layer hung 2px under the chip in the contextual menu's
+   dress, with its whole name under it, which the chip may cut. It takes
+   no pointer, so leaving the chip is all it takes to close it. */
+#peek { min-width: 0; padding: 5px; pointer-events: none; }
+#peek img { display: block; border: 1px solid var(--black); background: #fff; box-sizing: content-box; }
+#peek div { margin-top: 4px; font-size: 10px; line-height: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* the feed: a sunken white list, same chrome as a Finder list view */
 #feed { flex: 1; background: #fff; border: 1px solid var(--black);
@@ -834,6 +842,7 @@ body.mobile #status { padding-right: 8px; }
 
 <div id="toast"></div>
 <div id="ctx" class="dropdown" hidden></div>
+<div id="peek" class="dropdown" aria-hidden="true" hidden><img alt=""><div></div></div>
 <div id="at" class="dropdown" role="listbox" aria-label="Mention" hidden></div>
 <div id="veil">
   <div id="dlg"></div>
@@ -2298,6 +2307,7 @@ function connectEvents() {
 // ---- composing ----
 function renderChips() {
   const box = $("#chips");
+  peekHide(); // its chip is going; the pointer over the new one shows it again
   box.replaceChildren();
   $("#draw").disabled = attachments.length >= 4; // a drawing is one more attachment
   for (const [i, a] of attachments.entries()) {
@@ -2313,6 +2323,7 @@ function renderChips() {
       chip.append(el("span", {}, a.filename), a.bar, x);
     } else {
       const thumb = a.poster || (a.mime.startsWith("image/") ? a.cid : "");
+      const label = (a.filename || a.mime) + (a.duration ? " · " + fmtLength(a.duration) : "");
       if (thumb) {
         const img = el("img", { src: hurl("/v1/embed/" + thumb) });
         // a picture put back from a draft: the hub sweeps an unposted
@@ -2328,8 +2339,12 @@ function renderChips() {
           };
         }
         chip.append(img);
+        // the layer says the whole name, and a tooltip would hang over it
+        chip.title = "";
+        chip.onpointerenter = e => { if (e.pointerType !== "touch") peekShow(chip, img, label); };
+        chip.onpointerleave = peekHide;
       }
-      chip.append(el("span", {}, (a.filename || a.mime) + (a.duration ? " · " + fmtLength(a.duration) : "")), x);
+      chip.append(el("span", {}, label), x);
     }
     box.append(chip);
   }
@@ -2341,6 +2356,57 @@ function updatePostBtn() {
   // a file still converting has nothing to embed yet
   $("#post").disabled = (!$("#text").value.trim() && !attachments.length) || attachments.some(a => !a.cid);
 }
+// An attached picture, bigger, while the pointer is on its chip: up to
+// 320 by 240 and never past its own size, under the chip, or over it when
+// the window has the room only there, and smaller still when neither side
+// holds that much. The chip's picture is the whole file, so the layer's
+// is already loaded; it shows once decoded, never as an empty box first.
+const peekEl = $("#peek"), peekImg = peekEl.querySelector("img"), peekCap = peekEl.querySelector("div");
+let peekFor = null;
+function peekShow(chip, img, label) {
+  if (!img.naturalWidth) return; // still loading, or gone
+  peekFor = chip;
+  const nw = img.naturalWidth, nh = img.naturalHeight;
+  const fit = (mw, mh) => {
+    const k = Math.min(1, mw / nw, mh / nh);
+    return [Math.max(1, Math.round(nw * k)), Math.max(1, Math.round(nh * k))];
+  };
+  let [w, h] = fit(Math.min(320, innerWidth - 24), 240);
+  const size = () => {
+    peekImg.style.width = w + "px";
+    peekImg.style.height = h + "px";
+    peekCap.style.width = w + 2 + "px"; // a long name is cut, it does not widen the layer
+  };
+  peekImg.src = img.src;
+  peekCap.textContent = label;
+  size();
+  peekEl.style.left = peekEl.style.top = "0";
+  peekEl.style.visibility = "hidden";
+  peekEl.hidden = false;
+  const r = chip.getBoundingClientRect(), L = peekEl.getBoundingClientRect();
+  // the room under the chip and over it, less the 2px gap, the shadow and an edge
+  const under = innerHeight - r.bottom - 8, over = r.top - 8;
+  let top;
+  if (L.height <= under) top = r.bottom + 2;
+  else if (L.height <= over) top = r.top - 2 - L.height;
+  else {
+    const room = Math.max(under, over) - (L.height - h);
+    if (room < 32) { peekHide(); return; }
+    [w, h] = fit(w, room);
+    size();
+    top = under >= over ? r.bottom + 2 : r.top - 2 - peekEl.getBoundingClientRect().height;
+  }
+  const W = peekEl.getBoundingClientRect().width;
+  peekEl.style.left = Math.max(4, Math.min(r.left, innerWidth - W - 6)) + "px";
+  peekEl.style.top = top + "px";
+  peekImg.decode().catch(() => {}).then(() => { if (peekFor === chip) peekEl.style.visibility = ""; });
+}
+function peekHide() {
+  peekFor = null;
+  peekEl.hidden = true;
+}
+window.addEventListener("blur", peekHide);
+window.addEventListener("resize", peekHide);
 
 // ---- a drawing ----
 // Draw… opens a pad, PictoChat's size, and Send posts what was drawn
