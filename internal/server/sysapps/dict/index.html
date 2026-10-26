@@ -150,7 +150,7 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
    finger), its scroll bar hidden; the 3px it reaches below its line keep
    the open tab's foot inside the scrolled box, so it is not clipped */
 #tabs { flex: none; display: flex; align-items: flex-start; padding: 0 6px 3px; margin-bottom: -3px;
-  position: relative; z-index: 2; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  position: relative; z-index: 2; min-width: 0; min-height: 25px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 #tabs::-webkit-scrollbar { display: none; }
 .tab {
   height: 22px; color: #000; font-size: 11px; font-weight: bold; line-height: 14px;
@@ -179,8 +179,7 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
   animation: pulse 1.2s ease-in-out infinite; }
 .tab .lb { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .tab .lb.untitled { color: #666; }
-/* the close box: a crisp x in an 11px cell, inverted while pressed; hidden
-   (its cell kept) while the tab is the only one */
+/* the close box: a crisp x in an 11px cell, inverted while pressed */
 .tab .tx { flex: none; width: 11px; height: 11px; margin-top: 2px; display: grid; place-items: center; border-radius: 2px; }
 .tab .tx svg { display: block; }
 .tab .tx .fine { display: none; }
@@ -189,7 +188,6 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 }
 .tab .tx:active { background: #666; }
 .tab .tx:active svg { filter: invert(1); }
-body.lone .tab .tx { visibility: hidden; }
 
 /* the pages: one a tab, white, under the tabs' line, flush with the window
    frame at the sides and with the status bar below (its top line is the
@@ -238,6 +236,21 @@ body.lone .tab .tx { visibility: hidden; }
 /* what the page says when it holds no entry: centred, grey, in the page's
    own type */
 .entry .empty { padding: 40px 12px; text-align: center; color: #888; user-select: none; cursor: default; }
+/* The welcome page is not a tab. Its daily preview keeps the same room
+   while loading, empty or unavailable, so the recent words stay put. */
+#welcome .entry { cursor: default; }
+#welcome h1 { font-size: 12px; margin: 0 0 4px; }
+#welcome h2 { font-size: 12px; margin: 16px 0 6px; padding-bottom: 2px; border-bottom: 1px solid var(--g400); }
+#welcome .intro, #welcome .quiet { color: #666; }
+#daily { height: 76px; overflow: hidden; }
+#daily .daily-word { font-weight: bold; }
+#daily .daily-gloss { margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#welcome button.link { background: none; border: 0; padding: 0; text-align: left; font: inherit; }
+#welcome button.link:focus-visible { outline: 1px dotted var(--black); outline-offset: 2px; }
+#recent { list-style: none; margin: 0; padding: 0; }
+#recent li { display: flex; align-items: baseline; gap: 12px; min-height: 25px; margin: 0; }
+#recent .link { min-width: 0; overflow-wrap: anywhere; }
+#recent .pair { margin-left: auto; color: #777; font-size: 11px; white-space: nowrap; }
 /* a session writing, watched: the word in grey, the model under it, then
    the session's steps as they come — the time each began in a column of
    its own, what it is, how long a reasoning pass took in grey at its end.
@@ -357,7 +370,17 @@ body.kb #status { --sab: 0px; }
 <div id="suggestions" class="dropdown" role="listbox" aria-label="Dictionary words" hidden></div>
 
 <div id="tabs"></div>
-<div id="pages"></div>
+<div id="pages">
+  <div id="welcome" class="page off"><div class="entry">
+    <h1>Welcome to Dict</h1>
+    <p class="intro">Type a word or phrase above, or open a word below.</p>
+    <h2>Word of the Day</h2>
+    <div id="daily" aria-live="polite"><p class="quiet">Loading…</p></div>
+    <h2>Recent Words</h2>
+    <ol id="recent"></ol>
+    <p id="no-recent" class="quiet">Your last 10 lookups in this browser will appear here.</p>
+  </div></div>
+</div>
 
 <div id="status"><span id="st">Ready</span></div>
 
@@ -426,6 +449,72 @@ const day = ms => new Date(ms).toLocaleDateString(undefined, { day: "numeric", m
 const num = n => Number(n).toLocaleString("en-US");
 const secs = s => Math.max(1, Math.round(s)) + " s";
 const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
+const okFrom = c => FROM.some(([x]) => x === c), okTo = c => TO.some(([x]) => x === c);
+
+// ---- welcome: this browser's recent lookups and a saved daily word ----
+let recent = [];
+const welcome = $("#welcome"), daily = $("#daily"), recentEl = $("#recent");
+let dailyCtrl = null;
+function recentKey(item) { return [item.from, item.to, tidy(item.q).toLowerCase()].join(":"); }
+function recordLookup(q, src, dst, exact) {
+  const item = { q, from: src, to: dst, exact };
+  recent = [item, ...recent.filter(r => recentKey(r) !== recentKey(item))].slice(0, 10);
+  remember();
+}
+function welcomeLink(word, src, dst, exact, q = word) {
+  const button = el("button", { class: "link", type: "button", lang: src }, word);
+  button.addEventListener("click", () => {
+    from.value = src;
+    to.value = dst;
+    field.value = q;
+    lookup(exact);
+  });
+  return button;
+}
+function renderRecent() {
+  recentEl.replaceChildren(...recent.map(item => el("li", {},
+    welcomeLink(item.q, item.from, item.to, item.exact),
+    el("span", { class: "pair" }, pairOf(item.from, item.to)))));
+  $("#no-recent").hidden = recent.length > 0;
+}
+function stopDaily() {
+  if (dailyCtrl) dailyCtrl.abort();
+  dailyCtrl = null;
+}
+async function loadDaily() {
+  stopDaily();
+  const ctrl = dailyCtrl = new AbortController(), src = from.value, dst = to.value;
+  const now = new Date();
+  const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+  daily.replaceChildren(el("p", { class: "quiet" }, "Loading…"));
+  try {
+    const r = await api("/v1/dict/daily?" + new URLSearchParams({ from: src, to: dst, date }), { signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const m = await r.json();
+    if (ctrl !== dailyCtrl) return;
+    if (!m.word) {
+      daily.replaceChildren(el("p", { class: "quiet" }, "Look up a word in " + pairOf(src, dst) + " to start this dictionary."));
+      return;
+    }
+    const w = m.word;
+    daily.replaceChildren(
+      el("div", { class: "daily-word" }, welcomeLink(w.word, src, dst, true, w.q)),
+      el("p", { class: "daily-gloss", lang: LANG_TAG[dst] || dst },
+        w.pos ? el("span", { class: "pos" }, w.pos) : null, w.gloss || "Open the saved entry."));
+  } catch (e) {
+    if (ctrl !== dailyCtrl) return;
+    const retry = el("button", { class: "ghost", type: "button" }, "Try Again");
+    retry.addEventListener("click", loadDaily);
+    daily.replaceChildren(el("p", { class: "quiet" }, "Word of the Day could not be loaded."), retry);
+  }
+}
+// Refresh the calendar date after returning to an app left open overnight.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !active) loadDaily();
+});
+window.addEventListener("message", e => {
+  if (e.source === parent && e.data?.exe === "show" && !active) loadDaily();
+});
 
 // ---- saved-word autocomplete ----
 const suggestions = $("#suggestions");
@@ -573,7 +662,6 @@ function drawTab(tab) {
   }
 }
 function drawTabs() {
-  document.body.classList.toggle("lone", tabs.length < 2);
   for (const t of tabs) drawTab(t);
 }
 
@@ -581,6 +669,17 @@ function activate(tab) {
   closeSuggestions();
   stopSpeech();
   active = tab;
+  welcome.classList.toggle("off", !!tab);
+  stopDaily();
+  if (!tab) {
+    field.value = "";
+    renderRecent();
+    loadDaily();
+    drawTabs();
+    paintStatus();
+    remember();
+    return;
+  }
   tab.unseen = false;
   for (const t of tabs) t.page.classList.toggle("off", t !== tab);
   from.value = tab.src;
@@ -613,8 +712,7 @@ function closeTab(tab) {
   tabs.splice(i, 1);
   tab.el.remove();
   tab.page.remove();
-  if (!tabs.length) newTab({ src: tab.src, dst: tab.dst });
-  if (tab === active) activate(tabs[Math.min(i, tabs.length - 1)]);
+  if (tab === active) activate(tabs[Math.min(i, tabs.length - 1)] || null);
   else { drawTabs(); remember(); }
 }
 
@@ -626,14 +724,14 @@ function tabFor(q, src, dst, exact) {
     return t.busy && a.src === src && a.dst === dst && a.exact === exact && a.q.toLowerCase() === q.toLowerCase();
   });
   if (same) return { tab: same, open: true };
-  if (!active.busy) return { tab: active };
+  if (active && !active.busy) return { tab: active };
   return { tab: newTab({ src, dst, q, after: active }) };
 }
 
 // ---- this browser's own: the tabs, which is open, what the field holds ----
 function remember() {
   const state = { tabs: tabs.map(t => ({ from: t.src, to: t.dst, q: t.q, exact: t.exact, pending: t.busy && !t.ask, unseen: t.unseen })),
-    active: tabs.indexOf(active), field: field.value };
+    active: tabs.indexOf(active), field: field.value, from: from.value, to: to.value, recent };
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
 }
 
@@ -644,8 +742,8 @@ function setStatus(tab, text, err = false) {
   if (tab === active) paintStatus();
 }
 function paintStatus() {
-  st.textContent = active.st;
-  st.classList.toggle("err", active.stErr);
+  st.textContent = active ? active.st : pairOf(from.value, to.value);
+  st.classList.toggle("err", !!active?.stErr);
 }
 
 // ---- what a page shows ----
@@ -1104,6 +1202,7 @@ function lookup(exact = false) {
   const q = tidy(field.value);
   if (!q) { field.focus(); return; }
   field.value = q;
+  recordLookup(q, from.value, to.value, exact);
   const pick = tabFor(q, from.value, to.value, exact);
   if (pick.open) { // (the open tab itself, asked twice, keeps the field as typed)
     if (pick.tab !== active) activate(pick.tab);
@@ -1262,6 +1361,12 @@ for (const s of [from, to]) s.addEventListener("change", () => {
   closeSuggestions();
   const q = tidy(field.value);
   let tab = active;
+  if (!tab) {
+    remember();
+    paintStatus();
+    loadDaily();
+    return;
+  }
   if (tab.busy) {
     if (!q) return;
     tab = newTab({ src: from.value, dst: to.value, q, after: active });
@@ -1282,13 +1387,24 @@ for (const s of [from, to]) s.addEventListener("change", () => {
 (function restore() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) {}
-  const okFrom = c => FROM.some(([x]) => x === c), okTo = c => TO.some(([x]) => x === c);
-  let list = Array.isArray(saved.tabs) ? saved.tabs : [{ from: saved.from, to: saved.to, q: saved.q, exact: saved.exact, pending: saved.pending }];
-  list = list.filter(t => t && typeof t === "object").slice(0, 12);
-  if (!list.length) list = [{}];
+  const pair = Array.isArray(saved.tabs) ? saved.tabs[saved.active | 0] || saved : saved;
+  from.value = okFrom(pair.from) ? pair.from : "en";
+  to.value = okTo(pair.to) ? pair.to : "zh";
+  const seen = new Set();
+  recent = (Array.isArray(saved.recent) ? saved.recent : []).filter(item => {
+    if (!item || !okFrom(item.from) || !okTo(item.to) || typeof item.q !== "string" || !tidy(item.q)) return false;
+    const key = recentKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 10).map(item => ({ from: item.from, to: item.to, q: tidy(item.q), exact: !!item.exact }));
+  let list = Array.isArray(saved.tabs) ? saved.tabs : [saved];
+  // Old empty "New Tab" placeholders become the welcome page. A saved
+  // empty array stays empty; restoring tabs never changes lookup history.
+  list = list.filter(t => t && typeof t.q === "string" && tidy(t.q)).slice(0, 12);
   for (const t of list) Object.assign(newTab({ src: okFrom(t.from) ? t.from : "en", dst: okTo(t.to) ? t.to : "zh",
     q: typeof t.q === "string" ? tidy(t.q) : "", exact: !!t.exact }), { pending: !!t.pending, unseen: !!t.unseen });
-  activate(tabs[Math.min(Math.max(0, saved.active | 0), tabs.length - 1)]);
+  activate(tabs[Math.min(Math.max(0, saved.active | 0), tabs.length - 1)] || null);
   if (typeof saved.field === "string") field.value = saved.field;
   for (const t of tabs) {
     if (t.pending && t.q) run(t, t.q, t.src, t.dst, t.exact);

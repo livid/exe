@@ -4594,13 +4594,24 @@ connection, so a pile of writing tabs never ties up the browser. Tabs
 narrow as they crowd, and past that the bar scrolls sideways (a wheel, a
 trackpad or a finger).
 
-The × on a tab closes it; a lone tab has none. Closing a tab that is
-writing does not stop its session: the entry is still written and kept.
+The × on any tab closes it, including the last one. With no tabs open,
+Dict shows its welcome page: **Word of the Day** from the saved dictionary
+in the selected languages, and your **10 most recent words**, newest
+first. Click a word to open it; a recent word remembers its language pair.
+Looking up the same word in the same languages moves it to the top.
+The recent list stays in this browser, alongside its tabs. Viewing the
+daily preview or restoring tabs does not add to the list.
+
+An empty dictionary invites you to look up its first word. Changing the
+languages on the welcome page changes the daily word without starting a
+lookup. Closing a tab that is writing does not stop its session: the
+entry is still written and kept.
 
 The window remembers its tabs, the open one and its languages in this
 browser, and a reload brings back up to twelve tabs. A tab that was
 writing rejoins its session, and one whose session was lost to a daemon
 restart starts it again.
+Closing every tab is remembered too: a reload returns to the welcome page.
 
 ### Change the languages
 
@@ -4643,6 +4654,14 @@ returns `{"suggestions":[{"q":"serendipity","word":"serendipity"},…]}`:
 up to eight prefix matches in the selected dictionary, alphabetically.
 `q` is the lookup key and `word` its display spelling. No match returns
 an empty list. It does not generate entries or increment lookup counts.
+
+**Word of the Day.** `GET /v1/dict/daily?from=en&to=zh&date=2026-10-26`
+returns `{"date":"2026-10-26","word":{"q":"…","word":"…","pos":"…","gloss":"…"}}`.
+The date is the browser's calendar day; omitted, it defaults to today in
+UTC. The daily rotation uses entries saved before that date's UTC midnight,
+or the oldest saved entry when the dictionary has only just started.
+An empty dictionary returns `"word":null`. Reading this preview neither
+generates an entry nor counts a lookup.
 
 **Read a kept entry.** `GET /v1/dict?from=en&to=zh&q=word` answers a
 kept entry, and 404 when there is none. For a known typo it answers its
