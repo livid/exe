@@ -227,6 +227,9 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 .entry .gloss { font-weight: bold; }
 .entry .def { color: #444; }
 .entry .ex + .ex { margin-top: 8px; }
+.entry .example-line { display: flex; align-items: baseline; gap: 8px; }
+.entry .example-line > span { min-width: 0; }
+.entry .example-line .speak { align-self: flex-start; margin-top: 1px; }
 .entry .tr { color: #555; }
 .entry p { margin: 0; }
 .entry table.rel { border-collapse: collapse; }
@@ -939,13 +942,7 @@ function renderEntry(tab, k, live = false) {
   }
   const head = el("div", { class: "head" }, el("div", Object.assign({ class: "hw" }, S), e.headword || k.q));
   if (src === "en") {
-    const label = "Play American English pronunciation";
-    const play = el("button", { class: "ghost speak", type: "button", "aria-label": label,
-      title: k.audio ? label : tab.busy ? "Preparing pronunciation…" : "No pronunciation saved" });
-    play.disabled = !k.audio;
-    play.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5h3l4-4v12l-4-4H1zM10 4h1v6h-1zM12 2h1v10h-1z"/></svg>';
-    play.addEventListener("click", () => playSpeech(tab, k, play));
-    head.append(play);
+    head.append(speechButton(tab, k));
   }
   kids.push(head);
   const prons = (e.pronunciations || []).filter(p => p.ipa);
@@ -963,8 +960,10 @@ function renderEntry(tab, k, live = false) {
   const ex = e.examples || [];
   if (ex.length) {
     kids.push(el("h3", {}, "Examples"));
-    for (const x of ex) kids.push(el("div", { class: "ex" },
-      el("div", S, x.text || ""), el("div", Object.assign({ class: "tr" }, T), x.translation || "")));
+    ex.forEach((x, i) => kids.push(el("div", { class: "ex" },
+      el("div", { class: "example-line" }, el("span", S, x.text || ""),
+        src === "en" && i < 2 ? speechButton(tab, k, i + 1) : null),
+      el("div", Object.assign({ class: "tr" }, T), x.translation || ""))));
   }
   if (e.etymology) kids.push(el("h3", {}, "Etymology"), el("p", T, e.etymology));
   const rel = e.related || [];
@@ -996,7 +995,18 @@ function renderEntry(tab, k, live = false) {
   if (follow) pg.scrollTop = pg.scrollHeight;
 }
 
-// One pronunciation at a time, started by a press (also on mobile).
+function speechButton(tab, k, example = 0) {
+  const label = example ? "Play example " + example + " in American English" : "Play American English pronunciation";
+  const ready = example ? k.example_audio?.[example - 1] : k.audio;
+  const play = el("button", { class: "ghost speak", type: "button", "aria-label": label,
+    title: ready ? label : tab.busy ? "Preparing audio…" : "No audio saved. Look up this word again to retry." });
+  play.disabled = !ready;
+  play.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5h3l4-4v12l-4-4H1zM10 4h1v6h-1zM12 2h1v10h-1z"/></svg>';
+  play.addEventListener("click", () => playSpeech(tab, k, play, example));
+  return play;
+}
+
+// One word or example at a time, started by a press (also on mobile).
 // Audio uses the same token query supported by the daemon's media APIs.
 let speech = null;
 function stopSpeech() {
@@ -1006,9 +1016,10 @@ function stopSpeech() {
   speech.button.removeAttribute("aria-busy");
   speech = null;
 }
-function playSpeech(tab, k, button) {
+function playSpeech(tab, k, button, example = 0) {
   stopSpeech();
   const params = new URLSearchParams({ from: k.from, to: k.to, q: k.q });
+  if (example) params.set("example", example);
   if (TOKEN) params.set("token", TOKEN);
   const audio = new Audio("/v1/dict/audio?" + params);
   const current = speech = { audio, button };
@@ -1018,7 +1029,7 @@ function playSpeech(tab, k, button) {
   audio.play().catch(() => {
     if (speech !== current) return;
     stopSpeech();
-    setStatus(tab, "Pronunciation could not be played. Press the speaker to try again.", true);
+    setStatus(tab, "Audio could not be played. Press the speaker to try again.", true);
   });
 }
 addEventListener("pagehide", stopSpeech);
@@ -1295,7 +1306,7 @@ function tick(tab) {
   const w = tab.watcher;
   if (!w) return;
   const s = tab.base + Math.floor((Date.now() - tab.at) / 1000);
-  setStatus(tab, w.audio ? "Preparing pronunciation for “" + w.q + "”… " + clock(s) : w.answering
+  setStatus(tab, w.audio ? "Preparing audio for “" + w.q + "”… " + clock(s) : w.answering
     ? "Codex is writing “" + w.q + "”… " + num([...w.text].length) + " characters · " + clock(s)
     : w.spell && !w.spell.done ? "Codex is checking the spelling of “" + w.q + "”… " + clock(s)
     : "Codex is thinking about “" + w.q + "”… " + clock(s));
@@ -1327,7 +1338,10 @@ function take(tab, m) {
       ? "Written by " + k.model + " (" + k.effort + ") in " + clock(elapsed) +
         (tok ? " · " + num(tok.totalTokens) + " tokens, " + num(tok.reasoningOutputTokens) + " of them reasoning" : "") + " · kept"
       : pairOf(src, dst) + " · in the dictionary since " + day(k.created));
-    if (audioOnly && !k.audio) setStatus(tab, "Pronunciation unavailable. Look up this word again to retry.");
+    if ((audioOnly || k.written) && k.from === "en" && !k.audio_flight &&
+        (!k.audio || (k.entry.examples || []).slice(0, 2).some((x, i) => x.text?.trim() && !k.example_audio?.[i]))) {
+      setStatus(tab, "Some audio is unavailable. Look up this word again to retry.");
+    }
     if (k.audio_flight) { drawTab(tab); remember(); followFlight(tab); }
   } else if (m.notfound) {
     settle(tab);

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,7 +25,7 @@ const dictMaxMP3 = 2 << 20
 // twice. GET previews and playback remain reads; a failed fetch is retried
 // only by another lookup.
 func (s *Server) dictFetchAudio(k *dictKept) {
-	if k.Audio || k.From != "en" || dictTTSURL() == "" {
+	if dictAudioComplete(k) || k.From != "en" || dictTTSURL() == "" {
 		return
 	}
 	id := "audio\x00" + k.From + "\x00" + k.To + "\x00" + k.Q
@@ -59,8 +60,91 @@ func (s *Server) dictFetchAudio(k *dictKept) {
 		// Failure leaves the saved definition intact, without a sticky
 		// failed job that could prevent the next lookup from retrying.
 		kept.Audio = s.dictFillAudio(&kept)
+		s.dictFillExampleAudio(context.Background(), &kept)
 		f.kept = &kept
 	}()
+}
+
+// Only the two English examples are spoken, never their translations.
+func dictExampleTexts(k *dictKept) []string {
+	if k.From != "en" {
+		return nil
+	}
+	var e dictEntry
+	if json.Unmarshal(k.Entry, &e) != nil {
+		return nil
+	}
+	texts := make([]string, min(2, len(e.Examples)))
+	for i := range texts {
+		texts[i] = e.Examples[i].Text
+	}
+	return texts
+}
+
+func dictAudioComplete(k *dictKept) bool {
+	if !k.Audio {
+		return false
+	}
+	for i, text := range dictExampleTexts(k) {
+		if strings.TrimSpace(text) != "" && (i >= len(k.ExampleAudio) || !k.ExampleAudio[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func dictReadExampleAudio(db *sql.DB, k *dictKept) error {
+	texts := dictExampleTexts(k)
+	k.ExampleAudio = make([]bool, len(texts))
+	if len(texts) == 0 {
+		return nil
+	}
+	rows, err := db.Query(`SELECT example,text FROM example_audio WHERE src=? AND dst=? AND key=?`, k.From, k.To, k.Q)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var i int
+		var text string
+		if err := rows.Scan(&i, &text); err != nil {
+			return err
+		}
+		if i >= 0 && i < len(texts) && text == texts[i] && strings.TrimSpace(text) != "" {
+			k.ExampleAudio[i] = true
+		}
+	}
+	return rows.Err()
+}
+
+func (s *Server) dictFillExampleAudio(ctx context.Context, k *dictKept) {
+	db, err := s.dictDatabase()
+	if err != nil || dictReadExampleAudio(db, k) != nil {
+		return
+	}
+	for i, text := range dictExampleTexts(k) {
+		if k.ExampleAudio[i] || strings.TrimSpace(text) == "" || ctx.Err() != nil {
+			continue
+		}
+		var current bool
+		if db.QueryRow(`SELECT EXISTS(SELECT 1 FROM entries WHERE src=? AND dst=? AND key=? AND entry=?)`,
+			k.From, k.To, k.Q, string(k.Entry)).Scan(&current) != nil || !current {
+			break
+		}
+		mp3, err := dictSpeech(ctx, text)
+		if err != nil {
+			continue // keep successful clips; retry only missing ones on another lookup
+		}
+		// No transaction is held over TTS. Recheck the original entry in
+		// the write and preserve matching audio saved by a racing backfill.
+		_, _ = db.Exec(`INSERT INTO example_audio(src,dst,key,example,text,mp3,created)
+			SELECT src,dst,key,?,?,?,? FROM entries WHERE src=? AND dst=? AND key=? AND entry=?
+			ON CONFLICT(src,dst,key,example) DO UPDATE SET
+			text=excluded.text,mp3=excluded.mp3,created=excluded.created
+			WHERE example_audio.text<>excluded.text`, i, text, mp3, time.Now().UnixMilli(),
+			k.From, k.To, k.Q, string(k.Entry))
+	}
+	_ = dictReadExampleAudio(db, k)
 }
 
 func (s *Server) dictFillAudio(k *dictKept) bool {
@@ -160,8 +244,21 @@ func (s *Server) handleDictAudio(w http.ResponseWriter, r *http.Request) {
 	}
 	var mp3 []byte
 	var created int64
-	err = db.QueryRowContext(r.Context(), `SELECT mp3, created FROM entry_audio WHERE src = ? AND dst = ? AND key = ?`,
-		src.Code, dst.Code, key).Scan(&mp3, &created)
+	if q.Has("example") {
+		// Public numbering is 1 and 2, matching the order on the page.
+		i, parseErr := strconv.Atoi(q.Get("example"))
+		if parseErr != nil || i < 1 || i > 2 {
+			writeErr(w, http.StatusBadRequest, errors.New("example must be 1 or 2"))
+			return
+		}
+		err = db.QueryRowContext(r.Context(), `SELECT a.mp3,a.created FROM example_audio a
+			JOIN entries e USING(src,dst,key) WHERE a.src=? AND a.dst=? AND a.key=? AND a.example=?
+			AND a.text=json_extract(e.entry,'$.examples[' || a.example || '].text')`,
+			src.Code, dst.Code, key, i-1).Scan(&mp3, &created)
+	} else {
+		err = db.QueryRowContext(r.Context(), `SELECT mp3, created FROM entry_audio WHERE src = ? AND dst = ? AND key = ?`,
+			src.Code, dst.Code, key).Scan(&mp3, &created)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, errors.New("no pronunciation kept"))
 		return
@@ -172,6 +269,9 @@ func (s *Server) handleDictAudio(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "audio/mpeg")
 	w.Header().Set("Cache-Control", "private, max-age=86400")
+	if q.Has("example") {
+		w.Header().Set("Cache-Control", "private, no-cache")
+	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, "pronunciation.mp3", time.UnixMilli(created), bytes.NewReader(mp3))
 }

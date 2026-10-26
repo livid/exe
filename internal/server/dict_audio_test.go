@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -27,6 +28,9 @@ func TestDictAudioSavedWithGeneratedHeadword(t *testing.T) {
 	mp3 := []byte("ID3\x04\x00\x00saved pronunciation")
 	var calls atomic.Int32
 	tts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if serveDictTestExample(w, r) {
+			return
+		}
 		calls.Add(1)
 		if r.URL.Path != "/speak/serendipity" || r.URL.Query().Get("v") != "Aiden" {
 			t.Errorf("TTS request = %s", r.URL)
@@ -42,7 +46,7 @@ func TestDictAudioSavedWithGeneratedHeadword(t *testing.T) {
 	defer ts.Close()
 	lines := dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"zh","q":"serendipty"}`))
 	k, _ := lines[len(lines)-1]["entry"].(map[string]any)
-	if k == nil || k["audio"] != true || k["corrected"] != "serendipty" {
+	if k == nil || len(k["example_audio"].([]any)) != 2 || k["example_audio"].([]any)[0] != true || k["example_audio"].([]any)[1] != true || k["audio"] != true || k["corrected"] != "serendipty" {
 		t.Fatalf("generated entry = %v", k)
 	}
 	var saved []byte
@@ -93,6 +97,21 @@ func TestDictAudioSavedWithGeneratedHeadword(t *testing.T) {
 	}
 	if w := request("/v1/dict/audio?from=en&to=ja&q=serendipity", "test-token", "GET", ""); w.Code != 404 {
 		t.Fatalf("other language pair = %d", w.Code)
+	}
+	for i, sentence := range dictExampleTexts(&cached) {
+		p := path + "&example=" + strconv.Itoa(i+1)
+		if w := request(p, "test-token", "GET", ""); w.Code != 200 || w.Body.String() != "ID3"+sentence {
+			t.Fatalf("example playback = %d %q", w.Code, w.Body)
+		}
+		if w := request(p, "", "GET", ""); w.Code != 401 {
+			t.Fatal("example bypassed auth")
+		}
+		if w := request(p, "test-token", "GET", "bytes=0-2"); w.Code != 206 || w.Body.String() != "ID3" {
+			t.Fatal("example range failed")
+		}
+		if w := request(p, "test-token", "HEAD", ""); w.Code != 200 || w.Body.Len() != 0 {
+			t.Fatal("example HEAD failed")
+		}
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("syntheses = %d", calls.Load())

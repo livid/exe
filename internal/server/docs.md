@@ -4531,28 +4531,32 @@ every step so far included, rather than starting another.
 Entries are kept in the node's own dictionary, `~/.exe/dict.db`
 (SQLite), so a word looked up before opens at once.
 
-New English entries also get an American English pronunciation from the
-host's TTS service. Press the **speaker beside the headword** to hear it.
-The MP3 is saved in the same SQLite database and later playback needs no
-TTS service. Looking up a saved English entry without audio starts a
-pronunciation fetch in the background. Its definition appears immediately,
-and the speaker becomes available when the MP3 is saved. Existing entries
-keep their text and metadata; they are not regenerated. Concurrent lookups
-of the same entry share the fetch. If TTS is unavailable, the definition
-stays available and looking it up again retries the pronunciation.
+New English entries get American English audio for the headword and both
+example sentences. Press the **speaker beside a word or example** to hear
+it. All three MP3s are saved in the same SQLite database, so later playback
+needs no TTS service. Looking up a saved English entry fetches any missing
+clips in the background. Its definition appears immediately, and the
+speakers become available when the clips are saved. Entries keep their
+text and metadata; they are not regenerated. Concurrent lookups share the
+fetch. If one clip fails, successful clips remain saved; looking up the
+word again retries only missing audio. Example clips are tied to their
+exact sentence text, so an edited example cannot play an older sentence.
 Other source languages keep their written pronunciations only, since this
 TTS service is configured for English.
 
-The daemon calls `http://127.0.0.1:20262/speak/<headword>?v=Aiden`.
+The daemon calls `http://127.0.0.1:20262/speak/<text>?v=Aiden`.
 Set `EXE_DICT_TTS_URL` in the daemon's environment to use another base URL,
 or set it to an empty string to disable synthesis. Requests wait at most
 90 seconds and accept MP3s up to 2 MB. An entry with saved audio has
 `"audio": true` in its API result; read the bytes with
 `GET /v1/dict/audio?from=en&to=zh&q=word`, using the returned entry's `q`.
-This endpoint takes the daemon's API token like other dictionary calls.
-When a lookup returns a saved entry whose pronunciation is being fetched,
+The `example_audio` array reports availability in example order, such as
+`[true, false]`. Add `&example=1` or `&example=2` to the audio URL for the
+corresponding English sentence. These endpoints take the daemon's API
+token like other dictionary calls.
+When a lookup returns a saved entry whose audio is being fetched,
 its `audio_flight` identifies that work on `GET /v1/dict/stream`. The final
-entry reports whether audio was saved. Preview GETs and playback do not
+entry reports which clips were saved. Preview GETs and playback do not
 start synthesis.
 
 A word the dictionary does not have yet is written by Codex: an

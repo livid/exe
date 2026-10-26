@@ -93,6 +93,9 @@ func TestDictSavedAudioImmediateAndShared(t *testing.T) {
 	release := func() { once.Do(func() { close(gate) }) }
 	var calls atomic.Int32
 	tts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if serveDictTestExample(w, r) {
+			return
+		}
 		calls.Add(1)
 		if r.URL.Path != "/speak/serendipity" {
 			t.Errorf("spoke query instead of headword: %s", r.URL)
@@ -148,6 +151,9 @@ func TestDictSavedAudioImmediateAndShared(t *testing.T) {
 func TestDictSavedAudioFailureRetries(t *testing.T) {
 	var calls atomic.Int32
 	tts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if serveDictTestExample(w, r) {
+			return
+		}
 		if calls.Add(1) == 1 {
 			http.Error(w, "unavailable", 503)
 			return
@@ -182,6 +188,9 @@ func TestDictSavedAudioRacingWriter(t *testing.T) {
 			var once sync.Once
 			release := func() { once.Do(func() { close(gate) }) }
 			tts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if serveDictTestExample(w, r) {
+					return
+				}
 				close(started)
 				<-gate
 				w.Header().Set("Content-Type", "audio/mpeg")

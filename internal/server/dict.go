@@ -306,15 +306,16 @@ func dictQuery(from, to, q string) (src, dst dictLang, key string, err error) {
 
 // dictKept is an entry as the dictionary keeps it, and as the API sends it.
 type dictKept struct {
-	From        string          `json:"from"`
-	To          string          `json:"to"`
-	Q           string          `json:"q"`
-	Entry       json.RawMessage `json:"entry"`
-	Model       string          `json:"model"`
-	Effort      string          `json:"effort"`
-	Created     int64           `json:"created"`                // unix ms
-	Audio       bool            `json:"audio,omitempty"`        // MP3 kept in entry_audio
-	AudioFlight string          `json:"audio_flight,omitempty"` // missing MP3 being fetched on a lookup
+	From         string          `json:"from"`
+	To           string          `json:"to"`
+	Q            string          `json:"q"`
+	Entry        json.RawMessage `json:"entry"`
+	Model        string          `json:"model"`
+	Effort       string          `json:"effort"`
+	Created      int64           `json:"created"`                 // unix ms
+	Audio        bool            `json:"audio,omitempty"`         // MP3 kept in entry_audio
+	ExampleAudio []bool          `json:"example_audio,omitempty"` // in example order; bytes stay in SQLite
+	AudioFlight  string          `json:"audio_flight,omitempty"`  // missing MP3 being fetched on a lookup
 	// Written is set on the answer of the lookup that wrote it, with what
 	// the session spent.
 	Written bool       `json:"written,omitempty"`
@@ -347,7 +348,12 @@ func (s *Server) dictDatabase() (*sql.DB, error) {
 	CREATE TABLE IF NOT EXISTS entry_audio (
 		src TEXT NOT NULL, dst TEXT NOT NULL, key TEXT NOT NULL,
 		mp3 BLOB NOT NULL, created INTEGER NOT NULL,
-		PRIMARY KEY (src, dst, key))`); err != nil {
+		PRIMARY KEY (src, dst, key));
+	CREATE TABLE IF NOT EXISTS example_audio (
+		src TEXT NOT NULL, dst TEXT NOT NULL, key TEXT NOT NULL,
+		example INTEGER NOT NULL CHECK(example IN (0,1)), text TEXT NOT NULL,
+		mp3 BLOB NOT NULL, created INTEGER NOT NULL,
+		PRIMARY KEY (src, dst, key, example))`); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -374,6 +380,9 @@ func (s *Server) dictGet(src, dst, key string) (*dictKept, error) {
 		return nil, err
 	}
 	k.Entry = json.RawMessage(entry)
+	if err := dictReadExampleAudio(db, k); err != nil {
+		return nil, err
+	}
 	db.Exec(`UPDATE entries SET looked = ?, lookups = lookups + 1 WHERE src = ? AND dst = ? AND key = ?`,
 		time.Now().UnixMilli(), src, dst, key)
 	return k, nil
@@ -991,6 +1000,13 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 		// Synthesize the generated headword, never the original typo or
 		// an inflected form whose entry names a different headword.
 		if src.Code == "en" && dictTTSURL() != "" {
+			// Once the text is saved, lookups can return it while these
+			// clips are still being made. Let them join this same flight.
+			audioID := "audio\x00" + src.Code + "\x00" + dst.Code + "\x00" + key
+			s.dictMu.Lock()
+			s.dictFlights[audioID] = f
+			f.ids = append(f.ids, audioID)
+			s.dictMu.Unlock()
 			step("audio", nil)
 			mp3, err = dictSpeech(ctx, e.Headword)
 			if err != nil {
@@ -1001,6 +1017,11 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 		if err := s.dictPut(kept, e.Headword, mp3); err != nil {
 			f.err = err
 			return
+		}
+		// Save the definition before fetching longer clips, so even a
+		// shutdown or unavailable TTS cannot lose the model's work.
+		if src.Code == "en" && dictTTSURL() != "" {
+			s.dictFillExampleAudio(ctx, kept)
 		}
 		written := *kept
 		written.Written = true
