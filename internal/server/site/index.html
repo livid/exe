@@ -93,12 +93,14 @@
 </div>
 
 {{with .Blog}}
-<div class="window">
+<div class="window blog">
   <div class="titlebar"><div class="stripe"></div><div class="title">Blog</div><div class="stripe"></div></div>
   <div class="frame">
-    <ul class="posts">{{range .Posts}}
-      <li><a href="{{.Link}}" target="_blank" rel="noopener">{{.Title}}</a>{{if not .Date.IsZero}}<span>{{.Date.Format "Jan 2, 2006"}}</span>{{end}}</li>{{end}}
-    </ul>
+    <div class="body">
+      <div class="items">{{range .Posts}}
+        <div class="item"><div class="item-head"><a class="item-title" href="{{.Link}}" target="_blank" rel="noopener">{{.Title}}</a>{{if not .Date.IsZero}}<span class="item-date">{{.Date.Format "Jan 2, 2006"}}</span>{{end}}</div></div>{{end}}
+      </div>
+    </div>
     <div class="statusbar"><span><a href="{{.Home}}" target="_blank" rel="noopener">All posts</a></span><span><a href="{{.Feed}}" target="_blank" rel="noopener">RSS feed</a></span></div>
   </div>
 </div>

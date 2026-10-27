@@ -106,14 +106,14 @@ func TestSiteBlogWindow(t *testing.T) {
 		h.ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com/", nil))
 		return rec.Body.String()
 	}
-	if strings.Contains(page(), `class="posts"`) {
+	if strings.Contains(page(), `class="items"`) {
 		t.Fatal("a Blog window with no feed to read")
 	}
 	reads, _ := useTestBlog(t)
 	body := page()
 	for _, want := range []string{
 		`<div class="title">Blog</div>`,
-		`<a href="https://blog.example.com/6/" target="_blank" rel="noopener">Six</a><span>Oct 16, 2026</span>`,
+		`<a class="item-title" href="https://blog.example.com/6/" target="_blank" rel="noopener">Six</a><span class="item-date">Oct 16, 2026</span>`,
 		`Five &amp; &lt;b&gt;bold&lt;/b&gt;`,
 		`<a href="https://blog.example.com/" target="_blank" rel="noopener">All posts</a>`,
 		`<a href="` + siteBlogFeed + `" target="_blank" rel="noopener">RSS feed</a>`,
@@ -125,7 +125,7 @@ func TestSiteBlogWindow(t *testing.T) {
 	if strings.Contains(body, ">One<") || strings.Contains(body, "javascript:") {
 		t.Error("the window shows more than the five newest posts it can link")
 	}
-	if i, j := strings.Index(body, `class="posts"`), strings.Index(body, `class="foot"`); i < 0 || i > j {
+	if i, j := strings.Index(body, `class="items"`), strings.Index(body, `class="foot"`); i < 0 || i > j {
 		t.Error("the Blog window is not the page's last")
 	}
 	page()

@@ -255,12 +255,20 @@ ul.toc li span { color: var(--quiet); }
 html.js .btnrow.copies { display: flex; }
 .copies .btn { font-family: inherit; }
 
-/* ---- the blog's newest posts (siteblog.go), drawn on the server: a line
-   each, the title and at its right the day it went up. A long title
-   wraps beside the date rather than pushing it to a line of its own. ---- */
-ul.posts { list-style: none; margin: 0; padding: 6px 16px; }
-ul.posts li { display: flex; align-items: baseline; gap: 12px; margin: 0; padding: 5px 0;
-  border-top: 1px solid #ddd; }
-ul.posts li:first-child { border-top: 0; }
-ul.posts a { flex: 1 1 0; min-width: 0; }
-ul.posts span { flex: none; color: #555; font-size: 11px; white-space: nowrap; }
+/* ---- the blog's newest posts (siteblog.go), drawn on the server in the
+   blog's own markup. The list is the block "the list" of the blog's
+   Platinum template (exe-planet, templates/platinum/assets/style.css),
+   its declarations copied verbatim so a post is listed here as it is on
+   blog.v2core.com; copy it again when it changes there. The selectors
+   are kept inside this window, so they reach nothing else that shares
+   this stylesheet, and the window has the template's two inks and the
+   padding of its page body. ---- */
+.blog { --rule: #ddd; --quiet: #555; }
+.blog .body { padding: 16px 16px 12px; }
+.blog .items { margin: 0; }
+.blog .item { padding: 6px 0; border-top: 1px solid var(--rule); }
+.blog .items .item:last-child { border-bottom: 1px solid var(--rule); }
+.blog .item-head { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; }
+.blog .item-title { font-weight: bold; text-decoration: none; color: #333399; }
+.blog .item-title:hover { text-decoration: underline; }
+.blog .item-date { margin-left: auto; font-size: 11px; color: var(--quiet); white-space: nowrap; }
