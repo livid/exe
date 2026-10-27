@@ -5024,6 +5024,29 @@ addresses instead.
 - `exe token`, run on the machine that runs exe, shows it again.
 - **Special → Set API Token…** brings the dialog back.
 
+### Sign in with a passkey
+
+A passkey signs a browser in to exe in place of the API token, with Face
+ID, Touch ID, Windows Hello or a security key. On a phone, you no longer
+type the token.
+
+1. Open the desktop at a name over HTTPS, such as its Tailscale Serve
+   address. Passkeys do not work at an IP address.
+2. Choose **Windows → Configuration**, click the **Passkeys** tab, then
+   click **Add Passkey…**.
+3. In another browser, open the same address. The API Token dialog then
+   offers **Use Passkey…**.
+
+A browser that signs in with a passkey keeps no token. It stays signed in
+until you remove the passkey or the token changes.
+
+- A passkey works only at the address it was made at.
+- **Remove** on the Passkeys tab ends the passkey and every browser it
+  signed in.
+- Passkeys need an API token. Keep the token: it adds the first passkey,
+  and it gets you back in when every passkey is gone. curl, agents and
+  joined desks still use it.
+
 ### The Log Viewer
 
 **Windows → Log Viewer** streams two logs live, a tab each, when something

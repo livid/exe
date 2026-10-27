@@ -77,6 +77,9 @@ type Server struct {
 	cfg        atomic.Pointer[config.Config]
 	activeRuns sync.Map // transcript id -> struct{}
 
+	// pk is the passkeys and their open challenges (passkey.go).
+	pk passkeyStore
+
 	// agentLast is the tmux session each agent's window showed last,
 	// by app — the tiebreak when tmux's own stamps cannot tell where a
 	// reopened window belongs (lastAgentSession, agentsessions.go).
@@ -270,6 +273,13 @@ func (s *Server) Handler() http.Handler {
 	// is the answer. With no token it tells a desk that none is asked for.
 	mux.HandleFunc("GET /v1/auth", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("POST /v1/auth/session", s.handleSession)
+	mux.HandleFunc("GET /v1/passkeys", s.handlePasskeys)
+	mux.HandleFunc("POST /v1/passkeys/new", s.handlePasskeyNew)
+	mux.HandleFunc("POST /v1/passkeys", s.handlePasskeyAdd)
+	mux.HandleFunc("DELETE /v1/passkeys/{id}", s.handlePasskeyDelete)
+	mux.HandleFunc("GET /v1/passkeys/login", s.handlePasskeyAny)
+	mux.HandleFunc("POST /v1/passkeys/login", s.handlePasskeyLoginBegin)
+	mux.HandleFunc("POST /v1/passkeys/login/finish", s.handlePasskeyLogin)
 	mux.HandleFunc("GET /v1/vms", s.handleList)
 	mux.HandleFunc("POST /v1/vms", s.handleCreate)
 	mux.HandleFunc("GET /v1/vms/{name}", s.handleGet)
@@ -451,20 +461,16 @@ func (s *Server) Handler() http.Handler {
 // those routes authenticate each request by peer signature (or join code)
 // instead, and expose nothing beyond app-data sync. /pages/ is outside
 // /v1 on purpose: a rendered Workspace page is authorized by its ticket
-// (pages.go), never by the token.
+// (pages.go), never by the token. /v1/passkeys/login is how a browser
+// with no token signs in, by a passkey's signature (passkey.go).
 func (s *Server) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/v1/peer/") {
+		if strings.HasPrefix(r.URL.Path, "/v1/peer/") || r.URL.Path == "/v1/passkeys/login" || r.URL.Path == "/v1/passkeys/login/finish" {
 			next.ServeHTTP(w, r)
 			return
 		}
 		if tok := s.Config().APIToken; tok != "" && strings.HasPrefix(r.URL.Path, "/v1/") {
-			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if got == "" {
-				// Browsers cannot set headers on WebSocket connects.
-				got = r.URL.Query().Get("token")
-			}
-			if got != tok && !sessionOK(r, tok, time.Now()) {
+			if requestToken(r) != tok && !s.sessionOK(r, tok, time.Now()) {
 				// The scheme is named so that a client can tell this 401,
 				// "your token", from one a route gives for a reason of its
 				// own: the desk raises its API Token dialog on this one
@@ -476,6 +482,15 @@ func (s *Server) auth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// requestToken is the token a request carries: in its header, or on its
+// address where a client cannot set one (curl's WebSocket, an old script).
+func requestToken(r *http.Request) string {
+	if got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); got != "" {
+		return got
+	}
+	return r.URL.Query().Get("token")
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

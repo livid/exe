@@ -5,8 +5,8 @@ docs/release.md, "The notes", says how it is written. What every release
 before it said is kept in CHANGELOG.md.
 -->
 
+- **Use Passkey…** signs a browser in with Face ID or Windows Hello; add one in **Configuration → Passkeys**.
 - **Help → Mount Workspace…** shows how your Mac, Windows or Linux computer mounts the Workspace as a drive.
-- **Dict** saves spoken words and both examples; its welcome star reveals new words, and tabs slide together.
 - On a phone, a key row under the terminal windows sends **Esc**, **Tab**, **Shift-Tab** and the arrows.
 - After the host restarts, **Claude Code** and **Codex** keep each session as a row; a click continues it.
 - **Terminal**, **Claude Code** and **Codex** windows open on all your screens, at the same columns and rows.

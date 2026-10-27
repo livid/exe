@@ -47,15 +47,16 @@ func sessionMAC(tok, body string) string {
 }
 
 // sessionValue is "1.<via>.<issued>.<mac>": the format, how the session
-// began ("t", with the token) and when, in Unix seconds.
+// began ("t" with the token, "p<ref>" with a passkey: passkey.go) and when,
+// in Unix seconds.
 func sessionValue(tok, via string, now time.Time) string {
 	body := "1." + via + "." + strconv.FormatInt(now.Unix(), 10)
 	return body + "." + sessionMAC(tok, body)
 }
 
-func sessionCookie(r *http.Request, tok string, now time.Time) *http.Cookie {
+func sessionCookie(r *http.Request, tok, via string, now time.Time) *http.Cookie {
 	return &http.Cookie{
-		Name: sessionCookieName(r), Value: sessionValue(tok, "t", now),
+		Name: sessionCookieName(r), Value: sessionValue(tok, via, now),
 		Path: "/v1/", MaxAge: int(sessionMaxAge / time.Second),
 		HttpOnly: true, SameSite: http.SameSiteStrictMode,
 		// a fetch's POST always names its page: a desk on HTTPS (Tailscale
@@ -66,8 +67,9 @@ func sessionCookie(r *http.Request, tok string, now time.Time) *http.Cookie {
 }
 
 // sessionOK says whether r carries a session cookie of this token, sent
-// for a page of the daemon's own origin.
-func sessionOK(r *http.Request, tok string, now time.Time) bool {
+// for a page of the daemon's own origin. A passkey's session lasts as long
+// as the passkey is here.
+func (s *Server) sessionOK(r *http.Request, tok string, now time.Time) bool {
 	c, err := r.Cookie(sessionCookieName(r))
 	if err != nil || !sameOrigin(r) {
 		return false
@@ -78,14 +80,17 @@ func sessionOK(r *http.Request, tok string, now time.Time) bool {
 	}
 	body, mac := c.Value[:i], c.Value[i+1:]
 	f := strings.Split(body, ".")
-	if len(f) != 3 || f[0] != "1" || f[1] != "t" {
+	if len(f) != 3 || f[0] != "1" || (f[1] != "t" && !strings.HasPrefix(f[1], "p")) {
 		return false
 	}
 	issued, err := strconv.ParseInt(f[2], 10, 64)
 	if err != nil || now.Sub(time.Unix(issued, 0)) > sessionMaxAge {
 		return false
 	}
-	return hmac.Equal([]byte(mac), []byte(sessionMAC(tok, body)))
+	if !hmac.Equal([]byte(mac), []byte(sessionMAC(tok, body))) {
+		return false
+	}
+	return f[1] == "t" || s.passkeyLive(f[1][1:])
 }
 
 // sameOrigin says whether the browser sent r for a page of the daemon's own
@@ -113,15 +118,16 @@ func sameOrigin(r *http.Request) bool {
 
 // handleSession gives the desk its cookie for the token it sent, and says
 // whether the request came with a good one already: a desk that opened its
-// frames on a cookie it no longer had opens them again.
+// frames on a cookie it no longer had opens them again. A request let in
+// by its cookie alone keeps that cookie: a passkey's session stays one.
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	tok := s.Config().APIToken
-	if tok == "" {
+	if tok == "" || requestToken(r) != tok {
 		writeJSON(w, http.StatusOK, map[string]bool{"had": true})
 		return
 	}
 	now := time.Now()
-	had := sessionOK(r, tok, now)
-	http.SetCookie(w, sessionCookie(r, tok, now))
+	had := s.sessionOK(r, tok, now)
+	http.SetCookie(w, sessionCookie(r, tok, "t", now))
 	writeJSON(w, http.StatusOK, map[string]bool{"had": had})
 }

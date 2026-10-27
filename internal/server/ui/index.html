@@ -668,7 +668,12 @@ body.mobile .term-window .keyrow { display: flex; gap: 8px; padding: 6px 12px;
 .gi-grid span { user-select: text; word-break: break-word; }
 /* Configuration → Cloudflare: the summary's rows under its status line */
 #cfg-cf .cf-sum, #cfg-hub .cf-sum { margin-top: 12px; }
-#cfg-cf .cf-why, #cfg-hub .cf-why { margin-top: 6px; user-select: text; }
+#cfg-cf .cf-why, #cfg-hub .cf-why, #cfg-pk .cf-why { margin-top: 6px; user-select: text; }
+/* Configuration → Passkeys: one row a passkey, its Remove at the right */
+.pk-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.pk-row { display: flex; align-items: center; gap: 12px; }
+.pk-what { flex: 1; min-width: 0; }
+.pk-what .muted { font-size: 11px; line-height: 16px; overflow-wrap: anywhere; user-select: text; }
 
 /* About This Computer, after the Mac OS 9.0 box (pixel-sampled from a
    capture): a white logo panel sunk into the platinum field (#888 and
@@ -876,6 +881,9 @@ td.actions button + button { margin-left: 8px; }
 #token { height: 20px; padding: 2px 5px; line-height: 14px; }
 .row.tok-btns { justify-content: flex-end; gap: 12px; margin: 12px 0 2px; }
 .row.tok-btns button { width: 58px; padding-left: 0; padding-right: 0; }
+/* a passkey, offered where one can sign in: at the row's left, as an OS 9
+   dialog keeps a button that is not its answer */
+.row.tok-btns #tok-pk { width: auto; padding-left: 12px; padding-right: 12px; margin-right: auto; }
 
 /* ---------- Platinum tab control ----------
    Geometry measured from a real OS 9 Appearance control panel screenshot:
@@ -2640,6 +2648,7 @@ body.mobile th.sorted {
         </div>
         <div id="tok-fb" class="tok-fb"></div>
         <div class="row tok-btns">
+          <button class="ghost" id="tok-pk" hidden>Use Passkey…</button>
           <button class="ghost" id="tok-cancel">Cancel</button>
           <button class="btn" id="tok-ok">OK</button>
         </div>
@@ -2919,8 +2928,8 @@ function el(tag, attrs = {}, ...kids) {
 // have (see the API token dialog, below).
 const TOK_HINT = L("This exe asks for its API token: Special → Set API Token…");
 function toast(msg, ms = 3500) {
-  // while the token dialog is up it is saying this itself
-  if (msg === TOK_HINT && !$("#tok-overlay").hidden) return;
+  // while the token dialog is up, or on its way, it is saying this itself
+  if (msg === TOK_HINT && (!$("#tok-overlay").hidden || tokOpening)) return;
   const b = $("#status-bar");
   b.textContent = msg;
   b.classList.add("show");
@@ -3055,7 +3064,7 @@ const j = (p, o) => api(p, o).then(r => r.json());
 // leaves it to the Special menu: the desk polls, and a dialog that came
 // back with every poll could not be put away. What fails meanwhile says
 // where the dialog is (TOK_HINT, above toast) instead of "HTTP 401".
-let tokRefused = false, tokAsked = false;
+let tokRefused = false, tokAsked = false, tokOpening = false;
 function tokAsk() {
   tokRefused = true;
   if (tokAsked) return;
@@ -3067,8 +3076,13 @@ function tokSay(text, bad) {
   fb.textContent = text;
   fb.classList.toggle("bad", !!bad);
 }
-function tokOpen() {
-  if (!$("#tok-overlay").hidden) return;
+async function tokOpen() {
+  if (!$("#tok-overlay").hidden || tokOpening) return;
+  // whether a passkey can sign in here is known before the dialog shows,
+  // so its button never comes into a row already up
+  tokOpening = true;
+  $("#tok-pk").hidden = !(await Promise.race([pkAny(), new Promise(r => setTimeout(() => r(false), 1500))]));
+  tokOpening = false;
   $("#tok-head").textContent = !tokRefused ? L("The API token of this exe.")
     : apiToken ? L("This exe no longer accepts the token this browser has.")
     : L("This exe asks for its API token.");
@@ -3116,6 +3130,90 @@ async function tokDone() {
 }
 $("#tok-ok").onclick = tokDone;
 $("#tok-cancel").onclick = tokClose;
+$("#tok-pk").onclick = pkSignIn;
+
+// ---- passkeys ----
+// A passkey signs a browser in to exe in place of the API token
+// (passkey.go). Configuration → Passkeys adds and removes them; the API
+// Token dialog signs in with one, and the browser is then in by the
+// session cookie alone and keeps no token. A browser makes passkeys only
+// in a secure context at a name: over HTTPS (Tailscale Serve), or on
+// localhost, never at an IP address.
+const PK_HERE = !!(window.PublicKeyCredential && navigator.credentials) && isSecureContext
+  && !/^(\d+\.){3}\d+$/.test(location.hostname) && !location.hostname.startsWith("[");
+const pkBytes = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+const pkB64 = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+// whether a passkey can sign in here, asked of exe with no token; asked
+// again after one is added or removed
+let pkAnyAsked = null;
+const pkAny = () => !PK_HERE ? Promise.resolve(false) : pkAnyAsked || (pkAnyAsked =
+  fetch("/v1/passkeys/login", { cache: "no-store" }).then(r => r.json()).then(d => !!d.any, () => false));
+async function pkSignIn() {
+  const btns = ["#tok-pk", "#tok-ok", "#tok-cancel"].map(q => $(q));
+  btns.forEach(b => { b.disabled = true; });
+  tokSay(L("Waiting for a passkey…"));
+  try {
+    const ask = async (path, body) => {
+      const r = await fetch(path, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(d.error || "HTTP " + r.status), { refused: r.status === 403 });
+      return d;
+    };
+    const o = await ask("/v1/passkeys/login");
+    const a = await navigator.credentials.get({ publicKey: { ...o, challenge: pkBytes(o.challenge) } });
+    await ask("/v1/passkeys/login/finish", { id: a.id,
+      clientDataJSON: pkB64(a.response.clientDataJSON), authenticatorData: pkB64(a.response.authenticatorData),
+      signature: pkB64(a.response.signature), userHandle: a.response.userHandle ? pkB64(a.response.userHandle) : "" });
+    apiToken = "";
+    try { localStorage.removeItem("exe_token"); } catch (e) {}
+    tokClose();
+    if (tokRefused) { location.reload(); return; }
+    tokRefused = tokAsked = false;
+    document.dispatchEvent(new Event("exe-token"));
+  } catch (e) {
+    tokSay(e.name === "NotAllowedError" ? L("No passkey was given.") : e.refused ? L("exe did not accept this passkey.") : e.message, true);
+  } finally {
+    btns.forEach(b => { b.disabled = false; });
+  }
+}
+// a name for a passkey that its maker does not name (passkey.go knows the
+// managers that say who they are): the browser and system it was made on
+function pkDeviceName() {
+  const ua = navigator.userAgent;
+  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android"
+    : /Macintosh/.test(ua) ? (navigator.maxTouchPoints > 1 ? "iPad" : "Mac") : /Windows/.test(ua) ? "Windows"
+    : /CrOS/.test(ua) ? "ChromeOS" : /Linux/.test(ua) ? "Linux" : "";
+  const br = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "";
+  return [br, os].filter(Boolean).join(" on ") || "Passkey";
+}
+async function pkAdd(btn) {
+  btn.disabled = true;
+  btn.textContent = L("Adding…");
+  try {
+    const o = await j("/v1/passkeys/new", { method: "POST" });
+    const c = await navigator.credentials.create({ publicKey: { ...o, challenge: pkBytes(o.challenge),
+      user: { ...o.user, id: pkBytes(o.user.id) }, excludeCredentials: o.excludeCredentials.map(x => ({ ...x, id: pkBytes(x.id) })) } });
+    const k = await j("/v1/passkeys", { method: "POST", json: { id: c.id, name: pkDeviceName(),
+      clientDataJSON: pkB64(c.response.clientDataJSON), attestationObject: pkB64(c.response.attestationObject) } });
+    toast(L`Passkey added: ${k.name}`);
+  } catch (e) {
+    toast(e.name === "NotAllowedError" ? L("No passkey was made.") : e.name === "InvalidStateError" ? L("This passkey is here already.") : e.message);
+  }
+  pkAnyAsked = null;
+  pkTabLoad();
+}
+async function pkRemove(btn, k) {
+  if (!btn.classList.contains("armed")) {
+    btn.classList.add("armed");
+    btn.textContent = L("Sure?");
+    setTimeout(() => { btn.classList.remove("armed"); btn.textContent = L("Remove"); }, 3500);
+    return;
+  }
+  btn.disabled = true;
+  try { await api("/v1/passkeys/" + encodeURIComponent(k.id), { method: "DELETE" }); } catch (e) { toast(e.message); }
+  pkAnyAsked = null;
+  pkTabLoad();
+}
 tokenInput.addEventListener("keydown", e => {
   if (e.key === "Enter") { e.preventDefault(); tokDone(); }
 });
@@ -12081,6 +12179,8 @@ const CONFIG_FIELDS = [
     { path: "ssh_user", restart: true },
     { path: "image_url", restart: true },
   ]},
+  // sign-in without the token: the passkeys of this node (pkTabPaint)
+  { group: "Passkeys", fields: [] },
   { group: "VMs", fields: [
     { path: "default_cpus", num: true },
     { path: "default_memory_mb", num: true },
@@ -12154,6 +12254,7 @@ function openConfigWin(tab) {
 function showCfgPane(name) {
   cfgActiveTab = name;
   if (name === "Hub") hubTabLoad(); // a hub joined meanwhile shows
+  if (name === "Passkeys") pkTabLoad();
   document.querySelectorAll("#cfg-tabs .tab").forEach(t => t.classList.toggle("active", t.dataset.group === name));
   document.querySelectorAll("#cfg-form .pane").forEach(p => { p.hidden = p.dataset.group !== name; });
 }
@@ -12173,6 +12274,7 @@ async function loadConfig() {
     pane.hidden = g.group !== cfgActiveTab;
     if (g.group === "Cloudflare") pane.append(el("div", { id: "cfg-cf" }));
     if (g.group === "Hub") pane.append(el("div", { id: "cfg-hub" }));
+    if (g.group === "Passkeys") pane.append(el("div", { id: "cfg-pk" }));
     if (g.group === "OpenAI") pane.append(openaiAuthBox());
     if (g.group === "GitHub") pane.append(githubAuthBox());
     if (g.group === "Daemon") {
@@ -12227,6 +12329,7 @@ async function loadConfig() {
   });
   cfSummaryPaint();
   hubTabLoad();
+  pkTabLoad();
   cfgFitTabs();
   // populate placeholders elsewhere in the UI
   $("#c-cpus").placeholder = loadedConfig.default_cpus || "cpus";
@@ -13821,6 +13924,50 @@ function hubTabPaint() {
     grid,
     el("div", { class: "row", style: "justify-content:flex-end; margin-top:12px" },
       el("button", { class: "ghost", onclick: () => openHubJoin() }, L("Join a Hub…"))));
+}
+// Configuration → Passkeys: the passkeys this node keeps, each with the
+// address it works at, and Add Passkey… for this browser at this address
+let pkTab = null, pkTabAsked = 0;
+async function pkTabLoad() {
+  if (!document.getElementById("cfg-pk")) return;
+  const mine = ++pkTabAsked;
+  pkTabPaint(); // a pane drawn again shows the last answer until the new one comes
+  let t;
+  try { t = await j("/v1/passkeys"); } catch (e) { t = { error: e.message }; }
+  if (mine !== pkTabAsked) return;
+  pkTab = t;
+  pkTabPaint();
+}
+function pkTabPaint() {
+  const box = document.getElementById("cfg-pk");
+  if (!box) return;
+  const t = pkTab, host = location.hostname.toLowerCase();
+  const all = (t && t.passkeys) || [], here = all.filter(k => k.rp === host);
+  const state = !t ? "checking" : t.error ? "error" : !t.token ? "off" : !PK_HERE ? "elsewhere" : here.length ? "some" : "none";
+  const head = { checking: L("Passkeys: checking…"), error: L("Passkeys: not answering"), off: L("Passkeys: off"),
+    elsewhere: L("Passkeys: not at this address"), none: L("Passkeys: none yet"), some: L`Passkeys: ${here.length}` }[state];
+  const what = L`A passkey signs a browser in to exe in place of the API token, with Face ID, Touch ID, Windows Hello or a security key. It works at ${host} only.`;
+  const why = { checking: "", error: t && t.error, some: what, none: what,
+    off: L("A passkey signs a browser in to exe in place of the API token, and this exe has no token: set api_token on the Daemon tab first."),
+    elsewhere: !window.PublicKeyCredential ? L("This browser cannot make passkeys.")
+      : L("Passkeys work at a name over HTTPS, such as exe's Tailscale Serve address. To add one, open the desktop there.") }[state];
+  const day = d => new Date(d).toLocaleDateString(UI_LOCALE, { year: "numeric", month: "short", day: "numeric" });
+  const rows = all.map(k => {
+    const rm = el("button", { class: "ghost sm" }, L("Remove"));
+    rm.onclick = () => pkRemove(rm, k);
+    return el("div", { class: "pk-row" },
+      el("div", { class: "pk-what" }, el("b", {}, k.name),
+        el("div", { class: "muted" }, [L`at ${k.rp}`, L`added ${day(k.created)}`, k.used ? L`last used ${day(k.used)}` : L("never used")].join(" · "))),
+      rm);
+  });
+  const add = el("button", { class: "ghost" }, L("Add Passkey…"));
+  add.disabled = state !== "none" && state !== "some";
+  add.onclick = () => pkAdd(add);
+  box.replaceChildren(
+    el("span", { class: "chip " + ({ checking: "starting", error: "error", some: "running" }[state] || "stopped") }, head),
+    ...(why ? [el("div", { class: "muted cf-why" }, why)] : []),
+    ...(rows.length ? [el("div", { class: "pk-list" }, ...rows)] : []),
+    el("div", { class: "row", style: "justify-content:flex-end; margin-top:12px" }, add));
 }
 function renderSum() {
   const c = (loadedConfig && loadedConfig.cloudflare) || {};
