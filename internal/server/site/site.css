@@ -254,3 +254,13 @@ ul.toc li span { color: var(--quiet); }
 .btnrow.copies { display: none; }
 html.js .btnrow.copies { display: flex; }
 .copies .btn { font-family: inherit; }
+
+/* ---- the blog's newest posts (siteblog.go), drawn on the server: a line
+   each, the title and at its right the day it went up. A long title
+   wraps beside the date rather than pushing it to a line of its own. ---- */
+ul.posts { list-style: none; margin: 0; padding: 6px 16px; }
+ul.posts li { display: flex; align-items: baseline; gap: 12px; margin: 0; padding: 5px 0;
+  border-top: 1px solid #ddd; }
+ul.posts li:first-child { border-top: 0; }
+ul.posts a { flex: 1 1 0; min-width: 0; }
+ul.posts span { flex: none; color: #555; font-size: 11px; white-space: nowrap; }

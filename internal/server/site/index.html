@@ -92,6 +92,18 @@
   </div>
 </div>
 
+{{with .Blog}}
+<div class="window">
+  <div class="titlebar"><div class="stripe"></div><div class="title">Blog</div><div class="stripe"></div></div>
+  <div class="frame">
+    <ul class="posts">{{range .Posts}}
+      <li><a href="{{.Link}}" target="_blank" rel="noopener">{{.Title}}</a>{{if not .Date.IsZero}}<span>{{.Date.Format "Jan 2, 2006"}}</span>{{end}}</li>{{end}}
+    </ul>
+    <div class="statusbar"><span><a href="{{.Home}}" target="_blank" rel="noopener">All posts</a></span><span><a href="{{.Feed}}" target="_blank" rel="noopener">RSS feed</a></span></div>
+  </div>
+</div>
+{{end}}
+
 <p class="foot">This page is an exe daemon serving itself, published with <code>exe site</code>.{{if .Online}} <a href="/stats">{{.Online}} online</a>.{{end}}</p>
 
 <p class="badge"><a href="/badge/" title="Link to exe with this badge"><img src="/v{{.Build}}/badge.gif" width="88" height="31" alt="exe: a personal VM cloud. This badge, to link here with."></a></p>

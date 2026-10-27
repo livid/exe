@@ -345,7 +345,8 @@ func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 		if err := sitePageTmpl.Execute(w, struct {
 			Online int
 			Build  string
-		}{siteOnline(an, r, "home"), siteBuild}); err != nil {
+			Blog   *siteBlogData
+		}{siteOnline(an, r, "home"), siteBuild, siteBlogNow()}); err != nil {
 			log.Printf("site: %v", err)
 		}
 	}
