@@ -296,7 +296,7 @@ The **Control Strip** in the bottom-left corner is OS 9's tray: a row of
 small modules, each with a live figure about this machine. Click a module
 for its menu.
 
-<img src="https://hub.v2core.com/v1/embed/bafkreiadh2tua4bcsuus4cm7hrzhgz7hisurbvughod6t2ytfoqocedfny" alt="The Control Strip: the Cloudflare, Tailscale, Solana ticker and agent usage modules" width="271" height="24">
+<img src="https://hub.v2core.com/v1/embed/bafkreifdc2cy7bmtb2lwpz2mqhi2xtvehrmswkodeq5rf42wftg2bl5zfu" alt="The Control Strip: the Cloudflare, Tailscale, Solana ticker and agent usage modules" width="271" height="24">
 
 | Module | Its tile shows | It is there |
 | --- | --- | --- |
