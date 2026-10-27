@@ -5382,16 +5382,17 @@ let CF_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="
 let cfLast = null; // the last Cloudflare heartbeat; declared here so an icon override can repaint before the strip code runs
 let cfStatsLast = null, cfStatsPending = false, cfStatsFailed = false;
 // the Control Strip's Tailscale module: an indicator panel of nine lamps
-// on a dark plate, the four of Tailscale's mark lit — the lit lamps' two
-// blues are reserved, tsStripPaint repaints exactly them per tailnet state
+// on a dark plate, the four of Tailscale's mark lit (its T: the middle
+// row and the bottom centre) — the lit lamps' two blues are reserved,
+// tsStripPaint repaints exactly them per tailnet state
 // (pale while connected, blue through an exit node, yellow when something
 // needs attention, dim like the other five when Tailscale is off)
 let TS_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <path fill="#444" d="M1 1h1v1H1zM4 1h3v1H4zM9 1h3v1H9zM14 1h1v1H14zM5 2h1v1H5zM10 2h1v1H10zM5 3h1v1H5zM10 3h1v1H10zM1 4h1v1H1zM4 4h3v1H4zM9 4h3v1H9zM14 4h1v1H14zM1 5h14v1H1zM1 6h1v1H1zM4 6h3v1H4zM9 6h3v1H9zM14 6h1v1H14zM5 7h1v1H5zM10 7h1v1H10zM5 8h1v1H5zM10 8h1v1H10zM1 9h1v1H1zM4 9h3v1H4zM9 9h3v1H9zM14 9h1v1H14zM1 10h14v1H1zM1 11h1v1H1zM4 11h3v1H4zM9 11h3v1H9zM14 11h1v1H14zM5 12h1v1H5zM10 12h1v1H10zM5 13h1v1H5zM10 13h1v1H10zM1 14h1v1H1zM4 14h3v1H4zM9 14h3v1H9zM14 14h1v1H14z"/>
-  <path fill="#777" d="M3 1h1v1H3zM8 1h1v1H8zM13 1h1v1H13zM2 2h3v1H2zM7 2h3v1H7zM12 2h3v1H12zM1 3h4v1H1zM6 3h4v1H6zM11 3h4v1H11zM2 4h2v1H2zM7 4h2v1H7zM12 4h2v1H12zM3 6h1v1H3zM13 6h1v1H13zM2 7h3v1H2zM12 7h3v1H12zM1 8h4v1H1zM11 8h4v1H11zM2 9h2v1H2zM12 9h2v1H12z"/>
-  <path fill="#888" d="M2 1h1v1H2zM7 1h1v1H7zM12 1h1v1H12zM1 2h1v1H1zM6 2h1v1H6zM11 2h1v1H11zM2 6h1v1H2zM12 6h1v1H12zM1 7h1v1H1zM11 7h1v1H11z"/>
-  <path fill="#c8dcf8" d="M8 6h1v1H8zM7 7h3v1H7zM6 8h4v1H6zM7 9h2v1H7zM3 11h1v1H3zM8 11h1v1H8zM13 11h1v1H13zM2 12h3v1H2zM7 12h3v1H7zM12 12h3v1H12zM1 13h4v1H1zM6 13h4v1H6zM11 13h4v1H11zM2 14h2v1H2zM7 14h2v1H7zM12 14h2v1H12z"/>
-  <path fill="#f0f6ff" d="M7 6h1v1H7zM6 7h1v1H6zM2 11h1v1H2zM7 11h1v1H7zM12 11h1v1H12zM1 12h1v1H1zM6 12h1v1H6zM11 12h1v1H11z"/>
+  <path fill="#777" d="M3 1h1v1H3zM8 1h1v1H8zM13 1h1v1H13zM2 2h3v1H2zM7 2h3v1H7zM12 2h3v1H12zM1 3h4v1H1zM6 3h4v1H6zM11 3h4v1H11zM2 4h2v1H2zM7 4h2v1H7zM12 4h2v1H12zM3 11h1v1H3zM13 11h1v1H13zM2 12h3v1H2zM12 12h3v1H12zM1 13h4v1H1zM11 13h4v1H11zM2 14h2v1H2zM12 14h2v1H12z"/>
+  <path fill="#888" d="M2 1h1v1H2zM7 1h1v1H7zM12 1h1v1H12zM1 2h1v1H1zM6 2h1v1H6zM11 2h1v1H11zM2 11h1v1H2zM12 11h1v1H12zM1 12h1v1H1zM11 12h1v1H11z"/>
+  <path fill="#c8dcf8" d="M3 6h1v1H3zM8 6h1v1H8zM13 6h1v1H13zM2 7h3v1H2zM7 7h3v1H7zM12 7h3v1H12zM1 8h4v1H1zM6 8h4v1H6zM11 8h4v1H11zM2 9h2v1H2zM7 9h2v1H7zM12 9h2v1H12zM8 11h1v1H8zM7 12h3v1H7zM6 13h4v1H6zM7 14h2v1H7z"/>
+  <path fill="#f0f6ff" d="M2 6h1v1H2zM7 6h1v1H7zM12 6h1v1H12zM1 7h1v1H1zM6 7h1v1H6zM11 7h1v1H11zM7 11h1v1H7zM6 12h1v1H6z"/>
   <path fill="#000" d="M1 0h14v1H1zM0 1h1v1H0zM15 1h1v1H15zM0 2h1v1H0zM15 2h1v1H15zM0 3h1v1H0zM15 3h1v1H15zM0 4h1v1H0zM15 4h1v1H15zM0 5h1v1H0zM15 5h1v1H15zM0 6h1v1H0zM15 6h1v1H15zM0 7h1v1H0zM15 7h1v1H15zM0 8h1v1H0zM15 8h1v1H15zM0 9h1v1H0zM15 9h1v1H15zM0 10h1v1H0zM15 10h1v1H15zM0 11h1v1H0zM15 11h1v1H15zM0 12h1v1H0zM15 12h1v1H15zM0 13h1v1H0zM15 13h1v1H15zM0 14h1v1H0zM15 14h1v1H15zM1 15h14v1H1z"/>
 </svg>`;
 let tsLast = null; // the last /v1/tailscale answer, for the same reason
