@@ -59,6 +59,9 @@ type agentSession struct {
 	// the conversation exists for the CLI's own resume picker
 	// (readAgentResumable): the column offers Archive only then
 	Resumable bool `json:"resumable"`
+	// a restart of the host ended the session: no tmux session holds it,
+	// and a switch to it continues its conversation (agentrestart.go)
+	Stopped bool `json:"stopped,omitempty"`
 	// the pane title carried a spinner: a turn is in flight, whatever an
 	// older word in the state file says (markAgentStates)
 	spinner bool
@@ -147,28 +150,46 @@ func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) [
 			Working: spinner || activity > 0 && now-activity <= agentWorkingSeconds, spinner: spinner,
 			lastAttached: lastAttached})
 	}
+	sortAgentSessions(list)
+	return list
+}
+
+// sortAgentSessions puts the column's rows in its order: the latest
+// started first, two started within a second by number.
+func sortAgentSessions(list []agentSession) {
 	sort.Slice(list, func(i, j int) bool {
 		if list[i].Created != list[j].Created {
 			return list[i].Created > list[j].Created
 		}
 		return list[i].Number > list[j].Number
 	})
-	return list
+}
+
+// agentPanes is every pane on the agents' tmux server in
+// tmuxSessionFormat, and what counts as no title there
+// (parseAgentSessions); an error without tmux, or without a server
+// running.
+func (s *Server) agentPanes() (out string, untitled []string, err error) {
+	cmd := tmuxCmd("list-panes", "-a", "-F", tmuxSessionFormat)
+	if cmd == nil {
+		return "", nil, errors.New("no tmux on this host")
+	}
+	b, err := cmd.Output()
+	if err != nil {
+		return "", nil, err
+	}
+	host, _ := os.Hostname()
+	return string(b), []string{host, filepath.Base(s.agentProjectDir())}, nil
 }
 
 // agentSessions lists an agent's sessions on this host's tmux server —
 // none without tmux, or without a server running.
 func (s *Server) agentSessions(a hostAgent) []agentSession {
-	cmd := tmuxCmd("list-panes", "-a", "-F", tmuxSessionFormat)
-	if cmd == nil {
-		return []agentSession{}
-	}
-	out, err := cmd.Output()
+	out, untitled, err := s.agentPanes()
 	if err != nil {
 		return []agentSession{}
 	}
-	host, _ := os.Hostname()
-	return parseAgentSessions(a, string(out), []string{host, filepath.Base(s.agentProjectDir())}, time.Now().Unix())
+	return parseAgentSessions(a, out, untitled, time.Now().Unix())
 }
 
 // lastAgentSession is the session an agent's window showed last, where
@@ -321,6 +342,7 @@ func (c *agentColumn) follow(ctx context.Context) {
 		}
 		list := c.s.agentSessions(c.a)
 		c.s.markAgentStates(c.a, list)
+		list = c.s.withStopped(c.a, list) // and those a host restart ended (agentrestart.go)
 		frame := map[string]any{"sessions": list, "current": c.current()}
 		if !c.a.notify {
 			frame["prompt"] = c.s.agentLastPrompt(c.a, c.current()) // the line over the terminal (claudeprompts.go)
@@ -344,10 +366,15 @@ func (c *agentColumn) follow(ctx context.Context) {
 	}
 }
 
-// switchTo moves the window to one of the agent's sessions.
+// switchTo moves the window to one of the agent's sessions, continuing
+// it first when a host restart had stopped it (wakeAgentSession).
 func (c *agentColumn) switchTo(name string) error {
 	if agentSessionNumber(c.a, name) == 0 {
 		return fmt.Errorf("not a %s session: %q", c.a.title, name)
+	}
+	if _, err := c.s.wakeAgentSession(c.a, name); err != nil {
+		c.refresh() // a conversation gone from the machine took its row
+		return err
 	}
 	if err := c.sh.Switch(name); err != nil {
 		return err
@@ -372,6 +399,15 @@ func (c *agentColumn) archive(name string) error {
 	n := agentSessionNumber(c.a, name)
 	if n == 0 {
 		return fmt.Errorf("not a %s session: %q", c.a.title, name)
+	}
+	if c.s.forgetStopped(c.a, name) {
+		// a session a host restart stopped: nothing runs, nothing is freed
+		c.refresh()
+		if c.out != nil {
+			msg, _ := json.Marshal(map[string]string{"archived": name})
+			c.out.WriteText(msg)
+		}
+		return nil
 	}
 	if name == c.current() {
 		// the neighbours by number, whatever order the list is in
@@ -407,6 +443,7 @@ func (c *agentColumn) archive(name string) error {
 	}
 	os.Remove(c.s.agentStatusFile(c.a, name)) // the next session under this number starts clean
 	os.Remove(c.s.agentStateFile(c.a, name))
+	c.s.unnoteAgentSession(c.a, name)
 	c.refresh()
 	go func() {
 		defer c.settling.Done()
@@ -487,7 +524,8 @@ func agentSessionDir(dir string) (string, error) {
 }
 
 // nextAgentSession names the agent's next numbered session: one past
-// the highest in use, 2 at the least (the icon's own is 1).
+// the highest in use, 2 at the least (the icon's own is 1). A stopped
+// session's number is in use: its name and status file wait for it.
 func (s *Server) nextAgentSession(a hostAgent) string {
 	n := 2
 	for _, ss := range s.agentSessions(a) {
@@ -495,7 +533,24 @@ func (s *Server) nextAgentSession(a hostAgent) string {
 			n = ss.Number + 1
 		}
 	}
+	for _, st := range s.stoppedSessions(a) {
+		if st.Number >= n {
+			n = st.Number + 1
+		}
+	}
 	return agentSessionName(a, n)
+}
+
+// wakeAll continues every session a host restart stopped, the window
+// staying where it is: the rows turn live as they start, and a failure
+// comes back as {"error":…}.
+func (c *agentColumn) wakeAll() {
+	go func() {
+		if err := c.s.wakeAllStopped(c.a, c.refresh); err != nil && c.out != nil {
+			b, _ := json.Marshal(map[string]string{"error": err.Error()})
+			c.out.WriteText(b)
+		}
+	}()
 }
 
 // resume continues a conversation started elsewhere — a Codex thread

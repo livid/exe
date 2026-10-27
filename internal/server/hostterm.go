@@ -225,8 +225,10 @@ func termQuerySize(r *http.Request) (int, int) {
 // another, {"new":true} to start one, {"archive":"exe-claude-2"} to
 // end one and, for Codex, {"resume":"<thread id>"} to continue a thread
 // started elsewhere in a session of its own (the frames also carry
-// "threads", those threads — codexthreads.go); what goes wrong comes
-// back as {"error":…}. {"scroll":n} is
+// "threads", those threads — codexthreads.go). A row "stopped" is a
+// session a restart of the host ended: a switch to it continues it, and
+// {"wake_all":true} continues every one (agentrestart.go). What goes
+// wrong comes back as {"error":…}. {"scroll":n} is
 // the window's wheel: the daemon scrolls the pane's tmux history
 // (unixShell.Scroll) — the browser terminal cannot, as tmux draws in
 // its alternate screen, which keeps no scrollback. {"ping":t} is the
@@ -389,6 +391,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				Prompt  string          `json:"prompt"` // with new: the initial task, passed as one CLI argument
 				Archive string          `json:"archive"`
 				Resume  string          `json:"resume"`
+				WakeAll bool            `json:"wake_all"`
 				Scroll  *int            `json:"scroll"` // 0 means back to the live screen, so nil tells absent
 				Ping    json.RawMessage `json:"ping"`   // echoed as is: the browser's stamp, not the daemon's business
 			}
@@ -408,7 +411,11 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				// notch; the window simply stays where it is
 				sc.Scroll(*msg.Scroll)
 			}
-			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "" && msg.Resume == "") {
+			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "" && msg.Resume == "" && !msg.WakeAll) {
+				continue
+			}
+			if msg.WakeAll {
+				col.wakeAll()
 				continue
 			}
 			var err error

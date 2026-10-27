@@ -80,6 +80,9 @@ func (s *unixShell) Close() error {
 // (handleHostTerminal) retires it within the minute. Attaching with -d
 // kicked the others instead, and a kicked window read its own end in
 // that ("session ended") and stayed dead until the page was reloaded.
+// When none of the agent's sessions runs but a restart of the host
+// stopped some, the one shown last is continued and attached instead
+// (wakeLastStopped, agentrestart.go): the window lands where it was.
 // Without tmux each window is a fresh CLI run. The CLI is launched
 // with the arguments that point its hooks at the session's status file
 // (agentCommand) — the session's first launch decides, as -A attaching
@@ -99,7 +102,11 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, string, er
 	session := a.session
 	cmd := exec.Command(bin, args...)
 	if has := tmuxCmd("has-session", "-t", "="+a.session); has != nil {
-		if last := s.lastAgentSession(a); last != "" {
+		last := s.lastAgentSession(a)
+		if last == "" {
+			last = s.wakeLastStopped(a)
+		}
+		if last != "" {
 			session = last
 			cmd = tmuxCmd("attach-session", "-t", "="+last)
 		} else {

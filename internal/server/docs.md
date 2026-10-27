@@ -968,6 +968,30 @@ says otherwise.
   session leaves the window with none, and it stops as it does whenever the
   last session ends.
 
+### After the host restarts
+
+A restart of the daemon leaves the sessions running. A restart of the
+host ends them all, but you did not archive any of them, so the desktop
+brings them back as stopped rows. Each row keeps its name, title and day,
+with the hollow dot of a conversation that is not here.
+
+- Click a stopped row to continue it. Claude Code or Codex starts again
+  on that conversation, in the folder it was started in, under the same
+  session name. **Continue Here** on the row's menu does the same.
+- The window opened after the restart lands on the session it showed last,
+  continued for you. The other stopped rows wait until you click them, so
+  sessions you no longer need do not take memory.
+- **Continue All Stopped Sessions…**, on the column's menus, continues
+  every stopped row at once, after a dialog. The window stays where it is.
+- **Archive…** on a stopped row removes the row. Nothing was running, so
+  nothing is freed. The conversation stays on this machine, as it does for
+  any archived session.
+- A session that had no conversation yet, and one that ended before the
+  restart, do not come back.
+- The desktop tells a restart from the host's boot (Linux and macOS). It
+  notes the running sessions every few seconds, so one started in the last
+  few seconds before the host went down can be missing.
+
 ### Get Info on a conversation
 
 In the Claude Code window, right-click a row and choose **Get Info** for a

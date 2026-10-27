@@ -83,6 +83,12 @@ type Server struct {
 	agentLastMu sync.Mutex
 	agentLast   map[string]string
 
+	// agentStopped is the sessions a host restart ended, by app, as
+	// agents/stopped.json keeps them; nil until first read
+	// (agentrestart.go).
+	agentStoppedMu sync.Mutex
+	agentStopped   map[string][]stoppedSession
+
 	// termMu serializes new Terminal sessions (each takes the lowest free
 	// number) and guards termClosed: the sessions a close box ended, so
 	// their other windows hear "closed" (termsessions.go).

@@ -257,6 +257,13 @@ func cmdServe() error {
 	// end).
 	go srv.RunAgentPush(context.Background())
 
+	// The agent sessions a restart of the host ended come back as stopped
+	// rows in their columns, to be continued with a click; that is told
+	// before the first window can open, and the note it is told from is
+	// kept from then on.
+	srv.NoteHostRestart()
+	go srv.RunAgentNotes(context.Background())
+
 	apiHandler := srv.Handler()
 	// Every API request, each listener, goes to access.log beside
 	// daemon.log: who reached the API, what they asked, what they got.

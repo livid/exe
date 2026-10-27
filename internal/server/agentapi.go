@@ -22,14 +22,16 @@ import (
 // first message, so the Claude Code window lists it while it works and
 // the conversation stays open there to be taken over or continued.
 //
-//	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states, and "threads", the
+//	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states — "stopped" on one a restart of the
+//	                                                 host ended, which nothing runs in (agentrestart.go) — and "threads", the
 //	                                                 conversations started elsewhere (codexthreads.go, claudesessions.go):
 //	                                                 the latest ten, or with ?threads=all every one (the column's Search)
 //	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode, model, name} → {name, number}
 //	                                                 (Codex: prompt and resume, a thread id, alone)
 //	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt, say}: one message, "say" typed and the prompt pasted after it
 //	DELETE /v1/agents/{app}/sessions/{name}          ends the session, as the column's Archive does; answers with what it gave
-//	                                                 back: freed, swap, available (bytes), measured (agentmemory.go)
+//	                                                 back: freed, swap, available (bytes), measured (agentmemory.go). A
+//	                                                 stopped session's row goes, and nothing is freed
 //	GET    /v1/agents/{app}/sessions/{name}/info     what the column's Get Info shows: the conversation's title, summary,
 //	                                                 first and last prompt, turns, replies, tokens, models, start, last
 //	                                                 activity and folder, read from its transcript (claudeinfo.go; Claude Code only)
@@ -54,6 +56,7 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 	}
 	list := s.agentSessions(a)
 	s.markAgentStates(a, list)
+	list = s.withStopped(a, list)
 	out := map[string]any{"sessions": list}
 	if threads := s.agentThreadList(a, list, r.URL.Query().Get("threads") == "all"); threads != nil {
 		out["threads"] = threads // conversations started elsewhere (codexthreads.go, claudesessions.go)
@@ -173,13 +176,8 @@ func (s *Server) handleAgentSessionCreate(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	n := 2
-	for _, ss := range s.agentSessions(a) {
-		if ss.Number >= n {
-			n = ss.Number + 1
-		}
-	}
-	name := agentSessionName(a, n)
+	name := s.nextAgentSession(a)
+	n := agentSessionNumber(a, name)
 	dir, err := agentSessionDir(req.Dir)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -271,6 +269,10 @@ func (s *Server) handleAgentSessionDelete(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("not a %s session: %q", a.title, name))
 		return
 	}
+	if s.forgetStopped(a, name) {
+		writeJSON(w, http.StatusOK, archiveFigures{}) // a stopped session: nothing ran, nothing is freed
+		return
+	}
 	cmd := tmuxCmd("kill-session", "-t", "="+name)
 	if cmd == nil {
 		writeErr(w, http.StatusInternalServerError, errors.New("sessions need tmux on this host"))
@@ -283,6 +285,7 @@ func (s *Server) handleAgentSessionDelete(w http.ResponseWriter, r *http.Request
 	}
 	os.Remove(s.agentStatusFile(a, name))
 	os.Remove(s.agentStateFile(a, name))
+	s.unnoteAgentSession(a, name)
 	writeJSON(w, http.StatusOK, m.settle()) // what the session gave back (agentmemory.go), once its processes are gone
 }
 

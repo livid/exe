@@ -1288,7 +1288,9 @@ a.svc:hover { text-decoration: underline; }
    on a phone or the Codex app, Claude Code's sessions from a Terminal
    window or an SSH shell — follow the sessions under a rule; the hollow
    dot says the conversation is not here yet, a click continues it in a
-   session of its own (the row greys while that opens) */
+   session of its own (the row greys while that opens). A session row
+   wears it too when a restart of the host stopped the session: a click
+   continues it under its own name */
 .sess-sep { flex: none; height: 0; border-top: 1px solid var(--black); }
 .sess-away { flex: none; width: 7px; height: 7px; display: block; }
 .sess-away svg { display: block; }
@@ -9728,6 +9730,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       { label: L("Collapse All"), dis: !dayKeys.some(dayOpen), act: () => turnDays(dayKeys, false) },
       "-",
       { label: L("New Session"), act: sendNew },
+      ...wakeAllItems(),
     ], () => term.focus());
   }
   function dayRow(k, group, open) {
@@ -9757,7 +9760,11 @@ function openHostTermWin(app, cmd, vm, termSess) {
     // Codex rings for a finished turn and an approval
     const off = s.name !== current;
     const wants = off && (s.wants || s.bell), working = off && s.working && !wants;
-    const why = !wants ? (working ? L("\nstill working") : "")
+    // a session a restart of the host stopped wears the hollow dot of a
+    // conversation that is not here: a click continues it (agentrestart.go)
+    const stopped = off && s.stopped;
+    const why = stopped ? L("\nstopped when this host restarted\nclick to continue it")
+      : !wants ? (working ? L("\nstill working") : "")
       : s.state === "waiting" ? L("\nwaiting for you: a permission, or a question")
       : s.state === "done" ? L("\nfinished its turn — waiting for you")
       : L("\nrang the bell while no window was showing it");
@@ -9765,6 +9772,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       title: sessTitle(s) + (s.name ? "\n" + s.name : "") + why + (s.created ? L`\nstarted ${new Date(s.created * 1000).toLocaleString(UI_LOCALE)}` : "") });
     if (wants) row.append(sessBell());
     else if (working) row.append(el("span", { class: "sess-live" }));
+    else if (stopped) row.append(sessAway());
     row.append(el("span", { class: "t" }, sessTitle(s)));
     row.onclick = () => { if (s.name && s.name !== current) switchSession(s.name); term.focus(); };
     row.addEventListener("contextmenu", e => sessMenu(e, s));
@@ -9904,21 +9912,44 @@ function openHostTermWin(app, cmd, vm, termSess) {
     // about the row, not a command. The placeholder row before the first
     // frame has no start yet, so no line
     const items = s && s.created ? [{ label: L`Started ${sessWhen(s.created)}`, dis: true }, "-"] : [];
+    // a stopped row's click continues it: the menu says so in words
+    if (s && s.stopped && s.name !== current) items.push({ label: L("Continue Here"), act: () => switchSession(s.name) });
     items.push({ label: L("New Session"), act: sendNew });
     if (s) {
       items.push("-", { label: L("Copy Title"), act: () => copyText(sessTitle(s), L("title")) });
       if (s.resumable && findBtn) items.push({ label: L("Get Info"), act: () => sessInfo(s) });
       if (s.resumable) items.push("-", { label: L("Archive…"), act: () => archiveSession(s) });
     }
+    items.push(...wakeAllItems());
     showCtxMenu(e.clientX, e.clientY, items, () => term.focus());
+  }
+  // Continue All Stopped Sessions…, on the column's menus while a restart
+  // of the host has left any: each starts its CLI again, so a dialog says
+  // how many first. The window stays where it is; the rows turn live as
+  // their sessions start
+  function wakeAllItems() {
+    return sessions.some(x => x.stopped) ? ["-", { label: L("Continue All Stopped Sessions…"), act: wakeAll }] : [];
+  }
+  async function wakeAll() {
+    const n = sessions.filter(x => x.stopped).length;
+    const ok = await confirmDialog({
+      message: L`Continue ${n.toLocaleString(UI_LOCALE)} stopped session${n === 1 ? "" : "s"}?`,
+      detail: L`They stopped when this host restarted. Each starts ${agent.title} again on its conversation and holds memory while it runs; a click on a row continues that one alone.`,
+      action: L("Continue All"),
+    });
+    if (ok && ws && ws.readyState === 1) ws.send(JSON.stringify({ wake_all: true }));
+    term.focus();
   }
   // the titles of the sessions being archived, by name, for the toast
   // that follows: the list has dropped the row by the time it arrives
   const archivedTitles = new Map();
   async function archiveSession(s) {
+    const back = (findBtn ? L("Search finds it again, and so does /resume in any ") : L("/resume in any ")) + agent.title + (findBtn ? L(" session.") : L(" session brings it back."));
     const ok = await confirmDialog({
       message: L`Archive “${sessTitle(s)}”?`,
-      detail: L`The session ends, and ${agent.title} with it. The conversation stays on this machine: ${findBtn ? L("Search finds it again, and so does /resume in any ") : L("/resume in any ")}${agent.title}${findBtn ? L(" session.") : L(" session brings it back.")}${s.working ? L(" It is still working — the turn in flight is lost.") : ""}${s.name === current ? L(" The window moves to another session, or ends with the last one.") : ""}`,
+      detail: s.stopped
+        ? L`It stopped when this host restarted, so nothing runs in it. Its row goes, and the conversation stays on this machine: ${back}`
+        : L`The session ends, and ${agent.title} with it. The conversation stays on this machine: ${findBtn ? L("Search finds it again, and so does /resume in any ") : L("/resume in any ")}${agent.title}${findBtn ? L(" session.") : L(" session brings it back.")}${s.working ? L(" It is still working — the turn in flight is lost.") : ""}${s.name === current ? L(" The window moves to another session, or ends with the last one.") : ""}`,
       action: L("Archive"),
     });
     if (ok && ws && ws.readyState === 1) {
@@ -10194,6 +10225,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
         const off = s.name !== current, wants = off && (s.wants || s.bell);
         if (wants) m.append(sessBell());
         else if (off && s.working) m.append(el("span", { class: "sess-live" }));
+        else if (off && s.stopped) m.append(sessAway()); // a host restart stopped it: opening it continues it
       } else m.append(t.working || t.open ? el("span", { class: "sess-live" }) : sessAway());
       // the small text: a session's name and its day, a conversation's
       // folder and its day
