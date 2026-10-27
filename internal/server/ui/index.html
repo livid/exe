@@ -1567,6 +1567,21 @@ body.mobile .cf-note { height: 48px; }
   font-size: 12px; box-shadow: inset 1px 1px 0 #fff, 2px 2px 0 var(--black);
   opacity: 0; transition: opacity .15s; pointer-events: none; max-width: 90vw; z-index: 4000; }
 #status-bar.show { opacity: 1; }
+/* notices: toasts that stay until their close box is pressed (notices.go),
+   the toast's own box with the window's close box at its top-left, a bold
+   line and what follows, stacked under the menu bar */
+#notices { position: fixed; top: calc(28px + var(--sat)); left: 50%; transform: translateX(-50%); z-index: 4000;
+  display: flex; flex-direction: column; gap: 8px; /* a stack shares the widest one's width */
+  width: max-content; max-width: min(440px, calc(100vw - 32px)); }
+#notices:empty { display: none; }
+.notice { position: relative; background: #ffffc9; color: #000; border: 1px solid var(--black);
+  padding: 5px 14px 6px 29px; font-size: 12px; line-height: 16px; box-shadow: inset 1px 1px 0 #fff, 2px 2px 0 var(--black);
+  overflow-wrap: anywhere; }
+.notice .tbox { position: absolute; left: 8px; top: 7px; }
+.notice b { display: block; }
+.notice .nt-body { white-space: pre-line; }
+body.mobile #notices { left: calc(16px + var(--sal)); right: calc(16px + var(--sar));
+  transform: none; width: auto; max-width: none; }
 
 /* Mac OS 9 scrollbars, pixel-sampled from a real OS 9.0.4 (Infinite Mac
    canvas readback). 16px = 1px black rail each side + 14px interior.
@@ -2435,6 +2450,7 @@ body.mobile th.sorted {
 <div id="sa-shield" hidden></div>
 
 <div id="status-bar"></div>
+<div id="notices"></div>
 
 <!-- Cloudflare status summary (modal) -->
 <div id="sum-overlay" class="overlay" hidden>
@@ -2888,6 +2904,24 @@ function toast(msg, ms = 3500) {
   b.classList.add("show");
   clearTimeout(b._t);
   b._t = setTimeout(() => b.classList.remove("show"), ms);
+}
+// Notices: toasts that stay (notices.go). A script on this machine puts
+// one up, every desk and phone shows it, and it stays until its close box
+// is pressed on one of them; the app-data stream says every change (the
+// whole list), and its every open reads the list again for what a gap missed.
+let noticesShown = [];
+function noticesDraw(list) {
+  noticesShown = Array.isArray(list) ? list : [];
+  $("#notices").replaceChildren(...noticesShown.map(n => el("div", { class: "notice", role: "alert" },
+    el("button", { class: "tbox close", type: "button", title: L("Close"), "aria-label": L("Close"), onclick: () => noticeClose(n.id) }),
+    el("b", {}, n.title || ""),
+    ...(n.body ? [el("div", { class: "nt-body" }, n.body)] : []))));
+}
+function noticesLoad() { j("/v1/notices").then(r => noticesDraw(r.notices)).catch(() => {}); }
+function noticeClose(id) {
+  noticesDraw(noticesShown.filter(n => n.id !== id)); // here at once; the stream tells the rest
+  // one that would not close comes back with the list
+  api("/v1/notices/" + encodeURIComponent(id), { method: "DELETE" }).catch(noticesLoad);
 }
 const fmtTime = iso => new Date(iso).toLocaleString(UI_LOCALE);
 
@@ -13840,6 +13874,7 @@ function appDataSubscribe() {
   // its old code never acts on what it missed (the iPad's Notes wrote every
   // note back without its colour on such a wake).
   appES.onopen = () => {
+    noticesLoad();
     if (!appESOpened) { appESOpened = true; return; }
     const resync = () => document.querySelectorAll(".app-window .app-frame").forEach(fr => {
       if (fr.contentWindow && !appFrameStale(fr)) fr.contentWindow.postMessage({ exe: "data-resync" }, location.origin);
@@ -13850,6 +13885,7 @@ function appDataSubscribe() {
     let ev;
     try { ev = JSON.parse(e.data); } catch (err) { return; }
     if (!ev || !ev.app) return;
+    if (ev.app === "@notices") { noticesDraw(ev.notices); return; }
     // an app's code changed on disk
     if (ev.app === "@apps") {
       const a = appsList.find(a => a.name === canonicalAppName(ev.path || ""));

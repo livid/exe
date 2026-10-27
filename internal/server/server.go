@@ -216,6 +216,9 @@ type Server struct {
 	newsMu  sync.Mutex
 	newsSeq int64
 
+	// The desk's notices, toasts that stay until closed (see notices.go).
+	noticeMu sync.Mutex
+
 	// Published-app icon cache: one fetch in flight per hostname (see
 	// appicons.go).
 	appIconMu sync.Map // hostname -> *sync.Mutex
@@ -385,6 +388,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/push/subscribe", s.handlePushSubscribe)
 	mux.HandleFunc("POST /v1/push/test", s.handlePushTest)
 	mux.HandleFunc("POST /v1/push", s.handlePush)
+	mux.HandleFunc("GET /v1/notices", s.handleNoticesGet)
+	mux.HandleFunc("POST /v1/notices", s.handleNoticePost)
+	mux.HandleFunc("DELETE /v1/notices/{id}", s.handleNoticeDelete)
 	mux.HandleFunc("GET /v1/config", s.handleConfigGet)
 	mux.HandleFunc("PUT /v1/config", s.handleConfigPut)
 	mux.HandleFunc("GET /v1/extras", s.handleExtras)

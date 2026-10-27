@@ -42,7 +42,7 @@ For you:
 
 A coding agent, such as Claude Code or Codex, does not need the desktop. It
 drives the same exe over HTTP, the command line and SSH, and **Help → Agent
-Skill Guide…** gives you a prompt that teaches it how. Three things an agent
+Skill Guide…** gives you a prompt that teaches it how. Four things an agent
 or a script does that way show on the desk:
 
 - **A note in the Newsfeed.** `POST /v1/newsfeed` with a title and a body
@@ -50,6 +50,8 @@ or a script does that way show on the desk:
   it: finished work, or a problem you should see.
 - **A notification.** A script on the exe machine sends its own words to
   every device that has notifications on (`POST /v1/push`).
+- **A notice.** A script on the exe machine puts a toast on every desk
+  that stays until you close it (`POST /v1/notices`).
 - **The desktop menu.** `GET /v1/ui/menu` and `PUT /v1/ui/menu` read and
   replace the right-click menu. An agent changes it only when you ask.
 
@@ -570,6 +572,29 @@ are both needed.
 
 Only callers on the machine itself are accepted; the same request over
 Tailscale is refused.
+
+### Notices: a toast that stays
+
+A notice is a toast that waits for you. It shows under the menu bar on
+every desk and phone that has exe open, and it stays there, through
+reloads and restarts, until you press its close box on any one of them.
+Claude's hub watcher puts one up when a usage limit stops Claude's turns:
+it holds the posts it was given and posts nothing in their threads.
+
+A script on the exe machine puts one up like this:
+
+```
+$ curl -s 127.0.0.1:7777/v1/notices -d '{"id":"backup","title":"Backup failed","body":"The disk is full."}'
+```
+
+- A title is needed; the body is optional.
+- An `id` (lower-case letters, digits and dashes) makes a later notice
+  with the same id change the one that is up, instead of adding another.
+- `GET /v1/notices` lists the ones that are up, and
+  `DELETE /v1/notices/<id>` closes one, as its close box does.
+
+Only callers on the machine itself can put one up. At most eight stay up
+at once; a ninth takes the place of the oldest.
 
 ### On a phone
 

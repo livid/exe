@@ -486,6 +486,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   #ff66ff`, purple `#ccccff / #9999ff / #9999ff`, gray `#eeeeee /
   #bbbbbb / #777777`; white is Note Pad's, not Stickies', and takes
   `#999999 / #777777`.
+- Notices (`#notices`, notices.go): a toast that stays until it is
+  closed. Each is the toast's own box (`#ffffc9`, 1px black, an inset
+  white highlight, a 2px hard shadow, 12px type), with the window's 13px
+  close box 8px in from its left and top, a bold first line and the
+  words under it, 29px in. They stack 8px apart, centred 8px under the
+  menu bar, at most 440px wide, and a stack takes its widest one's width;
+  on a phone they span the screen inside the 16px gutters. No other
+  buttons and no timer: the close box is the only way out.
 - Every title bar has a menu, dialogs' too: a right-click, or a press held
   550ms on a touch screen (`winMenu`). Its one item, **Save a Screenshot**
   (`shotWindow`), draws the window a second time from a copy of its markup
