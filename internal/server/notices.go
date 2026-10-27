@@ -104,14 +104,18 @@ func (s *Server) handleNoticePost(w http.ResponseWriter, r *http.Request) {
 	n.Time = time.Now().UnixMilli()
 	s.noticeMu.Lock()
 	defer s.noticeMu.Unlock()
-	list := s.noticesLocked()
-	out := make([]notice, 0, len(list)+1)
-	for _, o := range list {
-		if o.ID != n.ID {
-			out = append(out, o)
+	out := s.noticesLocked()
+	at := -1
+	for i, o := range out {
+		if o.ID == n.ID {
+			at = i
 		}
 	}
-	out = append(out, n)
+	if at >= 0 {
+		out[at] = n // said again: in its place in the stack
+	} else {
+		out = append(out, n)
+	}
 	if len(out) > noticeKeep {
 		out = out[len(out)-noticeKeep:]
 	}

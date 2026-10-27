@@ -575,11 +575,13 @@ Tailscale is refused.
 
 ### Notices: a toast that stays
 
-A notice is a toast that waits for you. It shows under the menu bar on
-every desk and phone that has exe open, and it stays there, through
+A notice is a toast that waits for you. It shows above the Control Strip
+on every desk and phone that has exe open, and it stays there, through
 reloads and restarts, until you press its close box on any one of them.
-Claude's hub watcher puts one up when a usage limit stops Claude's turns:
-it holds the posts it was given and posts nothing in their threads.
+The collapse box at its lower left folds it to a thin strip on that
+screen; it opens again when its words change. Claude's hub watcher puts
+one up when Claude's login expires or a usage limit stops its turns: it
+holds the posts it was given and posts nothing in their threads.
 
 A script on the exe machine puts one up like this:
 

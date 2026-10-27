@@ -487,13 +487,29 @@ restyling: `internal/server/ui/index.html` (the desktop),
   #bbbbbb / #777777`; white is Note Pad's, not Stickies', and takes
   `#999999 / #777777`.
 - Notices (`#notices`, notices.go): a toast that stays until it is
-  closed. Each is the toast's own box (`#ffffc9`, 1px black, an inset
-  white highlight, a 2px hard shadow, 12px type), with the window's 13px
-  close box 8px in from its left and top, a bold first line and the
-  words under it, 29px in. They stack 8px apart, centred 8px under the
-  menu bar, at most 440px wide, and a stack takes its widest one's width;
-  on a phone they span the screen inside the 16px gutters. No other
-  buttons and no timer: the close box is the only way out.
+  closed, drawn as the note Kaleidoscope 2.3.1 puts above the Control
+  Strip after its install, sampled from the Mac OS 9 guest's lossless
+  screendump (`output/mac-os9/kaleidoscope/shots/v3.png`, 2026-09-30) and
+  matched pixel for pixel at a ratio of 1. Outside in: a 1px `#000`
+  frame; a 1px shadow of `#000` 2px in from the frame's top and left, on
+  its right and bottom; a bevel of `#fff` top and left, `#999` bottom and
+  right, `#ccc` in the two mixed corners; then, side by side, a 10px strip
+  of `#ccc` and the well. The strip holds the 10px close box at its top
+  and the 10px collapse box at its bottom (glyphs `NT_CLOSE` and
+  `NT_SHADE`: a `#888` / `#fff` bevel, a `#222` ring, a `#999`→`#fff`
+  diagonal inside; the collapse box crosses it with two `#222` lines),
+  and between them, 2px clear of each, a grip of embossed dots: a 3px
+  tile of `#ccc` with `#fff` at (1, 0) and `#777` at (2, 1). The well is
+  sunk: `#999` top and left, `#fff` bottom and right, `#ccc` corners,
+  then a 1px `#000` line around `#ffff99` (Stickies yellow). The words are
+  11px on a 13px line (the guest's 9-point Geneva), 4px from the top and
+  5px from the sides, the first line bold. A notice is 418px wide at
+  most, 16px from the left, its frame 2px above the Control Strip (26px
+  from the bottom), and notices stack 8px apart upwards; on a phone they
+  span the screen inside the 16px gutters. A press darkens a box inside
+  its ring, as the title bar's boxes do (not sampled). The collapse box
+  folds a notice to its 14px strip in that browser alone, until the
+  notice is said again. No timer: the close box is the only way out.
 - Every title bar has a menu, dialogs' too: a right-click, or a press held
   550ms on a touch screen (`winMenu`). Its one item, **Save a Screenshot**
   (`shotWindow`), draws the window a second time from a copy of its markup

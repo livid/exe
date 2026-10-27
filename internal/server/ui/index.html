@@ -1568,20 +1568,40 @@ body.mobile .cf-note { height: 48px; }
   opacity: 0; transition: opacity .15s; pointer-events: none; max-width: 90vw; z-index: 4000; }
 #status-bar.show { opacity: 1; }
 /* notices: toasts that stay until their close box is pressed (notices.go),
-   the toast's own box with the window's close box at its top-left, a bold
-   line and what follows, stacked under the menu bar */
-#notices { position: fixed; top: calc(28px + var(--sat)); left: 50%; transform: translateX(-50%); z-index: 4000;
-  display: flex; flex-direction: column; gap: 8px; /* a stack shares the widest one's width */
-  width: max-content; max-width: min(440px, calc(100vw - 32px)); }
+   drawn as the note Kaleidoscope 2.3.1 puts above the Control Strip
+   (sampled in the Mac OS 9 guest; docs/platinum.md, Notices): a black
+   frame with a 1px shadow 2px in, a Platinum bevel, a 10px strip down the
+   left (close box, a grip of embossed dots, collapse box) and the words in
+   a sunken well of Stickies yellow, 11px on a 13px line. Stacked up from
+   the Control Strip, 16px in from the left */
+#notices { position: fixed; left: calc(16px + var(--sal)); bottom: calc(26px + var(--sab)); z-index: 4000;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none; }
 #notices:empty { display: none; }
-.notice { position: relative; background: #ffffc9; color: #000; border: 1px solid var(--black);
-  padding: 5px 14px 6px 29px; font-size: 12px; line-height: 16px; box-shadow: inset 1px 1px 0 #fff, 2px 2px 0 var(--black);
-  overflow-wrap: anywhere; }
-.notice .tbox { position: absolute; left: 8px; top: 7px; }
-.notice b { display: block; }
-.notice .nt-body { white-space: pre-line; }
-body.mobile #notices { left: calc(16px + var(--sal)); right: calc(16px + var(--sar));
-  transform: none; width: auto; max-width: none; }
+.notice { position: relative; width: max-content; max-width: min(418px, calc(100vw - 32px - var(--sal) - var(--sar)));
+  border: 1px solid #000; pointer-events: auto; }
+.notice::after { content: ""; position: absolute; left: 1px; top: 1px; right: -2px; bottom: -2px; box-sizing: border-box;
+  border-right: 1px solid #000; border-bottom: 1px solid #000; pointer-events: none; }
+.nt-frame, .nt-well { position: relative; border: 1px solid; }
+.nt-frame { display: flex; background: #ccc; border-color: #fff #999 #999 #fff; }
+.nt-well { flex: 1; min-width: 0; border-color: #999 #fff #fff #999; }
+/* where a light and a dark edge meet, the corner pixel is #ccc */
+.nt-frame::before, .nt-frame::after, .nt-well::before, .nt-well::after { content: ""; position: absolute;
+  width: 1px; height: 1px; box-sizing: border-box; background: #ccc; }
+.nt-frame::before, .nt-well::before { top: -1px; right: -1px; }
+.nt-frame::after, .nt-well::after { bottom: -1px; left: -1px; }
+.nt-strip { display: flex; flex-direction: column; flex: none; width: 10px; }
+.nt-box { display: block; flex: none; position: relative; width: 10px; height: 10px; padding: 0; border: 0; background: none; }
+.nt-box svg { display: block; }
+.nt-box:active::after { content: ""; position: absolute; inset: 2px; box-sizing: border-box;
+  background-image: linear-gradient(135deg, #353535cc 0%, #9c9c9ccc 100%); }
+.nt-grip { flex: 1; margin: 2px 0; background: #ccc url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3" shape-rendering="crispEdges"><rect width="3" height="3" fill="%23cccccc"/><rect x="1" width="1" height="1" fill="%23ffffff"/><rect x="2" y="1" width="1" height="1" fill="%23777777"/></svg>') 0 0 / 3px 3px; }
+.nt-text { border: 1px solid #000; background: #ffff99; color: #000; padding: 4px 5px; font-size: 11px; line-height: 13px;
+  overflow-wrap: anywhere; user-select: text; }
+.nt-text b { display: block; }
+.nt-text .nt-body { white-space: pre-line; }
+.notice.collapsed .nt-well { display: none; }
+body.mobile #notices { right: calc(16px + var(--sar)); align-items: stretch; }
+body.mobile .notice { width: auto; max-width: none; }
 
 /* Mac OS 9 scrollbars, pixel-sampled from a real OS 9.0.4 (Infinite Mac
    canvas readback). 16px = 1px black rail each side + 14px interior.
@@ -2909,13 +2929,56 @@ function toast(msg, ms = 3500) {
 // one up, every desk and phone shows it, and it stays until its close box
 // is pressed on one of them; the app-data stream says every change (the
 // whole list), and its every open reads the list again for what a gap missed.
+// The collapse box folds one to its strip on this browser alone, until it
+// is said again (a notice is known by its id and time).
+// The two boxes, pixel for pixel from Kaleidoscope's note (10x10)
+const NT_BOX = (lines) => `<svg width="10" height="10" viewBox="0 0 10 10" shape-rendering="crispEdges" aria-hidden="true">${lines}</svg>`;
+const NT_CLOSE = NT_BOX('<path fill="#888" d="M0 0h9v1H1v8H0zM7 3h1v4H7zM3 7h5v1H3z"/>'
+  + '<path fill="#222" fill-rule="evenodd" d="M1 1h8v8H1zM2 2h6v6H2z"/>'
+  + '<path fill="#fff" d="M9 1h1v9H1V9h8zM2 2h1v1H2zM6 6h1v1H6z"/>'
+  + '<path fill="#ccc" d="M9 0h1v1H9zM0 9h1v1H0zM3 2h5v1H3zM2 3h1v5H2zM3 6h1v1H3zM6 3h1v1H6zM5 4h1v1H5zM4 5h1v1H4z"/>'
+  + '<path fill="#999" d="M3 3h2v1H3zM3 4h1v1H3z"/><path fill="#aaa" d="M5 3h1v1H5zM4 4h1v1H4zM3 5h1v1H3z"/>'
+  + '<path fill="#ddd" d="M6 4h1v1H6zM5 5h1v1H5zM4 6h1v1H4z"/><path fill="#eee" d="M6 5h1v1H6zM5 6h1v1H5z"/>');
+const NT_SHADE = NT_BOX('<path fill="#888" d="M0 0h9v1H1v8H0zM7 4h1v1H7zM7 6h1v1H7zM3 7h5v1H3z"/>'
+  + '<path fill="#222" fill-rule="evenodd" d="M1 1h8v8H1zM2 2h6v6H2z"/><path fill="#222" d="M2 3h6v1H2zM2 5h6v1H2z"/>'
+  + '<path fill="#fff" d="M9 1h1v9H1V9h8zM2 2h1v1H2zM6 6h1v1H6z"/>'
+  + '<path fill="#ccc" d="M9 0h1v1H9zM0 9h1v1H0zM3 2h5v1H3zM2 4h1v1H2zM5 4h1v1H5zM2 6h2v1H2zM2 7h1v1H2z"/>'
+  + '<path fill="#999" d="M3 4h1v1H3z"/><path fill="#aaa" d="M4 4h1v1H4z"/>'
+  + '<path fill="#ddd" d="M6 4h1v1H6zM4 6h1v1H4z"/><path fill="#eee" d="M5 6h1v1H5z"/>');
 let noticesShown = [];
+const noticeKey = n => n.id + "@" + n.time;
+function noticesFolded() {
+  try { return JSON.parse(localStorage.getItem("exe_notices_folded") || "[]"); } catch (e) { return []; }
+}
 function noticesDraw(list) {
   noticesShown = Array.isArray(list) ? list : [];
-  $("#notices").replaceChildren(...noticesShown.map(n => el("div", { class: "notice", role: "alert" },
-    el("button", { class: "tbox close", type: "button", title: L("Close"), "aria-label": L("Close"), onclick: () => noticeClose(n.id) }),
-    el("b", {}, n.title || ""),
-    ...(n.body ? [el("div", { class: "nt-body" }, n.body)] : []))));
+  const folded = noticesFolded();
+  const nodes = noticesShown.map(n => {
+    const close = el("button", { class: "nt-box", type: "button", title: L("Close"), "aria-label": L("Close"), onclick: () => noticeClose(n.id) });
+    const shade = el("button", { class: "nt-box", type: "button", title: L("Collapse"), "aria-label": L("Collapse"), "aria-expanded": "true" });
+    close.innerHTML = NT_CLOSE;
+    shade.innerHTML = NT_SHADE;
+    const box = el("div", { class: "notice", role: "alert" },
+      el("div", { class: "nt-frame" },
+        el("div", { class: "nt-strip" }, close, el("div", { class: "nt-grip" }), shade),
+        el("div", { class: "nt-well" }, el("div", { class: "nt-text" }, el("b", {}, n.title || ""),
+          ...(n.body ? [el("div", { class: "nt-body" }, n.body)] : [])))));
+    shade.addEventListener("click", () => noticeFold(box, n, !box.classList.contains("collapsed")));
+    return [box, n];
+  });
+  $("#notices").replaceChildren(...nodes.map(([box]) => box));
+  // folded ones keep the height they have open, so the strip stays a strip
+  for (const [box, n] of nodes) if (folded.includes(noticeKey(n))) noticeFold(box, n, true, true);
+}
+function noticeFold(box, n, fold, quiet) {
+  box.style.height = fold ? box.offsetHeight + "px" : "";
+  box.classList.toggle("collapsed", fold);
+  box.querySelectorAll(".nt-box")[1].setAttribute("aria-expanded", fold ? "false" : "true");
+  if (quiet) return;
+  const live = new Set(noticesShown.map(noticeKey));
+  const folded = noticesFolded().filter(k => live.has(k) && k !== noticeKey(n));
+  if (fold) folded.push(noticeKey(n));
+  try { localStorage.setItem("exe_notices_folded", JSON.stringify(folded)); } catch (e) {}
 }
 function noticesLoad() { j("/v1/notices").then(r => noticesDraw(r.notices)).catch(() => {}); }
 function noticeClose(id) {

@@ -62,8 +62,10 @@ func TestNoticesStayUntilClosed(t *testing.T) {
 		ID string `json:"id"`
 	}
 	json.Unmarshal(rec.Body.Bytes(), &made)
+	// ... and in its place in the stack, after another came up under it
+	noticePost(s, `{"id":"hub-watch-limit","title":"Claude hit its weekly limit","body":"Holding 3 posts."}`, "127.0.0.1:5000")
 	list := noticeList(t, s)
-	if len(list) != 2 || list[0].Body != "Holding 2 posts." || list[1].ID != made.ID || made.ID == "" {
+	if len(list) != 2 || list[0].Body != "Holding 3 posts." || list[1].ID != made.ID || made.ID == "" {
 		t.Fatalf("list after a repeat and a new one: %+v (new id %q)", list, made.ID)
 	}
 
