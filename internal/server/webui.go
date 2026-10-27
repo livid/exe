@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"maps"
 	"net/http"
 	"os"
@@ -523,6 +524,14 @@ func (s *Server) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 	if err := s.storeConfig(&nc); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
+	}
+	// a new token ends every session, and with them every terminal socket
+	// and stream open on the API, the ones the old token let in by a
+	// header too (conns.go); this request answers first
+	if old.APIToken != nc.APIToken {
+		if n := s.conns.end(connID(r), func(string) bool { return true }); n > 0 {
+			log.Printf("api_token changed: %d connection(s) signed out", n)
+		}
 	}
 	// every desk is drawn in the language its page came in: tell them all,
 	// and each loads its page again (a desk that misses this hears it from

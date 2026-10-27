@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"math/big"
 	"net"
@@ -476,24 +477,35 @@ func (s *Server) handlePasskeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"passkeys": list, "token": s.Config().APIToken != ""})
 }
 
-// DELETE /v1/passkeys/{id}: the passkey goes, and every session it began.
+// DELETE /v1/passkeys/{id}: the passkey goes, and every session it began,
+// with the terminal sockets and streams those sessions hold open (conns.go).
 func (s *Server) handlePasskeyDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	s.pk.mu.Lock()
-	defer s.pk.mu.Unlock()
 	f := s.passkeysLocked()
+	gone := false
 	for i, k := range f.Passkeys {
 		if k.ID == id {
 			f.Passkeys = append(f.Passkeys[:i], f.Passkeys[i+1:]...)
 			if err := s.passkeysSaveLocked(); err != nil {
+				s.pk.mu.Unlock()
 				writeErr(w, http.StatusInternalServerError, err)
 				return
 			}
-			w.WriteHeader(http.StatusNoContent)
-			return
+			gone = true
+			break
 		}
 	}
-	writeErr(w, http.StatusNotFound, errors.New("no such passkey"))
+	s.pk.mu.Unlock()
+	if !gone {
+		writeErr(w, http.StatusNotFound, errors.New("no such passkey"))
+		return
+	}
+	via := "p" + passkeyRef(id)
+	if n := s.conns.end(connID(r), func(v string) bool { return v == via }); n > 0 {
+		log.Printf("passkey removed: %d connection(s) signed out", n)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /v1/passkeys/new: what the browser needs to make a passkey here.

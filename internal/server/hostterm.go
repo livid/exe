@@ -307,6 +307,9 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	defer sh.Close()
 	defer c.CloseNow()
+	// the session ending ends the socket (conns.go): the tmux client
+	// detaches with it, the session stays
+	go signOutWatch(r, ctx, cancel, c)
 
 	out := &wsWriter{ctx: ctx, c: c}
 	var col *agentColumn

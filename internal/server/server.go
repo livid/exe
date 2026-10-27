@@ -79,6 +79,9 @@ type Server struct {
 
 	// pk is the passkeys and their open challenges (passkey.go).
 	pk passkeyStore
+	// conns is the requests open on the API, each with what let it in
+	// (conns.go).
+	conns conns
 
 	// agentLast is the tmux session each agent's window showed last,
 	// by app — the tiebreak when tmux's own stamps cannot tell where a
@@ -469,8 +472,15 @@ func (s *Server) auth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if tok := s.Config().APIToken; tok != "" && strings.HasPrefix(r.URL.Path, "/v1/") {
-			if requestToken(r) != tok && !s.sessionOK(r, tok, time.Now()) {
+		if !strings.HasPrefix(r.URL.Path, "/v1/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		via := "" // what lets the request in (conns.go)
+		if tok := s.Config().APIToken; tok != "" {
+			if requestToken(r) == tok {
+				via = "k"
+			} else if via = s.sessionVia(r, tok, time.Now()); via == "" {
 				// The scheme is named so that a client can tell this 401,
 				// "your token", from one a route gives for a reason of its
 				// own: the desk raises its API Token dialog on this one
@@ -480,7 +490,13 @@ func (s *Server) auth(next http.Handler) http.Handler {
 				return
 			}
 		}
-		next.ServeHTTP(w, r)
+		// the request stays registered while its handler runs, so that
+		// what ends its session can end it (conns.go)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		id := s.conns.add(via, cancel)
+		defer s.conns.drop(id)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, connKey{}, id)))
 	})
 }
 

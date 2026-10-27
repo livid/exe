@@ -922,5 +922,7 @@
 "added {0}": "{0} に追加",
 "last used {0}": "最終使用 {0}",
 "never used": "未使用",
-"Add Passkey…": "パスキーを追加…"
+"Add Passkey…": "パスキーを追加…",
+"\r\n\u001b[90m[signed out]\u001b[0m\r\n": "\r\n\u001b[90m[サインアウトしました]\u001b[0m\r\n",
+"signed out": "サインアウトしました"
 }

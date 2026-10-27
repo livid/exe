@@ -5017,9 +5017,11 @@ and checks it before keeping it (in localStorage).
 The token goes on no address. Each time the desktop loads, it gives the
 token to exe and gets back a cookie that only exe's own pages can use and
 that no script can read. App windows, apps opened from `/apps/`, terminals
-and movies get in with that cookie. A new token ends every such cookie.
-In a browser that keeps no cookies, the desktop puts the token on those
-addresses instead.
+and movies get in with that cookie. A new token ends every such cookie at
+once: each open terminal window says "signed out", and the desktop asks
+for the token again. The Terminal sessions stay in tmux, and the windows
+come back to them after you sign in. In a browser that keeps no cookies,
+the desktop puts the token on those addresses instead.
 
 - `exe token`, run on the machine that runs exe, shows it again.
 - **Special → Set API Token…** brings the dialog back.
@@ -5042,7 +5044,8 @@ until you remove the passkey or the token changes.
 
 - A passkey works only at the address it was made at.
 - **Remove** on the Passkeys tab ends the passkey and every browser it
-  signed in.
+  signed in, at once: their terminal windows say "signed out", and their
+  Terminal sessions stay in tmux for the next sign-in.
 - Passkeys need an API token. Keep the token: it adds the first passkey,
   and it gets you back in when every passkey is gone. curl, agents and
   joined desks still use it.

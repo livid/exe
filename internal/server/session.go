@@ -66,31 +66,38 @@ func sessionCookie(r *http.Request, tok, via string, now time.Time) *http.Cookie
 	}
 }
 
-// sessionOK says whether r carries a session cookie of this token, sent
-// for a page of the daemon's own origin. A passkey's session lasts as long
-// as the passkey is here.
-func (s *Server) sessionOK(r *http.Request, tok string, now time.Time) bool {
+// sessionVia is how the session cookie r carries began ("t", "p<ref>"),
+// when it is one of this token's, sent for a page of the daemon's own
+// origin, and "" when r carries no good one. A passkey's session lasts as
+// long as the passkey is here.
+func (s *Server) sessionVia(r *http.Request, tok string, now time.Time) string {
 	c, err := r.Cookie(sessionCookieName(r))
 	if err != nil || !sameOrigin(r) {
-		return false
+		return ""
 	}
 	i := strings.LastIndexByte(c.Value, '.')
 	if i < 0 {
-		return false
+		return ""
 	}
 	body, mac := c.Value[:i], c.Value[i+1:]
 	f := strings.Split(body, ".")
 	if len(f) != 3 || f[0] != "1" || (f[1] != "t" && !strings.HasPrefix(f[1], "p")) {
-		return false
+		return ""
 	}
 	issued, err := strconv.ParseInt(f[2], 10, 64)
 	if err != nil || now.Sub(time.Unix(issued, 0)) > sessionMaxAge {
-		return false
+		return ""
 	}
 	if !hmac.Equal([]byte(mac), []byte(sessionMAC(tok, body))) {
-		return false
+		return ""
 	}
-	return f[1] == "t" || s.passkeyLive(f[1][1:])
+	if f[1] != "t" && !s.passkeyLive(f[1][1:]) {
+		return ""
+	}
+	return f[1]
+}
+func (s *Server) sessionOK(r *http.Request, tok string, now time.Time) bool {
+	return s.sessionVia(r, tok, now) != ""
 }
 
 // sameOrigin says whether the browser sent r for a page of the daemon's own

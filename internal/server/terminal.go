@@ -65,6 +65,7 @@ func (s *Server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	defer client.Close()
 	defer c.CloseNow()
+	go signOutWatch(r, ctx, cancel, c) // the session ending ends the socket (conns.go)
 
 	sess, err := client.NewSession()
 	if err != nil {

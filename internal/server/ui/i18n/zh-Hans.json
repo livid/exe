@@ -922,5 +922,7 @@
 "added {0}": "添加于 {0}",
 "last used {0}": "上次使用 {0}",
 "never used": "从未使用",
-"Add Passkey…": "添加通行密钥…"
+"Add Passkey…": "添加通行密钥…",
+"\r\n\u001b[90m[signed out]\u001b[0m\r\n": "\r\n\u001b[90m[已登出]\u001b[0m\r\n",
+"signed out": "已登出"
 }

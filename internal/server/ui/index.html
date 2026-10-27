@@ -10655,6 +10655,15 @@ function openHostTermWin(app, cmd, vm, termSess) {
     clearTimeout(probe); probe = 0;
     usage.hidden = true; // the figures come back with the link
     if (heldPaths.length) syncHeld(); // and so does Insert
+    // the daemon signed this browser out (its passkey removed, a new
+    // token: conns.go): a reconnect could only be refused, and the desk's
+    // next ask raises the API Token dialog; signed in again, it reloads
+    // and the window comes back to its session
+    if (code === 1008) {
+      term.write(L("\r\n\x1b[90m[signed out]\x1b[0m\r\n"));
+      status.textContent = L("signed out");
+      return;
+    }
     if (vm && code === 1000 && reason === "session ended") { closeWin(w); return; }
     if (sess && code === 1000 && (reason === "session ended" || reason === "closed")) { w._dead = true; closeWin(w); return; }
     if (durable && !(code === 1000 && reason === "session ended")) {
