@@ -3228,6 +3228,12 @@ factory desktop menu lists the same apps under **Apps**, and a line of
 your own there can open one; see
 [Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu).
 
+An app also opens in a browser tab of its own. Add `/apps/` to the
+desktop's address: the page lists every app this node has as an icon.
+Click one, and it fills the tab; on a phone it opens as it does in the
+desktop's phone window. The page uses the API token you gave the
+desktop in that browser.
+
 ### The built-in apps
 
 These are part of exe itself, and each has a chapter of its own.

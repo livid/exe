@@ -371,3 +371,32 @@ func TestAppOfflineAddresses(t *testing.T) {
 		t.Errorf(`"offline": true as JSON: %s`, b)
 	}
 }
+
+// /apps/ is a page of the apps, public as the desk is; the list it shows
+// comes from /v1/apps, which still asks for the token.
+func TestAppsIndexPage(t *testing.T) {
+	s := New(&config.Config{APIToken: "test-secret"}, nil, nil, "", t.TempDir())
+	h := s.Handler()
+	r := httptest.NewRequest("GET", "http://exe.test/apps/", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") ||
+		!strings.Contains(w.Body.String(), `fetch("/v1/apps"`) {
+		t.Fatalf("/apps/ = %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	if w.Header().Get("ETag") == "" {
+		t.Fatal("/apps/ has no ETag")
+	}
+	r = httptest.NewRequest("GET", "http://exe.test/v1/apps", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("/v1/apps without the token = %d", w.Code)
+	}
+	r = httptest.NewRequest("GET", "http://exe.test/apps", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code/100 != 3 || w.Header().Get("Location") != "/apps/" {
+		t.Fatalf("/apps = %d %q", w.Code, w.Header().Get("Location"))
+	}
+}

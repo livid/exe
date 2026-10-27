@@ -50,6 +50,19 @@ func handleDocs(w http.ResponseWriter, r *http.Request) {
 	w.Write(docsMD)
 }
 
+//go:embed ui/apps.html
+var uiAppsHTML []byte
+
+// handleAppsIndex serves /apps/ itself: a page of the apps this node has,
+// each opening in the tab. Like the desk it holds no data; it asks
+// /v1/apps with the desk's token.
+func handleAppsIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("ETag", uiETags["apps.html"])
+	http.ServeContent(w, r, "apps.html", time.Time{}, bytes.NewReader(uiAppsHTML))
+}
+
 //go:embed all:ui
 var uiFS embed.FS
 

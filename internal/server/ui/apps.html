@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Apps</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="6.5" y="1.5" width="19" height="24" fill="%23DAD5CA" stroke="%23000"/><rect x="10.5" y="5.5" width="11" height="8" fill="%237FD67F" stroke="%23000"/><rect x="12" y="18" width="8" height="2" fill="%2355524B"/><rect x="9.5" y="25.5" width="13" height="3" fill="%23C8C3B8" stroke="%23000"/></svg>'>
+<style>
+/* /apps/: the apps this exe has, as a Finder window's icons on white (the
+   desktop's .finder-icons and .fitem, index.html) with no window around
+   them. Each opens in this tab as the desk would open it, the token and a
+   phone's ?mobile=1 with it. The page itself holds nothing: the list is
+   /v1/apps, asked with the desk's token, so it is as private as the desk. */
+:root {
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+  --black: #262626; --g700: #777; --hl: #333399;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0; background: #fff; font: 12px/16px var(--font); color: var(--black);
+  user-select: none; -webkit-user-select: none; cursor: default;
+  padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal));
+}
+/* it shows once the list is in, at the size it stays */
+main { max-width: 720px; visibility: hidden; }
+body.ready main { visibility: visible; }
+a { color: inherit; cursor: default; -webkit-tap-highlight-color: transparent; }
+.head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 16px; }
+h1 { font-size: 12px; font-weight: bold; margin: 0; }
+#where { color: var(--g700); font-size: 11px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#list { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  margin: 0; padding: 0; list-style: none; }
+.fitem { height: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  text-decoration: none; outline: none; }
+.fitem img { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
+.fitem .lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0 3px; }
+/* pressed or reached by Tab, an item is selected as the Finder draws it */
+.fitem:active img, .fitem:focus-visible img { filter: brightness(.55) saturate(1.3); }
+.fitem:active .lbl, .fitem:focus-visible .lbl { background: var(--hl); color: #fff; }
+#note { margin: 0; max-width: 400px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="head"><h1>Apps</h1><span id="where"></span></div>
+  <ul id="list"></ul>
+  <p id="note" hidden></p>
+</main>
+<script>
+// The desk's rule for what a phone is (index.html), so an app opens with
+// the layout it has in the desk's phone window.
+const IS_MOBILE = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent)
+  || (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 700);
+// an app with no icon of its own wears the desk's (APP_FALLBACK_ICON)
+const APP_FALLBACK_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path d="M16 2.5 L29.5 16 L16 29.5 L2.5 16 Z" fill="#DAD5CA" stroke="#000"/>
+  <path d="M16 8.5 L23.5 16 L16 23.5 L8.5 16 Z" fill="#9C9AF2" stroke="#000"/>
+</svg>`;
+// Art is drawn as an image, never inline, a system app's repaint too: an
+// SVG image needs its namespace, which inline art goes without.
+const svgSrc = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+  /<svg\b[^>]*\bxmlns=/.test(svg) ? svg : svg.replace(/<svg\b/, '<svg xmlns="http://www.w3.org/2000/svg"'));
+const esc = s => s.split("/").map(encodeURIComponent).join("/");
+
+let tok = "";
+try { tok = localStorage.getItem("exe_token") || ""; } catch (e) {}
+const auth = tok ? { Authorization: "Bearer " + tok } : {};
+// a line under the heading, in place of the list; a link in it is the desk
+const note = (...parts) => {
+  const p = document.getElementById("note");
+  p.append(...parts.map(t => {
+    if (typeof t === "string") return t;
+    const a = document.createElement("a");
+    a.href = "/"; a.textContent = t.desk;
+    return a;
+  }));
+  p.hidden = false;
+};
+
+(async () => {
+  try {
+    // The Icon Editor's repaints (System's icons.json) reach every desk;
+    // they reach this list too, as the desk would show them.
+    const [res, icons] = await Promise.all([
+      fetch("/v1/apps", { headers: auth, cache: "no-store" }),
+      fetch("/v1/apps/System/data/icons.json", { headers: auth, cache: "no-store" })
+        .then(r => r.ok ? r.json() : null).then(d => (d && d.icons) || {}, () => ({})),
+    ]);
+    if (res.status === 401) {
+      document.getElementById("where").textContent = location.host;
+      note("This exe asks for its API token. Enter it on the ", { desk: "desktop" }, ", then reload this page.");
+      return;
+    }
+    if (!res.ok) throw new Error("apps " + res.status);
+    const apps = (await res.json()).filter(a => !a.hidden);
+    const q = new URLSearchParams();
+    if (tok) q.set("token", tok);
+    if (IS_MOBILE) q.set("mobile", "1");
+    const query = String(q) ? "?" + q : "";
+    const list = document.getElementById("list");
+    for (const a of apps) {
+      const title = a.title || a.name;
+      const art = a.system_icon && icons["app-" + a.name];
+      const img = document.createElement("img");
+      img.width = img.height = 32; img.alt = "";
+      img.src = art ? svgSrc(art)
+        : a.icon ? "/apps/" + encodeURIComponent(a.name) + "/" + esc(a.icon)
+        : svgSrc(icons.app || APP_FALLBACK_ICON);
+      const lbl = document.createElement("span");
+      lbl.className = "lbl"; lbl.textContent = title;
+      const link = document.createElement("a");
+      link.className = "fitem";
+      link.href = "/apps/" + encodeURIComponent(a.name) + "/" + query;
+      link.append(img, lbl);
+      const li = document.createElement("li");
+      li.append(link);
+      list.append(li);
+    }
+    const where = document.getElementById("where");
+    where.textContent = (apps.length === 1 ? "1 app" : apps.length + " apps") + " on ";
+    const desk = document.createElement("a");
+    desk.href = "/"; desk.textContent = location.host;
+    where.append(desk);
+  } catch (e) {
+    note("exe did not send its list of apps. Reload the page to try again.");
+  } finally {
+    document.body.classList.add("ready");
+  }
+})();
+</script>
+</body>
+</html>

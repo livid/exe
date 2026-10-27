@@ -379,9 +379,13 @@ func (s *Server) listApps(logSkips ...bool) []*appMeta {
 // appStatic serves app bundles from disk at /apps/<name>/, resolving each
 // app to whichever configured root holds it. os.DirFS is rooted, so requests
 // cannot escape that root; app data lives in a separate tree this handler
-// can never reach.
+// can never reach. /apps/ itself is the page that lists them (ui/apps.html).
 func (s *Server) appStatic() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apps/" {
+			handleAppsIndex(w, r)
+			return
+		}
 		name, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/apps/"), "/")
 		root, folder, ok := s.findAppRoot(name)
 		var files fs.FS
