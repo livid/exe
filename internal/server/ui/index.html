@@ -2992,10 +2992,36 @@ const fmtTime = iso => new Date(iso).toLocaleString(UI_LOCALE);
 
 // ---- api ----
 // The API token this browser holds (the daemon's api_token): sent with
-// every request, and on the URL where a header cannot go. It changes only
-// once the daemon has accepted it (tokDone), never while it is being typed.
+// every request. It changes only once the daemon has accepted it
+// (tokDone), never while it is being typed.
 let apiToken = "";
 try { apiToken = localStorage.getItem("exe_token") || ""; } catch (e) {}
+// The token is a password, so it goes on no address. Once a load the desk
+// hands it to the daemon and gets back a cookie its scripts cannot read
+// (session.go), which the browser sends where no header can go: an app's
+// frame, a stream, a terminal's socket, a movie. cookieAuth is whether the
+// cookie works in this browser, as the last load found; in one that keeps
+// no cookies those addresses carry the token instead (tokArg).
+let cookieAuth = true;
+try { cookieAuth = localStorage.getItem("exe_cookie") !== "0"; } catch (e) {}
+const tokQ = () => apiToken && !cookieAuth ? apiToken : "";
+const tokArg = (sep = "?") => tokQ() ? sep + "token=" + encodeURIComponent(tokQ()) : "";
+async function sessionStart() {
+  if (!apiToken) return;
+  const was = cookieAuth;
+  try {
+    const r = await fetch("/v1/auth/session", { method: "POST", cache: "no-store", headers: { Authorization: "Bearer " + apiToken } });
+    if (!r.ok) return;
+    const { had } = await r.json();
+    // asked with no token, the daemon answers to the cookie alone
+    cookieAuth = (await fetch("/v1/auth", { cache: "no-store" })).status === 204;
+    try { localStorage.setItem("exe_cookie", cookieAuth ? "1" : "0"); } catch (e) {}
+    // frames opened before this, on a cookie the browser did not have (the
+    // first load, or its cookies cleared), open again with one; the streams
+    // and sockets ask again by themselves
+    if (was && !(had && cookieAuth)) appFramesAgain();
+  } catch (e) {}
+}
 const tokenInput = $("#token");
 async function api(path, opts = {}) {
   opts.headers = Object.assign({}, opts.headers);
@@ -3080,6 +3106,7 @@ async function tokDone() {
   let kept = true;
   try { localStorage.setItem("exe_token", tok); } catch (e) { kept = false; }
   tokClose();
+  await sessionStart();
   // Everything the desk asked for so far was refused: it starts over, with
   // the token. (Where the browser keeps nothing, a reload would only ask
   // again; the streams reconnect and the next poll fills the windows.)
@@ -4384,8 +4411,7 @@ let winES = null, winEST = 0, winESUp = false;
 function winSubscribe() {
   if (winES) winES.close();
   clearTimeout(winEST);
-  const tok = apiToken ? "?token=" + encodeURIComponent(apiToken) : "";
-  winES = new EventSource("/v1/ui/events" + tok);
+  winES = new EventSource("/v1/ui/events" + tokArg());
   // a dropped stream reconnects by itself, but an HTTP error ends it for
   // good — and a proxy in front (Tailscale Serve) answers 502 while the
   // daemon restarts. Reopen it, or a restart leaves this browser deaf
@@ -6210,12 +6236,12 @@ async function loadApps() {
   appStaleCheck();
   stickiesSoon();
 }
-// An app window's address: the token, and on a phone ?mobile=1 so the app
-// can size its chrome for one (the Hub swaps its composer labels for
-// glyphs), and the args it was opened on.
+// An app window's address: on a phone ?mobile=1 so the app can size its
+// chrome for one (the Hub swaps its composer labels for glyphs), and the
+// args it was opened on. The token only where cookies do not work (tokQ).
 function appFrameSrc(name, args) {
   const q = new URLSearchParams();
-  if (apiToken) q.set("token", apiToken);
+  if (tokQ()) q.set("token", tokQ());
   if (IS_MOBILE) q.set("mobile", "1");
   for (const [k, v] of Object.entries(args || {})) if (typeof v === "string") q.set(k, v);
   const qs = q.toString(); // not .size: iOS 16 Safari lacks it
@@ -8770,11 +8796,11 @@ function wireMovie(w) {
     }
   });
 }
-// the token rides the URL the way the app frames carry it: a media element
-// cannot send the Authorization header, and a blob: URL would download the
-// whole movie before the first frame
+// a media element cannot send the Authorization header, and a blob: URL
+// would download the whole movie before the first frame: the cookie goes
+// with it (tokArg)
 function movieURL(path) {
-  return wsUrl(path) + (apiToken ? "?token=" + encodeURIComponent(apiToken) : "");
+  return wsUrl(path) + tokArg();
 }
 async function loadMovie(w, refresh) {
   const v = w.querySelector("video");
@@ -9348,8 +9374,7 @@ $("#term-open").onclick = () => {
   term.open(box);
   fitAddon.fit();
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const tok = apiToken ? "?token=" + encodeURIComponent(apiToken) : "";
-  termWS = new WebSocket(`${proto}://${location.host}/v1/vms/${currentVM}/terminal${tok}`);
+  termWS = new WebSocket(`${proto}://${location.host}/v1/vms/${currentVM}/terminal${tokArg()}`);
   termWS.binaryType = "arraybuffer";
   const enc = new TextEncoder();
   termWS.onopen = () => {
@@ -10342,7 +10367,6 @@ function openHostTermWin(app, cmd, vm, termSess) {
   });
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const qs = new URLSearchParams();
-  if (apiToken) qs.set("token", apiToken);
   if (app) qs.set("app", app);
   if (cmd) qs.set("cmd", cmd);
   if (sess) qs.set("term", sess);
@@ -10351,6 +10375,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // that came in at 80×24 would size a shared session to that a moment,
   // on every other window of it
   const url = () => {
+    if (tokQ()) qs.set("token", tokQ()); else qs.delete("token");
     if (!vm) { qs.set("cols", term.cols); qs.set("rows", term.rows); }
     return `${proto}://${location.host}${endpoint}${qs.size ? "?" + qs : ""}`;
   };
@@ -13957,8 +13982,7 @@ let appES = null, appEST = 0, appESOpened = false;
 function appDataSubscribe() {
   if (appES) appES.close();
   clearTimeout(appEST);
-  const tok = apiToken ? "?token=" + encodeURIComponent(apiToken) : "";
-  appES = new EventSource("/v1/apps/events" + tok);
+  appES = new EventSource("/v1/apps/events" + tokArg());
   // reopen after an HTTP error, as winSubscribe does
   appES.onerror = () => { if (appES.readyState === 2) appEST = setTimeout(appDataSubscribe, 3000); };
   // Every open after the first follows a gap (a daemon restart, a sleep)
@@ -14226,12 +14250,17 @@ function appFrameStale(fr) {
   const w = fr.closest(".app-window"), v = w && appVer(w.dataset.app || w.id.slice(8));
   return !!v && fr._ver !== undefined && fr._ver !== v;
 }
-function appFrameBusy(w, fr) {
+// a draft typed in the window (a field saved as it is typed does not count)
+function appFrameDraft(fr) {
   let doc = null;
   try { doc = fr.contentDocument; } catch (e) {}
   for (const t of buildTyped) {
     if (t.isConnected && t.ownerDocument === doc && (t.tagName === "TEXTAREA" ? t.value : t.textContent).trim()) return true;
   }
+  return false;
+}
+function appFrameBusy(w, fr) {
+  if (appFrameDraft(fr)) return true;
   if (openMenuEl || document.querySelector(".overlay:not([hidden])")) return true;
   if (document.hidden) return false;
   return performance.now() - buildInputAt < (w.hidden ? 3000 : 30000);
@@ -14249,6 +14278,18 @@ function appStaleCheck() {
     // a closed window is told so again once its new page is up
     if (w.hidden) fr.addEventListener("load", () => { if (w.hidden) tellApp(w, "hide"); }, { once: true });
     fr.src = appFrameSrc(name, fr._args);
+  }
+}
+// every open app window loads its page again, as an update would
+// (sessionStart: the frames opened before the cookie came). One holding a
+// typed draft is left alone: what it asks next carries the cookie the desk
+// has now.
+function appFramesAgain() {
+  for (const fr of document.querySelectorAll(".app-window .app-frame")) {
+    if (!fr.getAttribute("src") || appFrameDraft(fr)) continue;
+    const w = fr.closest(".app-window");
+    if (w.hidden) fr.addEventListener("load", () => { if (w.hidden) tellApp(w, "hide"); }, { once: true });
+    fr.src = appFrameSrc(w.dataset.app || w.id.slice(8), fr._args);
   }
 }
 
@@ -14331,6 +14372,7 @@ function agentWakeStart() {
 
 // ---- boot ----
 if (IS_MOBILE) $("#vm-hint").textContent = L("tap a VM to open it");
+sessionStart();
 viewsReady = loadViews().catch(() => {}); // before the restore: a Workspace window it opens waits for this
 winRestore();
 agentWakeStart();

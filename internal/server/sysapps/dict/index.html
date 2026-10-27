@@ -1020,7 +1020,11 @@ function playSpeech(tab, k, button, example = 0) {
   stopSpeech();
   const params = new URLSearchParams({ from: k.from, to: k.to, q: k.q });
   if (example) params.set("example", example);
-  if (TOKEN) params.set("token", TOKEN);
+  // an audio element sends no header: the desk's cookie lets it in, and
+  // the token goes on its address only where this page's came with one (a
+  // browser that keeps no cookies)
+  const own = new URLSearchParams(location.search).get("token");
+  if (own) params.set("token", own);
   const audio = new Audio("/v1/dict/audio?" + params);
   const current = speech = { audio, button };
   button.disabled = true;

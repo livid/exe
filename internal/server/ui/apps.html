@@ -9,9 +9,11 @@
 <style>
 /* /apps/: the apps this exe has, as a Finder window's icons on white (the
    desktop's .finder-icons and .fitem, index.html) with no window around
-   them. Each opens in this tab as the desk would open it, the token and a
-   phone's ?mobile=1 with it. The page itself holds nothing: the list is
-   /v1/apps, asked with the desk's token, so it is as private as the desk. */
+   them. Each opens in this tab as the desk would open it, a phone's
+   ?mobile=1 with it. The page itself holds nothing: the list is /v1/apps,
+   asked with the desk's token, so it is as private as the desk. The token
+   goes on no address: the page trades it for the desk's cookie first
+   (session.go), and the app in the tab is let in by that. */
 :root {
   --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
@@ -87,8 +89,9 @@ const note = (...parts) => {
   try {
     // The Icon Editor's repaints (System's icons.json) reach every desk;
     // they reach this list too, as the desk would show them.
-    const [res, icons] = await Promise.all([
+    const [res, , icons] = await Promise.all([
       fetch("/v1/apps", { headers: auth, cache: "no-store" }),
+      tok && fetch("/v1/auth/session", { method: "POST", headers: auth, cache: "no-store" }).catch(() => {}),
       fetch("/v1/apps/System/data/icons.json", { headers: auth, cache: "no-store" })
         .then(r => r.ok ? r.json() : null).then(d => (d && d.icons) || {}, () => ({})),
     ]);
@@ -99,10 +102,7 @@ const note = (...parts) => {
     }
     if (!res.ok) throw new Error("apps " + res.status);
     const apps = (await res.json()).filter(a => !a.hidden);
-    const q = new URLSearchParams();
-    if (tok) q.set("token", tok);
-    if (IS_MOBILE) q.set("mobile", "1");
-    const query = String(q) ? "?" + q : "";
+    const query = IS_MOBILE ? "?mobile=1" : "";
     const list = document.getElementById("list");
     for (const a of apps) {
       const title = a.title || a.name;

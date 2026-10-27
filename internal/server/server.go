@@ -269,6 +269,7 @@ func (s *Server) Handler() http.Handler {
 	// (auth, below, stands before every /v1/ route): reaching this at all
 	// is the answer. With no token it tells a desk that none is asked for.
 	mux.HandleFunc("GET /v1/auth", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("POST /v1/auth/session", s.handleSession)
 	mux.HandleFunc("GET /v1/vms", s.handleList)
 	mux.HandleFunc("POST /v1/vms", s.handleCreate)
 	mux.HandleFunc("GET /v1/vms/{name}", s.handleGet)
@@ -445,7 +446,8 @@ func (s *Server) Handler() http.Handler {
 }
 
 // auth guards the API; the static UI page itself is public (it holds no
-// data — every API call it makes carries the token). /v1/peer/* is exempt:
+// data — every API call it makes carries the token, or the session cookie
+// the desk had for it: session.go). /v1/peer/* is exempt:
 // those routes authenticate each request by peer signature (or join code)
 // instead, and expose nothing beyond app-data sync. /pages/ is outside
 // /v1 on purpose: a rendered Workspace page is authorized by its ticket
@@ -462,7 +464,7 @@ func (s *Server) auth(next http.Handler) http.Handler {
 				// Browsers cannot set headers on WebSocket connects.
 				got = r.URL.Query().Get("token")
 			}
-			if got != tok {
+			if got != tok && !sessionOK(r, tok, time.Now()) {
 				// The scheme is named so that a client can tell this 401,
 				// "your token", from one a route gives for a reason of its
 				// own: the desk raises its API Token dialog on this one

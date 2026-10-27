@@ -126,8 +126,9 @@ setInterval(() => probe(false), 3000);
 
 // An app that keeps a copy on this device (sw.js, "what an app keeps") can
 // be read from it meanwhile: a line says which, and each has a button that
-// opens its page as the desk would have, the token and a phone's ?mobile=1
-// with it (the desk's own rule for what a phone is). In a browser it opens
+// opens its page as the desk would have, a phone's ?mobile=1 with it (the
+// desk's own rule for what a phone is). The token goes on no address: the
+// app is let in by the desk's cookie (session.go) when exe is back. In a browser it opens
 // in a new tab, and this alert stays where it is to bring the desk back.
 // An installed app has no tabs, and an iPhone's would open outside it,
 // where its copies are not: there the page takes this one's place, with
@@ -145,7 +146,6 @@ const INSTALLED = navigator.standalone === true || matchMedia("(display-mode: st
     }
     if (apps.length) {
       const q = new URLSearchParams();
-      try { const tok = localStorage.getItem("exe_token"); if (tok) q.set("token", tok); } catch (e) {}
       if (IS_MOBILE) q.set("mobile", "1");
       if (INSTALLED) q.set("from", "offline");
       const query = String(q);

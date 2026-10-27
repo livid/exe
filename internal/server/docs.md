@@ -5014,6 +5014,13 @@ it does for an update.
 The desktop asks for the token by itself the first time a browser opens it,
 and checks it before keeping it (in localStorage).
 
+The token goes on no address. Each time the desktop loads, it gives the
+token to exe and gets back a cookie that only exe's own pages can use and
+that no script can read. App windows, apps opened from `/apps/`, terminals
+and movies get in with that cookie. A new token ends every such cookie.
+In a browser that keeps no cookies, the desktop puts the token on those
+addresses instead.
+
 - `exe token`, run on the machine that runs exe, shows it again.
 - **Special → Set API Token…** brings the dialog back.
 
