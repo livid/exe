@@ -43,7 +43,8 @@ func (s *Server) handlePingStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"rrdtool": st.RRDtool, "probe": st.Probe, "step": st.Step, "pings": st.Pings, "from": st.From,
 		"round": st.Round, "next": st.Next, "busy": st.Busy, "targets": st.Targets,
-		"ranges": ping.Ranges, "overview": ping.OverviewRange, "min_width": ping.MinWidth,
+		"ranges": ping.Ranges, "overview": ping.OverviewRange,
+		"min_width": ping.MinWidth, "wide_width": ping.WideWidth,
 	})
 }
 

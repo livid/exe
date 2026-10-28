@@ -3320,8 +3320,8 @@ of its spread. An open row shows SmokePing's four graphs: the last 3 hours,
 - **Zoom**: drag across one of the four graphs, and it shows the span you
   dragged over. **Back** returns it to its own span.
 
-Under 560 pixels wide (a phone, a narrow window), a graph scrolls sideways,
-so SmokePing's legend stays whole.
+In a window under 680 pixels wide, a phone's too, the legend puts its
+figures two to a line, so each graph fits the window's width.
 
 ### Ping for an agent
 

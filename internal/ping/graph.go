@@ -120,10 +120,14 @@ var Ranges = []Range{
 const OverviewRange = 10 * 3600
 
 const (
-	// SmokePing draws its graphs 600 wide; below MinWidth its legend no
-	// longer fits, so a narrower window scrolls the graph sideways.
-	MinWidth = 560
-	maxWidth = 2400
+	// SmokePing's legend needs WideWidth: narrower, rrdtool leaves a line
+	// of long figures (medians over 100 ms) running off the picture's edge.
+	// A narrower graph (a phone's) gets the same figures two to a line, a
+	// size smaller, which fit from MinWidth up: a 320-point phone's window.
+	// Narrower still, the window scrolls the graph sideways.
+	WideWidth = 680
+	MinWidth  = 300
+	maxWidth  = 2400
 )
 
 // GraphOpts asks for one picture.
@@ -395,38 +399,87 @@ func detailArgs(path string, o GraphOpts, top float64, probe string, when time.T
 		"VDEF:avmed=median,AVERAGE",
 		"VDEF:sdmed=median,STDEV",
 		"CDEF:mesd=median,POP,avmed,sdmed,/",
-		`GPRINT:avmed:median rtt\:  %.1lf %ss avg`,
-		`GPRINT:median:MAX:%.1lf %ss max`,
-		`GPRINT:median:MIN:%.1lf %ss min`,
-		`GPRINT:median:LAST:%.1lf %ss now`,
-		`GPRINT:sdmed:%.1lf %ss sd`,
-		`GPRINT:mesd:AVERAGE:%.1lf %s am/s\l`,
-		"LINE1:median#202020",
-		`GPRINT:ploss:AVERAGE:packet loss\: %.2lf %% avg`,
-		`GPRINT:ploss:MAX:%.2lf %% max`,
-		`GPRINT:ploss:MIN:%.2lf %% min`,
-		`GPRINT:ploss:LAST:%.2lf %% now\l`,
-		`COMMENT:loss color\:`,
 	)
+	narrow := o.Width < WideWidth
+	if narrow {
+		// a size smaller, for the figures to fit two to a line
+		args = append(args, "--font", "LEGEND:7.5")
+	}
+	if !narrow {
+		args = append(args,
+			`GPRINT:avmed:median rtt\:  %.1lf %ss avg`,
+			`GPRINT:median:MAX:%.1lf %ss max`,
+			`GPRINT:median:MIN:%.1lf %ss min`,
+			`GPRINT:median:LAST:%.1lf %ss now`,
+			`GPRINT:sdmed:%.1lf %ss sd`,
+			`GPRINT:mesd:AVERAGE:%.1lf %s am/s\l`,
+			"LINE1:median#202020",
+			`GPRINT:ploss:AVERAGE:packet loss\: %.2lf %% avg`,
+			`GPRINT:ploss:MAX:%.2lf %% max`,
+			`GPRINT:ploss:MIN:%.2lf %% min`,
+			`GPRINT:ploss:LAST:%.2lf %% now\l`,
+			`COMMENT:loss color\:`,
+		)
+	} else {
+		// the same figures two to a line, in columns after their label:
+		// each is of a fixed width, and every label is twelve characters
+		args = append(args,
+			legendLabel("median rtt:"),
+			`GPRINT:avmed:%5.1lf %ss avg`,
+			`GPRINT:median:MAX:%5.1lf %ss max\l`,
+			legendLabel(""),
+			`GPRINT:median:MIN:%5.1lf %ss min`,
+			`GPRINT:median:LAST:%5.1lf %ss now\l`,
+			legendLabel(""),
+			`GPRINT:sdmed:%5.1lf %ss sd `,
+			`GPRINT:mesd:AVERAGE:%5.1lf %s am/s\l`,
+			"LINE1:median#202020",
+			legendLabel("packet loss:"),
+			`GPRINT:ploss:AVERAGE:%6.2lf %% avg`,
+			`GPRINT:ploss:MAX:%6.2lf %% max\l`,
+			legendLabel(""),
+			`GPRINT:ploss:MIN:%6.2lf %% min`,
+			`GPRINT:ploss:LAST:%6.2lf %% now\l`,
+			legendLabel("loss color:"),
+		)
+	}
 	last := -1
-	for _, lc := range lossColors {
+	for i, lc := range lossColors {
+		label := lc.label
+		if narrow && i == 4 {
+			label += `\l` // the rest of the scale takes a line of its own
+		}
 		args = append(args,
 			fmt.Sprintf("CDEF:me%d=loss,%d,GT,loss,%d,LE,*,1,UNKN,IF,median,*", lc.upTo, last, lc.upTo),
 			fmt.Sprintf("CDEF:meL%d=me%d,%s,-", lc.upTo, lc.upTo, swidth),
 			fmt.Sprintf("CDEF:meH%d=me%d,0,*,%s,2,*,+", lc.upTo, lc.upTo, swidth),
-			fmt.Sprintf("AREA:meL%d", lc.upTo),
-			fmt.Sprintf("STACK:meH%d%s:%s", lc.upTo, lc.color, lc.label))
+			fmt.Sprintf("AREA:meL%d", lc.upTo))
+		if narrow && i == 5 {
+			args = append(args, legendLabel(""))
+		}
+		args = append(args, fmt.Sprintf("STACK:meH%d%s:%s", lc.upTo, lc.color, label))
 		last = lc.upTo
 	}
-	every := fmt.Sprintf(`COMMENT:probe\:       %d %s every %ds`, Pings, probeDesc(probe), Step)
 	args = append(args, `COMMENT: \l`, "HRULE:0#000000")
+	date := "COMMENT:" + rrdText(stamp(when))
+	if narrow {
+		return append(args,
+			legendLabel("probe:"), fmt.Sprintf(`COMMENT:%d %s\l`, Pings, probeDesc(probe)),
+			legendLabel(""), fmt.Sprintf(`COMMENT:every %ds\l`, Step),
+			date+`\r`)
+	}
+	every := fmt.Sprintf(`COMMENT:probe\:       %d %s every %ds`, Pings, probeDesc(probe), Step)
 	// SmokePing puts the date at the end of the probe's line; under 640
 	// pixels the two do not fit side by side, and the date takes a line
 	if o.Width < 640 {
-		return append(args, every+`\l`, "COMMENT:"+rrdText(stamp(when))+`\r`)
+		return append(args, every+`\l`, date+`\r`)
 	}
-	return append(args, every, "COMMENT:"+rrdText(stamp(when))+`\j`)
+	return append(args, every, date+`\j`)
 }
+
+// legendLabel is a narrow legend's first column: a label, or blanks under
+// one, twelve characters wide.
+func legendLabel(s string) string { return "COMMENT:" + rrdText(fmt.Sprintf("%-12s", s)) }
 
 // overviewArgs is SmokePing's overview graph (get_overview): the median
 // as a line in a band of its standard deviation over the twenty pings.
@@ -457,7 +510,7 @@ func overviewArgs(path string, o GraphOpts, desc string, when time.Time) []strin
 	count.WriteString(",-")
 	sum.WriteString(",pings1,/")
 	sq.WriteString(",pings1,/,SQRT")
-	return append(args, count.String(), sum.String(), sq.String(),
+	args = append(args, count.String(), sum.String(), sq.String(),
 		"CDEF:dmlow1=dm1,sdev1,2,/,-",
 		"CDEF:s2d1=sdev1",
 		"AREA:dmlow1",
@@ -467,13 +520,28 @@ func overviewArgs(path string, o GraphOpts, desc string, when time.Time) []strin
 		"VDEF:avsd1=sdev1,AVERAGE",
 		"CDEF:msr1=median1,POP,avmed1,avsd1,/",
 		"VDEF:avmsr1=msr1,AVERAGE",
+	)
+	date := "COMMENT:" + rrdText(stamp(when))
+	if o.Width < WideWidth {
+		// a line of SmokePing's legend is two here, its second half under
+		// the first's figures, and the date takes a line of its own
+		return append(args,
+			"--font", "LEGEND:7.5",
+			`GPRINT:avmed1:%5.1lf %ss av md `,
+			`GPRINT:ploss1:AVERAGE:%5.1lf %% av ls\l`,
+			`COMMENT:       `,
+			`GPRINT:avsd1:%5.1lf %ss av sd `,
+			`GPRINT:avmsr1:%5.1lf %s am/as\l`,
+			"COMMENT:"+rrdText(desc)+`\l`,
+			date+`\r`)
+	}
+	return append(args,
 		`GPRINT:avmed1:%5.1lf %ss av md `,
 		`GPRINT:ploss1:AVERAGE:%5.1lf %% av ls`,
 		`GPRINT:avsd1:%5.1lf %ss av sd`,
 		`GPRINT:avmsr1:%5.1lf %s am/as\l`,
 		"COMMENT:"+rrdText(desc),
-		"COMMENT:"+rrdText(stamp(when))+`\j`,
-	)
+		date+`\j`)
 }
 
 // parseGraphv splits rrdtool graphv's answer: "key = value" lines, then

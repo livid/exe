@@ -4,3 +4,4 @@ What changed since the last release, as Software Update will show it under
 docs/release.md, "The notes", says how it is written. What every release
 before it said is kept in CHANGELOG.md.
 -->
+- **Ping**'s graphs fit a phone or a narrow window: the legend puts its figures two to a line.

@@ -421,7 +421,8 @@ func TestRRDAndGraphs(t *testing.T) {
 
 	for _, o := range []GraphOpts{
 		{Range: 10800, Width: 697, Height: 300, Zoom: 1},
-		{Range: 108000, Width: 400, Height: 300, Zoom: 1.5}, // under MinWidth: drawn at it
+		{Range: 108000, Width: 400, Height: 380, Zoom: 1.5}, // a phone's: the narrow legend
+		{Range: 864000, Width: 200, Height: 380, Zoom: 2},   // under MinWidth: drawn at it
 		{Overview: true, Range: OverviewRange, Width: 697, Height: 120, Zoom: 2},
 		{Start: now - 3600, End: now, Width: 800, Height: 320, Zoom: 1},
 	} {
@@ -459,5 +460,60 @@ func TestRRDAndGraphs(t *testing.T) {
 	}
 	if _, _, err := f.Graph(context.Background(), "nope", GraphOpts{Range: 10800}); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
+	}
+}
+
+// TestLegendsFit draws every legend at the widths a window or a phone asks
+// for, with wide figures (medians from 50 to 250 ms, losses), and holds each
+// item rrdtool placed to the picture: SmokePing's lines from WideWidth, the
+// narrow ones below it. At 586 to 655 SmokePing's first line ran off the
+// edge before WideWidth was raised to 680.
+func TestLegendsFit(t *testing.T) {
+	f := newFake(t, true)
+	tg, _ := f.Add("1.1.1.1", "")
+	now := time.Now().Unix() / Step * Step
+	for i := int64(12); i >= 0; i-- {
+		v := map[bool]string{true: "250.25 ", false: "50.5 "}[i%2 == 0]
+		f.answers["1.1.1.1"] = strings.TrimSpace(strings.Repeat(v, 17) + "- - -")
+		if i == 3 {
+			f.answers["1.1.1.1"] = strings.TrimSpace(strings.Repeat("- ", 20))
+		}
+		f.measure(context.Background(), now-i*Step, false)
+	}
+	path := f.rrdPath(tg.ID)
+	for _, w := range []int{300, 304, 344, 359, 374, 414, 480, 560, 586, 620, 655, 679, 680, 697, 728} {
+		for _, z := range []float64{1, 1.5, 3} {
+			for _, ov := range []bool{false, true} {
+				o := GraphOpts{Overview: ov, Range: 10800, Width: w, Height: 380, Zoom: z}
+				var args []string
+				if ov {
+					o.Range, o.Height = OverviewRange, 150
+					args = overviewArgs(path, o, probeDesc("fping"), time.Now())
+				} else {
+					args = detailArgs(path, o, 0.2, "fping", time.Now())
+				}
+				args[1] = os.DevNull // the numbers, not the picture
+				out, stderr, err := runTool(context.Background(), f.tool("rrdtool"), args...)
+				if err != nil {
+					t.Fatalf("%+v: %v", o, toolErr(err, stderr))
+				}
+				items := 0
+				for _, line := range strings.Split(string(out), "\n") {
+					k, v, ok := strings.Cut(line, " = ")
+					if !ok || !strings.HasPrefix(k, "coords[") {
+						continue
+					}
+					var x1, y1, x2, y2 int
+					fmt.Sscanf(strings.Trim(v, `"`), "%d,%d,%d,%d", &x1, &y1, &x2, &y2)
+					items++
+					if x1 < 0 || x2 > w || y2 > o.Height {
+						t.Errorf("width %d zoom %g overview %v: legend item %s at %d..%d leaves the picture", w, z, ov, k, x1, x2)
+					}
+				}
+				if items < 4 {
+					t.Fatalf("%+v: %d legend items", o, items)
+				}
+			}
+		}
 	}
 }
