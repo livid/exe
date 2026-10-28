@@ -357,6 +357,22 @@ were pushed: Extras… installs them from GitHub, and a line of the notes
 needed their newest commits. Not tried: a new install on Windows, and the
 iPhone lines of the notes on a device.
 
+The fifth, 2026.10.28, was the first since the desk signs in by a cookie
+(5e8fdfa). The update the window starts was sent on `precision`, `world`
+and the Mac node as for 2026.10.15, and each moved from 2026.10.15 with a
+VM running, in 34 s, 10 s and 4 s, with one `update: exe 2026.10.28 is
+installed` line in its log and its guest's journal ending in "Journal
+stopped". Because the sign-in had changed, the window's button was also
+pressed in a browser: a new VM on this machine, installed with an API
+token from a build of the same commit numbered 2026.10.27.90, was moved by
+**Update Now**, whose request carried the token and the session cookie.
+The window said the update was done about 9 s later, the tab having been
+closed during the download. The token was that VM's own, and went with
+it. `lab` moved by a shell's `exe update -y`; `birdie` and another new VM
+installed it with the questions answered at a terminal, and the notes were
+read in that VM's window; the Intel build said its version under Rosetta.
+Not tried: a new install on Windows, and a passkey on a phone.
+
 Rolling back is moving GitHub's "latest" mark to the release before
 (`gh release edit <older> --latest`); whether that is allowed with
 immutable releases on has not been tried — publishing the next version is
