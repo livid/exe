@@ -66,7 +66,7 @@ type extraDef struct {
 }
 
 var extraDefs = []extraDef{
-	{Name: "apps", Repo: "exe-apps", Bundles: []string{"Notes", "Paint", "Tides", "Todo", "Weather", "World Clock"}},
+	{Name: "apps", Repo: "exe-apps", Bundles: []string{"Notes", "Paint", "Ping", "Tides", "Todo", "Weather", "World Clock"}},
 	{Name: "planet", Repo: "exe-planet", Bundles: []string{"Planet", "Writer"},
 		Service: "planet", URL: "http://127.0.0.1:7799", Health: "/v1/status"},
 	{Name: "easel", Repo: "exe-easel", Bundles: []string{"easel"},

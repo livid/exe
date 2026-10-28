@@ -35,6 +35,7 @@ import (
 	"exe/internal/hostmon"
 	"exe/internal/macos9"
 	"exe/internal/peer"
+	"exe/internal/ping"
 	"exe/internal/proxy"
 	"exe/internal/sshexec"
 	"exe/internal/transcript"
@@ -224,6 +225,11 @@ type Server struct {
 	dictSeq   int
 	dictBoot  string // this daemon's start, in flight ids: a restart reuses no id
 
+	// The Ping app's measurements, SmokePing's way (ping.go): made on
+	// first use, run by RunPing.
+	pingOnce sync.Once
+	ping     *ping.Monitor
+
 	// One-writer guard for this node's Newsfeed journal (see newsfeed.go).
 	newsMu  sync.Mutex
 	newsSeq int64
@@ -387,6 +393,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/dict", s.handleDictLookup)
 	mux.HandleFunc("POST /v1/dict/start", s.handleDictStart)
 	mux.HandleFunc("GET /v1/dict/stream", s.handleDictStream)
+	mux.HandleFunc("GET /v1/ping", s.handlePingStatus)
+	mux.HandleFunc("POST /v1/ping/targets", s.handlePingAdd)
+	mux.HandleFunc("PUT /v1/ping/targets/{id}", s.handlePingEdit)
+	mux.HandleFunc("DELETE /v1/ping/targets/{id}", s.handlePingDelete)
+	mux.HandleFunc("GET /v1/ping/targets/{id}/graph", s.handlePingGraph)
 	mux.HandleFunc("GET /v1/vms/{name}/publish/scan", s.handlePublishScan)
 	mux.HandleFunc("POST /v1/vms/{name}/publish", s.handlePublish)
 	mux.HandleFunc("POST /v1/github/oauth/start", s.handleGitHubStart)

@@ -252,6 +252,10 @@ func cmdServe() error {
 	// city, a push when rain reaches the next hour and one when it clears.
 	go srv.RunRain(context.Background())
 
+	// The Ping app: twenty pings to each of its destinations every five
+	// minutes, kept and drawn by RRDtool as SmokePing does.
+	go srv.RunPing(context.Background())
+
 	// A push when a Claude Code or Codex turn ends in one of the desk's
 	// agent sessions; a tap opens that window (Chat runs push their own
 	// end).

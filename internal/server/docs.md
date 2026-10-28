@@ -3256,13 +3256,82 @@ app data keeps its original storage and sync namespace.
 
 ### The extra apps
 
-The installer offers a set of extra apps: Notes, Paint, Tides, Todo,
+The installer offers a set of extra apps: Notes, Paint, Ping, Tides, Todo,
 Weather and World Clock, from
 [exe-apps](https://github.com/livid/exe-apps). Say yes and they go into
 `~/.exe/apps`. Say no and **Extras** brings them later.
 
 An update brings their new versions, except for an app you edited or
 removed; see [Updating](https://exe.v2core.com/docs/using/updating).
+
+### Ping
+
+**Ping**, one of the extra apps, watches how fast the network reaches the
+places you care about, the way SmokePing does. Every five minutes it sends
+twenty pings to each address on its list and graphs what came back.
+
+- **For you**: see at a glance whether a server, your router or your
+  provider is slow or drops packets, now and over the last year.
+- **SmokePing's graphs.** RRDtool draws them from files in SmokePing's own
+  layout, so they look and read as SmokePing's do.
+- **For an agent**: the last round of every address is one HTTP call.
+
+exe itself does the measuring, not the window: it goes on while the window
+is closed, and the files are in `~/.exe/ping`. Each machine measures from
+where it stands, so joined desks do not share the list.
+
+Ping needs two programs on the machine:
+
+- **RRDtool**, which keeps and draws the numbers: `sudo apt install
+  rrdtool` on Debian and Ubuntu, `brew install rrdtool` on a Mac. Until it
+  is there, the window says so and nothing is measured.
+- **fping**, which sends the pings as SmokePing sends them: `sudo apt
+  install fping` or `brew install fping`. Without it, Ping uses the
+  system's `ping`, one process for each address.
+
+Ping looks for both at every round, so after you install one, it starts
+without a restart.
+
+### Watch an address
+
+- **Add**: type an IP address or a host name in the field at the top, and
+  press Return or **Add**. Its first twenty pings go out at once; after
+  that it is measured with the others, every five minutes on the clock.
+- **The row** shows the name and the address, the median time of the last
+  round, and how many of the twenty pings were lost. The square before the
+  name is in SmokePing's colour for that loss.
+- **Rename or move**: click the row to open it, change **Name** or
+  **Address**, and press Return. A new address keeps the history.
+- **Remove**: click × twice. The history goes with it.
+
+### Read the graphs
+
+A closed row shows the last 10 hours: the median as a blue line in a band
+of its spread. An open row shows SmokePing's four graphs: the last 3 hours,
+30 hours, 10 days and 360 days.
+
+- **The smoke** is each round's twenty pings in order. The darker the grey,
+  the nearer the median.
+- **The median** is the line through the smoke, in the colour of the
+  round's loss: green for none, blues and purples for a few, red for 11 to
+  19 of the 20. When all 20 are lost, nothing is drawn.
+- **The scale** goes a fifth past the highest median of the span. One slow
+  ping does not flatten the rest: it runs off the top.
+- **Zoom**: drag across one of the four graphs, and it shows the span you
+  dragged over. **Back** returns it to its own span.
+
+Under 560 pixels wide (a phone, a narrow window), a graph scrolls sideways,
+so SmokePing's legend stays whole.
+
+### Ping for an agent
+
+| Call | What it does |
+|---|---|
+| `GET /v1/ping` | Each address with its last round: `median` in seconds, `loss` of 20, and when |
+| `POST /v1/ping/targets` | Adds `{"host": "…", "title": "…"}`; the title is optional |
+| `PUT /v1/ping/targets/{id}` | Changes `host` or `title` |
+| `DELETE /v1/ping/targets/{id}` | Removes it and its history |
+| `GET /v1/ping/targets/{id}/graph?range=10800` | A detail graph as a PNG; `range` is 10800, 108000, 864000 or 31104000 seconds, or `start` and `end` |
 
 ### Extras
 

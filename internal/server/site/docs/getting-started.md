@@ -86,8 +86,8 @@ only, and no sudo.
    machine's Terminal. exe speaks plain HTTP, so all interfaces is for a
    network you trust. The desktop asks for the token the first time a
    browser opens it; `exe token` shows it again.
-3. **Install the extra desktop apps?** Notes, Paint, Tides, Todo, Weather
-   and World Clock, from [exe-apps](https://github.com/livid/exe-apps),
+3. **Install the extra desktop apps?** Notes, Paint, Ping, Tides, Todo,
+   Weather and World Clock, from [exe-apps](https://github.com/livid/exe-apps),
    into `~/.exe/apps`.
 4. **Set this machine up to run VMs?** Linux only, asked where `/dev/kvm`
    exists, and the one step that uses sudo. It lists the commands it would
