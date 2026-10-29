@@ -884,9 +884,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   title: the 7px black dot when the session wants someone (a hook's word,
   or the bell), or the Chat list's 6px pulsing green dot while it works
   unwatched — green means "live" everywhere. Codex's rows follow the last
-  user message, newest first, then session creation time; sessions without
-  messages follow those with messages. Output and selection do not reorder
-  them. In the Claude Code window
+  user message, newest first, using creation time until the first message
+  so New puts a session at the top. Creation time breaks ties. Output and
+  selection do not reorder them. In the Claude Code window
   the sessions go under the day each started (`.sess-day`): a row of
   the same 18px and line, the Finder's disclosure triangle (`FL_SHUT`,
   `FL_OPEN`, darkened while the row is pressed) 5px in and 3px down,

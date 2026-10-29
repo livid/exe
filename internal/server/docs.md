@@ -905,8 +905,8 @@ sessions, one row for each tmux session. Each is a conversation of its own.
   The width is kept with the window's layout.
 
 In the Codex window, sessions are ordered by when you last sent a message,
-newest first, then by when the session was created. Sessions with no message
-yet follow those with messages, newest created first. Agent output and
+newest first. A session with no message yet uses its creation time, so
+**New** puts it at the top. Creation time breaks ties. Agent output and
 switching sessions do not change this order.
 
 In the Claude Code window, sessions run newest created first and are grouped

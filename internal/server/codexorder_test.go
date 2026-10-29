@@ -83,6 +83,12 @@ func TestCodexColumnInteractionOrder(t *testing.T) {
 		if n == 4 {
 			created = 300 // same creation time and message as 3: number wins
 		}
+		if n == 6 {
+			created = 1793268000 // 10:00:00, just before the messages' milliseconds
+		}
+		if n == 7 {
+			created = 1793269800 // New at 10:30, with no message yet
+		}
 		panes = append(panes, fmt.Sprintf("%s:%d:9999999999:1:0:9999999999:Example %d", name, created, n))
 		id := fmt.Sprintf("d4290000-0000-4000-8000-%012d", n)
 		t.Cleanup(func() { codexRolloutPaths.Delete(id) })
@@ -124,12 +130,15 @@ func TestCodexColumnInteractionOrder(t *testing.T) {
 			t.Fatalf("column order = %v, want %v", got, want)
 		}
 	}
-	read([]int{1, 5, 4, 3, 2, 7, 6})
+	read([]int{7, 1, 5, 4, 3, 2, 6})
 	// New assistant output never promotes session 2; a new user message does.
 	writeLines(t, paths[2], strings.Replace(codexUser("2026-10-29T11:00:00Z", "reply"), `"role":"user"`, `"role":"assistant"`, 1))
-	read([]int{1, 5, 4, 3, 2, 7, 6})
+	read([]int{7, 1, 5, 4, 3, 2, 6})
 	writeLines(t, paths[2], codexUser("2026-10-29T11:00:01Z", "continue"))
-	read([]int{2, 1, 5, 4, 3, 7, 6})
+	read([]int{2, 7, 1, 5, 4, 3, 6})
+	// The new session follows its first message once one arrives.
+	writeLines(t, paths[7], codexUser("2026-10-29T11:01:00Z", "first message"))
+	read([]int{7, 2, 1, 5, 4, 3, 6})
 	// A stopped session keeps the same message order; Claude's stays by start.
 	rows := []agentSession{{Name: "exe-codex", Number: 1, Created: 100, Stopped: true}, {Name: "exe-codex-2", Number: 2, Created: 200}}
 	s.orderSessionColumn(a, rows)

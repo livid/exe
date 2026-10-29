@@ -6,4 +6,4 @@ before it said is kept in CHANGELOG.md.
 -->
 - **Ping**'s graphs fit a phone or a narrow window: the legend puts its figures two to a line.
 - **A link** can open an app: add `#show=app:Ping` to the desktop's address and Ping's window comes forward.
-- **Codex**'s sidebar puts sessions you last messaged first, then sorts by newest session creation time.
+- **Codex**'s sidebar puts sessions you last messaged first; **New** puts a fresh session at the top.

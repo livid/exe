@@ -157,13 +157,19 @@ func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) [
 	return list
 }
 
-// sortAgentSessions puts the latest interaction first when known, then
-// the latest start, with the session number breaking ties within a second.
+// sortAgentSessions puts the latest interaction first, using the session's
+// start until its first message. Start time and session number break ties.
 // parseAgentSessions has no interaction times yet: it returns start order.
 func sortAgentSessions(list []agentSession) {
+	when := func(s agentSession) int64 {
+		if s.interaction != 0 {
+			return s.interaction
+		}
+		return s.Created * 1000 // tmux reports seconds; messages use milliseconds
+	}
 	sort.Slice(list, func(i, j int) bool {
-		if list[i].interaction != list[j].interaction {
-			return list[i].interaction > list[j].interaction
+		if a, b := when(list[i]), when(list[j]); a != b {
+			return a > b
 		}
 		if list[i].Created != list[j].Created {
 			return list[i].Created > list[j].Created
