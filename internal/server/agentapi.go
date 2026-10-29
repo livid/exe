@@ -57,6 +57,7 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 	list := s.agentSessions(a)
 	s.markAgentStates(a, list)
 	list = s.withStopped(a, list)
+	s.orderSessionColumn(a, list)
 	out := map[string]any{"sessions": list}
 	if threads := s.agentThreadList(a, list, r.URL.Query().Get("threads") == "all"); threads != nil {
 		out["threads"] = threads // conversations started elsewhere (codexthreads.go, claudesessions.go)

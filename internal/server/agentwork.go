@@ -72,10 +72,11 @@ const agentWorkFresh = 2 * time.Second
 // agentTurn is what a conversation's file says of its turns and of the
 // addresses its instructions named.
 type agentTurn struct {
-	open  bool  // a turn is in flight
-	since int64 // when it began
-	ended int64 // when the last one to end did, 0 while none has
-	refs  []agentRef
+	open        bool  // a turn is in flight
+	since       int64 // when it began
+	ended       int64 // when the last one to end did, 0 while none has
+	refs        []agentRef
+	interaction int64 // Codex's latest user message, Unix milliseconds
 }
 
 // agentTrail is a conversation's file as read so far. The file only
@@ -280,6 +281,7 @@ func codexTrailLine(t *agentTrail, line []byte) {
 			Type    string `json:"type"`
 			Role    string `json:"role"`
 			Content []struct {
+				Type string `json:"type"`
 				Text string `json:"text"`
 			} `json:"content"`
 		} `json:"payload"`
@@ -294,15 +296,38 @@ func codexTrailLine(t *agentTrail, line []byte) {
 		t.end(trailTime(e.Timestamp))
 	case e.Type == "response_item" && e.Payload.Type == "message" && e.Payload.Role == "user":
 		var parts []string
+		interaction := false
 		for _, c := range e.Payload.Content {
+			// The CLI writes context as user items too. Match its known
+			// wrappers, not every heading or tag: a person's message can
+			// be Markdown, XML, or an image without accompanying text.
+			s := strings.TrimSpace(c.Text)
+			if c.Type == "input_image" || s != "" && !codexContextText(s) {
+				interaction = true
+			}
 			if s := strings.TrimSpace(c.Text); s != "" && !strings.HasPrefix(s, "<") && !strings.HasPrefix(s, "#") {
 				parts = append(parts, s)
+			}
+		}
+		if interaction {
+			if ts, err := time.Parse(time.RFC3339Nano, e.Timestamp); err == nil && ts.UnixMilli() > t.interaction {
+				t.interaction = ts.UnixMilli()
 			}
 		}
 		if len(parts) > 0 {
 			t.name(strings.Join(parts, "\n"), trailTime(e.Timestamp))
 		}
 	}
+}
+
+func codexContextText(text string) bool {
+	for _, prefix := range []string{"# AGENTS.md instructions", "<environment_context>", "<permissions instructions>",
+		"<collaboration_mode>", "<turn_aborted>", "<subagent_notification>", "<agent_notification>"} {
+		if strings.HasPrefix(text, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // claudeTrailPath is the transcript of the conversation a Claude Code

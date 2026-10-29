@@ -51,6 +51,9 @@ type agentSession struct {
 	// attach and switch-client, whole seconds, 0 for a session no window
 	// has shown yet: how lastAgentSession finds where the window was
 	lastAttached int64
+	// Codex's last user message, in Unix milliseconds; terminal output
+	// and switching to a session never advance its place in the column.
+	interaction int64
 	// from the session's hooks (agentStateHooks), Claude Code only: State
 	// is the word they wrote, Wants that the session waits for the person
 	// — its turn finished, or a permission or question is pending
@@ -154,15 +157,32 @@ func parseAgentSessions(a hostAgent, out string, untitled []string, now int64) [
 	return list
 }
 
-// sortAgentSessions puts the column's rows in its order: the latest
-// started first, two started within a second by number.
+// sortAgentSessions puts the latest interaction first when known, then
+// the latest start, with the session number breaking ties within a second.
+// parseAgentSessions has no interaction times yet: it returns start order.
 func sortAgentSessions(list []agentSession) {
 	sort.Slice(list, func(i, j int) bool {
+		if list[i].interaction != list[j].interaction {
+			return list[i].interaction > list[j].interaction
+		}
 		if list[i].Created != list[j].Created {
 			return list[i].Created > list[j].Created
 		}
 		return list[i].Number > list[j].Number
 	})
+}
+
+// orderSessionColumn applies Codex's message order after the stopped
+// sessions have joined the live ones. Claude Code keeps its start order
+// and day groups. Missing conversations have no interaction timestamp.
+func (s *Server) orderSessionColumn(a hostAgent, list []agentSession) {
+	if a.app != "codex" {
+		return
+	}
+	for i := range list {
+		list[i].interaction = s.agentTrailFor(a, list[i]).interaction
+	}
+	sortAgentSessions(list)
 }
 
 // agentPanes is every pane on the agents' tmux server in
@@ -343,6 +363,7 @@ func (c *agentColumn) follow(ctx context.Context) {
 		list := c.s.agentSessions(c.a)
 		c.s.markAgentStates(c.a, list)
 		list = c.s.withStopped(c.a, list) // and those a host restart ended (agentrestart.go)
+		c.s.orderSessionColumn(c.a, list)
 		frame := map[string]any{"sessions": list, "current": c.current()}
 		if !c.a.notify {
 			frame["prompt"] = c.s.agentLastPrompt(c.a, c.current()) // the line over the terminal (claudeprompts.go)

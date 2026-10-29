@@ -877,10 +877,13 @@ sessions, one row for each tmux session. Each is a conversation of its own.
 - **Resize the column.** Drag the line between the list and the terminal.
   The width is kept with the window's layout.
 
-The list runs newest first, so the session the icon first opened is normally
-at the bottom.
+In the Codex window, sessions are ordered by when you last sent a message,
+newest first, then by when the session was created. Sessions with no message
+yet follow those with messages, newest created first. Agent output and
+switching sessions do not change this order.
 
-In the Claude Code window, the sessions are grouped by the day they started.
+In the Claude Code window, sessions run newest created first and are grouped
+by the day they started.
 Each day has a row of its own, such as **Today**, **Yesterday** or **Tue,
 Oct 20**, with a triangle at its left and the number of sessions at its
 right.
