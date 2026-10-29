@@ -2855,15 +2855,31 @@ if ("serviceWorker" in navigator) {
 // showTarget opens what a notification named when an agent's turn ended
 // (the daemon's agentpush.go): "claude:exe-claude-2" is the Claude Code
 // window on that session, "chat:<id>" the Chat window on that chat. A
+// link to the desk, or a script's push (POST /v1/push with that url), can
+// name an app: "app:Ping" opens or raises that app's window (showApp). A
 // desk that had to be loaded for the tap finds the same after "#show=" in
 // its address (showFromHash, at boot). Anything else is ignored.
 function showTarget(t) {
+  const a = /^app:(.+)$/.exec(t || "");
+  if (a) { showApp(a[1]); return; }
   const m = /^([a-z]+):([A-Za-z0-9_-]+)$/.exec(t || "");
   if (!m) return;
   if (m[1] === "chat") { openChatWin(); selectChat(m[2]); return; }
   if (!AGENT_APPS[m[1]]) return;
   const w = openHostTermWin(m[1]);
   if (w && w._showSession) w._showSession(m[2]);
+}
+// showApp waits for the list of apps and for the saved layout, which
+// would close a window opened before it came (as it would Welcome's).
+// Only a listed app opens: any other name would get an empty window. The
+// emulated Macs are left out, as opening their window starts a Mac that
+// is shut down, and a link alone must not boot one.
+function showApp(name) {
+  Promise.all([appsReady, winRestored]).then(() => {
+    name = canonicalAppName(name);
+    if (MAC_APPS.includes(name) || !appsList.some(a => a.name === name)) return;
+    openAppWin(name);
+  });
 }
 function showFromHash() {
   const m = /^#show=(.+)$/.exec(location.hash);

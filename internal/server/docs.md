@@ -122,6 +122,31 @@ Double-click an icon to open it. A single click selects it.
   model to work with: Ollama answers, or, when Chat runs on a ChatGPT
   subscription, you are signed in.
 
+### Open an app from a link
+
+A link can open an app on the desktop. Put `#show=app:` and the app's name
+after the desktop's address:
+
+```
+http://127.0.0.1:7777/#show=app:Ping
+```
+
+The app's window opens, or comes to the front if it is already open. A
+desktop that is already open does the same when its address changes, so a
+bookmark or a link from another page works whether the desktop is open or
+not.
+
+- **The name** is the app's ID: a built-in app's lowercase ID, such as
+  `hub`, or the folder name of an app you installed, such as `Ping`. Write
+  a space as `%20`: `World%20Clock`. The desktop menu names apps the same
+  way; see
+  [Arguments, paths and app names](https://exe.v2core.com/docs/using/desktop-context-menu#arguments-paths-and-app-names).
+- **A name that is not an installed app** does nothing.
+- **Mac OS 9 and Mac OS X** do not open from a link, because opening one
+  starts its Mac. Open them from their icons.
+- **The window is part of the layout**, so it opens on your other screens
+  too.
+
 ### Move, resize and close windows
 
 Windows behave like OS 9 windows. The close box is at the left end of the
@@ -568,7 +593,9 @@ It reaches every browser that turned notifications on. A title and a body
 are both needed.
 
 - A `tag` makes a later push with the same tag replace the earlier one.
-- A `url` (a path, such as `/`) is what a tap opens.
+- A `url` (a path, such as `/`) is what a tap opens. `/#show=app:Ping`
+  opens the Ping app
+  ([Open an app from a link](https://exe.v2core.com/docs/using/the-desktop#open-an-app-from-a-link)).
 
 Only callers on the machine itself are accepted; the same request over
 Tailscale is refused.
