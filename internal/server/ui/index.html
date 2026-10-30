@@ -3018,7 +3018,10 @@ function noticesDraw(list) {
   for (const [box, n] of nodes) if (folded.includes(noticeKey(n))) noticeFold(box, n, true, true);
 }
 function noticeFold(box, n, fold, quiet) {
-  box.style.height = fold ? box.offsetHeight + "px" : "";
+  // the height to the fraction: offsetHeight rounds it, and where borders
+  // round to a device pixel (Chrome at 150%: 0.667px) a notice is 39.333px
+  // high, so a fold to 39 would drop its top edge a pixel
+  box.style.height = fold ? box.getBoundingClientRect().height + "px" : "";
   box.classList.toggle("collapsed", fold);
   box.querySelectorAll(".nt-box")[1].setAttribute("aria-expanded", fold ? "false" : "true");
   if (quiet) return;
