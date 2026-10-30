@@ -508,10 +508,21 @@ restyling: `internal/server/ui/index.html` (the desktop),
   A notice is 418px wide at most, 16px from the left, its frame 2px above
   the Control Strip (26px from the bottom), and notices stack 8px apart
   upwards; on a phone they
-  span the screen inside the 16px gutters. A press darkens a box inside
-  its ring, as the title bar's boxes do (not sampled). The collapse box
-  folds a notice to its 14px strip in that browser alone, until the
-  notice is said again. No timer: the close box is the only way out.
+  span the screen inside the 16px gutters. A pressed box keeps its ring
+  and bevel; the 6px well inside is a ramp from `#444` at the top left to
+  `#bbb` at the bottom right (`#111` a step along either axis: counted
+  from the box's top-left pixel, the one at x, y is `0x11·(x+y−1)`, never
+  under `#444`), with `#999` down its right column and along its bottom
+  row, and the collapse box keeps its two `#222` lines (`NT_CLOSE_DOWN`,
+  `NT_SHADE_DOWN`, sampled 2026-10-29 from a Notification Manager note
+  that `output/mac-os9/notetest` posts in the guest). The collapse box folds
+  a notice in that browser alone, until the notice is said again, as the
+  guest folds the note: at once, no animation, to its strip at its full
+  height, 14px wide, the black frame, the bevel (`#fff` top and left,
+  `#999` right and bottom, `#ccc` corners) and the shadow drawn around
+  the strip alone; nothing of the well stays. It stays where its left
+  edge was, on a phone too. Pressed again, it opens to what it was. No
+  timer: the close box is the only way out.
 - Every title bar has a menu, dialogs' too: a right-click, or a press held
   550ms on a touch screen (`winMenu`). Its one item, **Save a Screenshot**
   (`shotWindow`), draws the window a second time from a copy of its markup

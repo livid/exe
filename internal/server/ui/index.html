@@ -1583,7 +1583,9 @@ body.mobile .cf-note { height: 48px; }
    frame with a 1px shadow 2px in, a Platinum bevel, a 10px strip down the
    left (close box, a grip of embossed dots, collapse box) and the words in
    a sunken well of Stickies yellow, 11px on a 13px line. Stacked up from
-   the Control Strip, 16px in from the left */
+   the Control Strip, 16px in from the left. Folded, as the guest folds a
+   note, it is the strip alone at its full height, the frame and shadow
+   drawn around it, in one step; a press draws the box's pressed glyph */
 #notices { position: fixed; left: calc(16px + var(--sal)); bottom: calc(26px + var(--sab)); z-index: 4000;
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none; }
 #notices:empty { display: none; }
@@ -1602,13 +1604,15 @@ body.mobile .cf-note { height: 48px; }
 .nt-strip { display: flex; flex-direction: column; flex: none; width: 10px; }
 .nt-box { display: block; flex: none; position: relative; width: 10px; height: 10px; padding: 0; border: 0; background: none; }
 .nt-box svg { display: block; }
-.nt-box:active::after { content: ""; position: absolute; inset: 2px; box-sizing: border-box;
-  background-image: linear-gradient(135deg, #353535cc 0%, #9c9c9ccc 100%); }
+.nt-box svg + svg, .nt-box:active svg:first-child { display: none; }
+.nt-box:active svg + svg { display: block; }
 .nt-grip { flex: 1; margin: 2px 0; background: #ccc url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3" shape-rendering="crispEdges"><rect width="3" height="3" fill="%23cccccc"/><rect x="1" width="1" height="1" fill="%23ffffff"/><rect x="2" y="1" width="1" height="1" fill="%23777777"/></svg>') 0 0 / 3px 3px; }
 .nt-text { border: 1px solid #000; background: #ffff99; color: #000; padding: 4px 5px; font-size: 11px; line-height: 13px;
   overflow-wrap: anywhere; user-select: text; }
 .nt-text b { display: block; }
 .nt-text .nt-body { white-space: pre-line; }
+.notice.collapsed { align-self: flex-start; }
+.notice.collapsed .nt-frame { height: 100%; }
 .notice.collapsed .nt-well { display: none; }
 body.mobile #notices { right: calc(16px + var(--sar)); align-items: stretch; }
 body.mobile .notice { width: auto; max-width: none; }
@@ -2972,6 +2976,20 @@ const NT_SHADE = NT_BOX('<path fill="#888" d="M0 0h9v1H1v8H0zM7 4h1v1H7zM7 6h1v1
   + '<path fill="#ccc" d="M9 0h1v1H9zM0 9h1v1H0zM3 2h5v1H3zM2 4h1v1H2zM5 4h1v1H5zM2 6h2v1H2zM2 7h1v1H2z"/>'
   + '<path fill="#999" d="M3 4h1v1H3z"/><path fill="#aaa" d="M4 4h1v1H4z"/>'
   + '<path fill="#ddd" d="M6 4h1v1H6zM4 6h1v1H4z"/><path fill="#eee" d="M5 6h1v1H5z"/>');
+// Pressed, the ring keeps its bevel and the well inside it is a ramp, #444
+// at the top left to #bbb, with #999 down its right and along its bottom;
+// the collapse box keeps its two lines (sampled in the guest, 2026-10-29)
+const NT_RAMP = (() => {
+  let s = "";
+  for (let y = 2; y < 8; y++) for (let x = 2; x < 8; x++) {
+    const v = x === 7 || y === 7 ? 0x99 : Math.max(0x44, 0x11 * (x + y - 1));
+    s += `<rect x="${x}" y="${y}" width="1" height="1" fill="#${v.toString(16).repeat(3)}"/>`;
+  }
+  return '<path fill="#888" d="M0 0h9v1H1v8H0z"/><path fill="#222" fill-rule="evenodd" d="M1 1h8v8H1zM2 2h6v6H2z"/>'
+    + '<path fill="#fff" d="M9 1h1v9H1V9h8z"/><path fill="#ccc" d="M9 0h1v1H9zM0 9h1v1H0z"/>' + s;
+})();
+const NT_CLOSE_DOWN = NT_BOX(NT_RAMP);
+const NT_SHADE_DOWN = NT_BOX(NT_RAMP + '<path fill="#222" d="M2 3h6v1H2zM2 5h6v1H2z"/>');
 let noticesShown = [];
 const noticeKey = n => n.id + "@" + n.time;
 // the time of what a notice tells of (its at), as Recent Moves writes it
@@ -2985,8 +3003,8 @@ function noticesDraw(list) {
   const nodes = noticesShown.map(n => {
     const close = el("button", { class: "nt-box", type: "button", title: L("Close"), "aria-label": L("Close"), onclick: () => noticeClose(n.id) });
     const shade = el("button", { class: "nt-box", type: "button", title: L("Collapse"), "aria-label": L("Collapse"), "aria-expanded": "true" });
-    close.innerHTML = NT_CLOSE;
-    shade.innerHTML = NT_SHADE;
+    close.innerHTML = NT_CLOSE + NT_CLOSE_DOWN;
+    shade.innerHTML = NT_SHADE + NT_SHADE_DOWN;
     const box = el("div", { class: "notice", role: "alert" },
       el("div", { class: "nt-frame" },
         el("div", { class: "nt-strip" }, close, el("div", { class: "nt-grip" }), shade),
