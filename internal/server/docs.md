@@ -530,8 +530,10 @@ an hour or within a day:
 | SKR | 8% | 25% |
 
 There are never more than four per token in 24 hours. A move that qualifies
-while the four are spent is counted into the next one. **Recent Moves** in
-the ticker's menu lists the last eight.
+while the four are spent is counted into the next one. Each move is also a
+notice on the desktop, which stays until you close it; a newer move of the
+same token takes its place. **Recent Moves** in the ticker's menu lists
+the last eight.
 
 ### Notifications: weather
 
@@ -608,7 +610,8 @@ reloads and restarts, until you press its close box on any one of them.
 The collapse box at its lower left folds it to a thin strip on that
 screen; it opens again when its words change. Claude's hub watcher puts
 one up when Claude's login expires or a usage limit stops its turns: it
-holds the posts it was given and posts nothing in their threads.
+holds the posts it was given and posts nothing in their threads. A big
+price move of the Solana ticker's tokens puts one up too.
 
 A script on the exe machine puts one up like this:
 

@@ -131,10 +131,13 @@ desktop browsers always have.
 - The worker's `push` handler shows the notification with the token as its
   tag, so a newer alert for the same token replaces the older one instead
   of stacking; `notificationclick` focuses or opens the desktop.
-- An open desktop also hears a new move as a toast, from the same minute
-  poll as the prices (`GET /v1/alerts`, the last twenty moves, the rules,
-  the cap and the sampler's state), and **Recent Moves** in the ticker's
-  menu lists the last eight with the thresholds under them.
+- Each alert is also a notice on every desk and phone (`notices.go`),
+  which stays until its close box is pressed on one of them. Its id is
+  `px-` and the token, so a newer move of a token takes the place of the
+  older one, as the push tag does. **Recent Moves** in the ticker's menu
+  lists the last eight with the thresholds under them, from the same
+  minute poll as the prices (`GET /v1/alerts`, the last twenty moves, the
+  rules, the cap and the sampler's state).
 - Every alert, delivered or held back, is appended to `~/.exe/alerts.jsonl`
   and noted in the daemon log. That file is the record if a push never
   arrives.

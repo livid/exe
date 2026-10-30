@@ -13191,9 +13191,9 @@ async function pxRefresh(force) {
 // makes a rare move (alerts.go, docs/price-alerts.md). "Notify Me of Big
 // Moves" subscribes this browser through the service worker and hands the
 // subscription to the daemon; a subscription found on load is sent again so
-// the daemon's list heals itself. An open desktop also hears about a new
-// move as a toast, from the same minute poll as the prices.
-let pxPushSub = null, pxAlerts = null, pxAlertSeen = 0, pxAlertsPrimed = false;
+// the daemon's list heals itself. The daemon also puts a new move up on
+// every desk as a notice, which stays until it is closed (notices.go).
+let pxPushSub = null, pxAlerts = null;
 const pxPushable = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 const pxKeyBytes = k => Uint8Array.from(atob(k.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
 async function pxPushInit() {
@@ -13230,11 +13230,6 @@ async function pxPushToggle() {
 async function pxAlertsRefresh() {
   try {
     pxAlerts = await j("/v1/alerts");
-    const ids = pxAlerts.alerts.map(a => a.id);
-    const fresh = pxAlerts.alerts.filter(a => !a.held_back && a.id > pxAlertSeen);
-    if (pxAlertsPrimed && fresh.length) toast(fresh[0].title + " — " + fresh[0].body);
-    pxAlertSeen = Math.max(pxAlertSeen, ...ids);
-    pxAlertsPrimed = true;
   } catch (e) {}
 }
 // the Recent Moves submenu: the last eight, newest first, then the thresholds.

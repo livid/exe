@@ -216,6 +216,10 @@ func (s *Server) alertTick(ctx context.Context, now time.Time) {
 			continue
 		}
 		log.Printf("price alerts: %s — %s", rec.Title, rec.Body)
+		// on every desk until it is closed; a newer move of the token takes its place
+		if _, err := s.sayNotice(notice{ID: "px-" + strings.ToLower(rec.Token), Title: rec.Title, Body: rec.Body}); err != nil {
+			log.Printf("price alerts: notice: %s", err)
+		}
 		r := rec
 		go func() {
 			n, errs := s.pushAll(context.Background(), pushMessage{Title: r.Title, Body: r.Body, Tag: "px-" + r.Token, URL: "/"})

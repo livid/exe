@@ -16,7 +16,8 @@ import (
 
 // Notices are the desk's toasts that stay. A script on this machine puts
 // one up (the hub watcher does when a usage limit stops Claude's turns:
-// there the toast is the nudge, not a reply in a public thread), every open
+// there the toast is the nudge, not a reply in a public thread), and so
+// does the daemon for a big price move, one per token (alerts.go); every open
 // desk shows it at once, and it stays on every desk, over reloads and
 // restarts, until someone closes it there. A notice is said again under
 // its id: a POST with an id already up changes it in place, so a script
@@ -93,13 +94,25 @@ func (s *Server) handleNoticePost(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("title or body too long"))
 		return
 	}
+	if n.ID != "" && !noticeID.MatchString(n.ID) {
+		writeErr(w, http.StatusBadRequest, errors.New("id is lower-case letters, digits and dashes"))
+		return
+	}
+	id, err := s.sayNotice(n)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
+// sayNotice puts n up, or changes the one up under its id, and returns
+// the id: a POST's words, or the daemon's own (a big price move, alerts.go).
+func (s *Server) sayNotice(n notice) (string, error) {
 	if n.ID == "" {
 		b := make([]byte, 8)
 		rand.Read(b)
 		n.ID = hex.EncodeToString(b)
-	} else if !noticeID.MatchString(n.ID) {
-		writeErr(w, http.StatusBadRequest, errors.New("id is lower-case letters, digits and dashes"))
-		return
 	}
 	n.Time = time.Now().UnixMilli()
 	s.noticeMu.Lock()
@@ -119,11 +132,7 @@ func (s *Server) handleNoticePost(w http.ResponseWriter, r *http.Request) {
 	if len(out) > noticeKeep {
 		out = out[len(out)-noticeKeep:]
 	}
-	if err := s.saveNoticesLocked(out); err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": n.ID})
+	return n.ID, s.saveNoticesLocked(out)
 }
 
 // handleNoticeDelete is a desk's close box: gone from every desk.
