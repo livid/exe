@@ -2974,6 +2974,8 @@ const NT_SHADE = NT_BOX('<path fill="#888" d="M0 0h9v1H1v8H0zM7 4h1v1H7zM7 6h1v1
   + '<path fill="#ddd" d="M6 4h1v1H6zM4 6h1v1H4z"/><path fill="#eee" d="M5 6h1v1H5z"/>');
 let noticesShown = [];
 const noticeKey = n => n.id + "@" + n.time;
+// the time of what a notice tells of (its at), as Recent Moves writes it
+const noticeAt = n => n.at > 0 ? new Date(n.at).toLocaleString(UI_LOCALE, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 function noticesFolded() {
   try { return JSON.parse(localStorage.getItem("exe_notices_folded") || "[]"); } catch (e) { return []; }
 }
@@ -2989,7 +2991,7 @@ function noticesDraw(list) {
       el("div", { class: "nt-frame" },
         el("div", { class: "nt-strip" }, close, el("div", { class: "nt-grip" }), shade),
         el("div", { class: "nt-well" }, el("div", { class: "nt-text" }, el("b", {}, n.title || ""),
-          ...(n.body ? [el("div", { class: "nt-body" }, n.body)] : [])))));
+          ...(n.body || n.at ? [el("div", { class: "nt-body" }, [noticeAt(n), n.body].filter(Boolean).join(" · "))] : [])))));
     shade.addEventListener("click", () => noticeFold(box, n, !box.classList.contains("collapsed")));
     return [box, n];
   });

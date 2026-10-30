@@ -21,7 +21,9 @@ import (
 // desk shows it at once, and it stays on every desk, over reloads and
 // restarts, until someone closes it there. A notice is said again under
 // its id: a POST with an id already up changes it in place, so a script
-// keeps one toast current instead of stacking them.
+// keeps one toast current instead of stacking them. An at (unix ms) puts
+// the time of what it tells of at the head of its words, in each reader's
+// own clock.
 //
 // The list lives in notices.json in the state folder; every change goes
 // to open desks and phones over /v1/apps/events, the stream both keep open,
@@ -31,6 +33,7 @@ type notice struct {
 	Title string `json:"title"`
 	Body  string `json:"body,omitempty"`
 	Time  int64  `json:"time"` // unix ms, when it was last said
+	At    int64  `json:"at,omitempty"` // unix ms, when what it tells of happened: the desk shows it
 }
 
 const (

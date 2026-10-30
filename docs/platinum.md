@@ -503,9 +503,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   sunk: `#999` top and left, `#fff` bottom and right, `#ccc` corners,
   then a 1px `#000` line around `#ffff99` (Stickies yellow). The words are
   11px on a 13px line (the guest's 9-point Geneva), 4px from the top and
-  5px from the sides, the first line bold. A notice is 418px wide at
-  most, 16px from the left, its frame 2px above the Control Strip (26px
-  from the bottom), and notices stack 8px apart upwards; on a phone they
+  5px from the sides, the first line bold. A notice with an `at` starts
+  its second line with that time, as Recent Moves writes it, then ` · `.
+  A notice is 418px wide at most, 16px from the left, its frame 2px above
+  the Control Strip (26px from the bottom), and notices stack 8px apart
+  upwards; on a phone they
   span the screen inside the 16px gutters. A press darkens a box inside
   its ring, as the title bar's boxes do (not sampled). The collapse box
   folds a notice to its 14px strip in that browser alone, until the

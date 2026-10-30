@@ -132,7 +132,10 @@ desktop browsers always have.
   tag, so a newer alert for the same token replaces the older one instead
   of stacking; `notificationclick` focuses or opens the desktop.
 - Each alert is also a notice on every desk and phone (`notices.go`),
-  which stays until its close box is pressed on one of them. Its id is
+  which stays until its close box is pressed on one of them. Its `at` is
+  the time of the move, which the desk puts before the body in the
+  reader's own clock, so a notice read hours later still says when "the
+  last hour" was. Its id is
   `px-` and the token, so a newer move of a token takes the place of the
   older one, as the push tag does. **Recent Moves** in the ticker's menu
   lists the last eight with the thresholds under them, from the same

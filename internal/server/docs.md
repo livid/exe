@@ -531,8 +531,8 @@ an hour or within a day:
 
 There are never more than four per token in 24 hours. A move that qualifies
 while the four are spent is counted into the next one. Each move is also a
-notice on the desktop, which stays until you close it; a newer move of the
-same token takes its place. **Recent Moves** in the ticker's menu lists
+notice on the desktop, with the time of the move, which stays until you
+close it; a newer move of the same token takes its place. **Recent Moves** in the ticker's menu lists
 the last eight.
 
 ### Notifications: weather
@@ -622,6 +622,8 @@ $ curl -s 127.0.0.1:7777/v1/notices -d '{"id":"backup","title":"Backup failed","
 - A title is needed; the body is optional.
 - An `id` (lower-case letters, digits and dashes) makes a later notice
   with the same id change the one that is up, instead of adding another.
+- An `at` (Unix time in milliseconds) puts the time of what the notice
+  tells of before its body, in each reader's own clock.
 - `GET /v1/notices` lists the ones that are up, and
   `DELETE /v1/notices/<id>` closes one, as its close box does.
 

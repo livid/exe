@@ -43,7 +43,7 @@ func TestNoticesStayUntilClosed(t *testing.T) {
 	s.appEv.subs = map[chan []byte]struct{}{ch: {}}
 	s.appEv.mu.Unlock()
 
-	if rec := noticePost(s, `{"id":"hub-watch-limit","title":"Claude hit its weekly limit","body":"Holding 1 post."}`, "127.0.0.1:5000"); rec.Code != http.StatusOK {
+	if rec := noticePost(s, `{"id":"hub-watch-limit","title":"Claude hit its weekly limit","body":"Holding 1 post.","at":1793320140000}`, "127.0.0.1:5000"); rec.Code != http.StatusOK {
 		t.Fatalf("post: %d %s", rec.Code, rec.Body)
 	}
 	var ev struct {
@@ -51,7 +51,7 @@ func TestNoticesStayUntilClosed(t *testing.T) {
 		Notices []notice `json:"notices"`
 	}
 	json.Unmarshal(<-ch, &ev)
-	if ev.App != "@notices" || len(ev.Notices) != 1 || ev.Notices[0].Title != "Claude hit its weekly limit" || ev.Notices[0].Time == 0 {
+	if ev.App != "@notices" || len(ev.Notices) != 1 || ev.Notices[0].Title != "Claude hit its weekly limit" || ev.Notices[0].Time == 0 || ev.Notices[0].At != 1793320140000 {
 		t.Fatalf("desk heard %+v", ev.Notices)
 	}
 

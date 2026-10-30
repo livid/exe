@@ -217,7 +217,7 @@ func (s *Server) alertTick(ctx context.Context, now time.Time) {
 		}
 		log.Printf("price alerts: %s — %s", rec.Title, rec.Body)
 		// on every desk until it is closed; a newer move of the token takes its place
-		if _, err := s.sayNotice(notice{ID: "px-" + strings.ToLower(rec.Token), Title: rec.Title, Body: rec.Body}); err != nil {
+		if _, err := s.sayNotice(notice{ID: "px-" + strings.ToLower(rec.Token), Title: rec.Title, Body: rec.Body, At: rec.T.UnixMilli()}); err != nil {
 			log.Printf("price alerts: notice: %s", err)
 		}
 		r := rec
