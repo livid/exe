@@ -4945,8 +4945,9 @@ dot, red down and green up, with its change beside it.
 The candles are Coinbase Exchange's, fetched by the daemon and shared by
 every desktop open on the node: a page of 300 at a time (150 for 4h,
 which the daemon folds from the hour's candles on four-hour UTC
-boundaries). A minute with no trade has no candle, so a quiet pair shows
-gaps. A big move is one that passed the ticker's thresholds
+boundaries). A minute with no trade has no candle on Coinbase; the chart
+fills such a slot with a flat candle at the last close, as TradingView
+does, so a quiet pair reads as a line. A big move is one that passed the ticker's thresholds
 (**Notifications: big price moves**, under The desktop); a move the day's
 cap held back shows too, marked "held back".
 

@@ -221,7 +221,7 @@ try {
 // the candles of one token and timeframe, by their time; oldest and
 // newest; whether Coinbase has run out of past (an empty page), whether a
 // page is on its way
-let series = { key: "", map: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+let series = { key: "", map: new Map(), times: [], oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
 // the view: cw is a candle's slot in CSS px (the wheel changes it); rightT
 // is the time at the plot's right edge, or null to follow the newest
 // candle with two empty slots after it, as a trading chart does
@@ -260,7 +260,7 @@ const month = t => new Date(t).toLocaleDateString(undefined, { month: "short" })
 // ---- the candles ----
 const step = () => STEP[tf];
 function resetSeries() {
-  series = { key: token + "|" + tf, map: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+  series = { key: token + "|" + tf, map: new Map(), times: [], oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
   rightT = null; hover = null;
 }
 // one page: the newest (end 0) or the one ending at end; a page already
@@ -281,11 +281,20 @@ async function loadPage(end) {
   series.fetched = r.fetched_at ? new Date(r.fetched_at).getTime() : Date.now();
   for (const c of r.candles) series.map.set(c[0], c);
   if (end && !r.candles.length) series.exhausted = true;
-  const ts = [...series.map.keys()];
-  series.oldest = ts.length ? Math.min(...ts) : 0;
-  series.newest = ts.length ? Math.max(...ts) : 0;
+  const ts = [...series.map.keys()].sort((a, b) => a - b);
+  series.times = ts;
+  series.oldest = ts.length ? ts[0] : 0;
+  series.newest = ts.length ? ts[ts.length - 1] : 0;
   if (!end && !r.candles.length) series.exhausted = true;
   draw(); status();
+}
+// the newest candle before a time, or null: the one a quiet slot's flat
+// candle takes its price from
+function lastBefore(t) {
+  const ts = series.times;
+  let lo = 0, hi = ts.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (ts[mid] < t) lo = mid + 1; else hi = mid; }
+  return lo > 0 ? series.map.get(ts[lo - 1]) : null;
 }
 // the view's right edge, in seconds: where it was dragged, or two slots
 // past the newest candle
@@ -314,10 +323,19 @@ function draw() {
   const right = viewRight(), slots = Math.floor((x1 - x0) / cwD);
   const leftT = right - slots * st;
   const X = t => x1 - (right - t) / st * cwD - cwD / 2; // a candle's centre
-  // the candles in view, oldest first
-  const seen = [];
+  // the candles in view, oldest first. Coinbase has no candle for a slot
+  // with no trade; the chart fills such a slot with a flat candle at the
+  // last close, as TradingView does, so a quiet pair reads as a line, not
+  // as holes. The fill stops at the newest candle, and before the first.
+  const seen = [], seenAt = new Map();
   const tFirst = Math.floor(leftT / st) * st;
-  for (let t = tFirst; t <= right; t += st) { const c = series.map.get(t); if (c) seen.push(c); }
+  let prev = lastBefore(tFirst);
+  for (let t = tFirst; t <= right; t += st) {
+    let c = series.map.get(t);
+    if (!c && prev && t <= series.newest) c = [t, prev[4], prev[4], prev[4], prev[4], 0];
+    if (!c) continue;
+    seen.push(c); seenAt.set(t, c); prev = c;
+  }
   $("#empty").hidden = seen.length > 0 || series.loading;
   $("#empty").textContent = series.err ? "The daemon did not answer: " + series.err
     : series.exhausted && !series.map.size ? "Coinbase has no " + tf + " candles of " + token + "." : "";
@@ -371,8 +389,8 @@ function draw() {
       const xc = Math.round(X(c[0]));
       const yo = Math.round(Y(c[1])), yc = Math.round(Y(c[4])), yh = Math.round(Y(c[2])), yl = Math.round(Y(c[3]));
       g.fillStyle = col;
-      g.fillRect(xc - Math.floor(wick / 2), yh, wick, Math.max(1, yl - yh));
-      const top = Math.min(yo, yc), hgt = Math.max(1, Math.abs(yc - yo));
+      g.fillRect(xc - Math.floor(wick / 2), yh, wick, Math.max(wick, yl - yh));
+      const top = Math.min(yo, yc), hgt = Math.max(wick, Math.abs(yc - yo)); // a flat candle is a line a CSS pixel thick
       g.fillRect(xc - Math.floor(body / 2), top, body, hgt);
     }
   }
@@ -382,7 +400,7 @@ function draw() {
   if (hover) {
     const hx = hover.x * dpr, hy = hover.y * dpr;
     const tb = Math.round((right - (x1 - hx - cwD / 2) / cwD * st) / st) * st;
-    const c = series.map.get(tb);
+    const c = seenAt.get(tb);
     if (c) legendC = c;
     const x = Math.round(X(tb)) + 0.5, y = Math.round(hy) + 0.5;
     g.strokeStyle = "#999"; g.setLineDash([px(3), px(3)]); g.lineWidth = Math.max(1, px(1));
@@ -401,7 +419,7 @@ function draw() {
   // the selected one ringed black with its words in a box
   const moves = data ? data.moves.map(m => ({ ...m, ms: new Date(m.t).getTime() })) : [];
   for (const m of moves) {
-    const tb = Math.floor(m.ms / 1000 / st) * st, c = series.map.get(tb);
+    const tb = Math.floor(m.ms / 1000 / st) * st, c = seenAt.get(tb);
     if (!c || tb < leftT || tb > right) continue;
     const price = m.price > 0 ? Math.min(c[2], Math.max(c[3], m.price)) : c[4];
     const x = X(tb), y = Y(price), col = m.change < 0 ? "#b01c1c" : "#1f7a3a";
