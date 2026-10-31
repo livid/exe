@@ -1,0 +1,5 @@
+{
+  "title": "Solana",
+  "icon": "icon.svg",
+  "window": { "width": 560, "height": 470, "grow": true }
+}

@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Solana</title>
+<style>
+/* Platinum values match the exe desktop (same block as the Analytics app) */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399; --lav: #ccf;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+  --up: #1f7a3a; --down: #b01c1c;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* iOS Safari inflates text after a rotate to landscape (its text-size
+   "auto" heuristic) and keeps the inflated size on the way back; 100% pins
+   the type to its authored size */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
+  user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column; }
+
+#bar { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 10px 10px 8px; align-items: center; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+/* the chosen token and range stay depressed, like a Platinum segmented control */
+button.ghost.on { background: #888; color: #fff;
+  box-shadow: inset 1px 1px 0 #666, inset -1px -1px 0 #aaa,
+    inset 2px 2px 0 #777, inset -2px -2px 0 #999; }
+.seg { display: flex; gap: 0; flex: none; }
+.seg button { border-radius: 0; border-right-width: 0; padding: 2px 9px; }
+.seg button:first-child { border-radius: 3px 0 0 3px; }
+.seg button:last-child { border-radius: 0 3px 3px 0; border-right-width: 1px; }
+/* a token's button wears its coin, the Control Strip's own */
+#tokens button svg { width: 16px; height: 16px; vertical-align: -4px; margin-right: 4px; }
+#range { margin-left: auto; }
+/* a narrow window (a phone's) keeps the coins and drops the words */
+@media (max-width: 400px) {
+  #tokens button .w { display: none; }
+  #tokens button svg { margin-right: 0; }
+}
+
+/* the head: the coin, the price now, its change over the range shown,
+   and the range's high and low */
+#head { display: flex; align-items: center; gap: 12px; padding: 0 12px 8px; }
+#coin svg { width: 32px; height: 32px; display: block; }
+#figs { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#top { display: flex; align-items: baseline; gap: 8px; }
+#price { font-size: 24px; font-weight: bold; line-height: 28px; font-variant-numeric: tabular-nums; min-width: 72px; }
+#price sub { font-size: 12px; vertical-align: -3px; font-weight: normal; }
+#change { font-size: 11px; font-weight: bold; line-height: 14px; font-variant-numeric: tabular-nums;
+  padding: 1px 6px; border: 1px solid var(--black); border-radius: 3px; background: #fff; min-width: 44px; text-align: center; }
+#change.up { color: var(--up); } #change.down { color: var(--down); }
+#change.none { color: #999; border-color: #999; }
+#sub { font-size: 11px; color: #555; line-height: 14px; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 14px; }
+
+/* the chart: a sunken white field, the desktop's field block */
+#field { flex: 1; min-height: 120px; margin: 0 12px; position: relative; background: #fff;
+  border: 1px solid var(--black); touch-action: none;
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+#field canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #777; font-size: 11px; text-align: center; padding: 0 20px; }
+
+/* the moves of the range shown: a short table under the chart, the
+   selected one in the desktop's highlight */
+#moves { margin: 8px 12px 10px; font-size: 11px; line-height: 14px; }
+#moves .row { display: flex; gap: 8px; padding: 2px 4px; align-items: baseline; }
+#moves .row.sel { background: var(--hl); color: #fff; }
+#moves .t { flex: none; min-width: 84px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#moves .ti { flex: none; font-weight: bold; font-variant-numeric: tabular-nums; }
+#moves .ti.up { color: var(--up); } #moves .ti.down { color: var(--down); }
+#moves .row.sel .ti { color: #fff; }
+#moves .b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
+#moves .row.sel .b { color: #ddd; }
+#moves .none { color: #777; padding: 2px 4px; }
+#moves .more { color: #777; padding: 2px 4px; }
+
+/* overflow: clip — the 11px text's line box is taller than the 14px face and
+   hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
+   the page (docs/platinum.md, status bar) */
+#status { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
+  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
+#st-left { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#st-right { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+#grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
+  touch-action: none; z-index: 6; }
+body.mobile #grow { display: none; }
+body.mobile #status { padding-right: 8px; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <span class="seg" id="tokens"></span>
+  <span class="seg" id="range">
+    <button class="ghost" data-h="6">6 h</button>
+    <button class="ghost on" data-h="24">24 h</button>
+  </span>
+</div>
+<div id="head">
+  <div id="coin"></div>
+  <div id="figs">
+    <div id="top"><span id="price">—</span><span id="change" class="none">—</span></div>
+    <div id="sub"></div>
+  </div>
+</div>
+<div id="field">
+  <canvas id="cv"></canvas>
+  <div id="empty" hidden></div>
+</div>
+<div id="moves"></div>
+<div id="status">
+  <span id="st-left">Checking…</span>
+  <span id="st-right"></span>
+</div>
+<!-- grow box sampled pixel-for-pixel from Mac OS 9 (Infinite Mac) -->
+<svg id="grow" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
+  <rect width="15" height="15" fill="#ccc"/>
+  <path fill="#000" d="M0 0h15v1H0zM0 1h1v14H0z"/>
+  <path fill="#fff" d="M1 1h14v1H1zM1 2h1v13H1z"/>
+  <path fill="#fff" d="M9 4h2v1H9zM8 5h1v1H8zM7 6h1v1H7zM6 7h1v1H6zM5 8h1v1H5zM4 9h1v1H4zM11 6h2v1h-2zM10 7h1v1h-1zM9 8h1v1H9zM8 9h1v1H8zM7 10h1v1H7zM6 11h1v1H6zM13 8h2v1h-2zM12 9h1v1h-1zM11 10h1v1h-1zM10 11h1v1h-1zM9 12h1v1H9zM8 13h1v1H8z"/>
+  <path fill="#777" d="M10 5h1v1h-1zM9 6h1v1H9zM8 7h1v1H8zM7 8h1v1H7zM6 9h1v1H6zM5 10h1v1H5zM12 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM9 10h1v1H9zM8 11h1v1H8zM7 12h1v1H7zM14 9h1v1h-1zM13 10h1v1h-1zM12 11h1v1h-1zM11 12h1v1h-1zM10 13h1v1h-1zM9 14h1v1H9z"/>
+  <path fill="#aaa" d="M4 10h1v1H4zM6 12h1v1H6zM8 14h1v1H8z"/>
+</svg>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+
+// The desktop passes its API token in the iframe URL only when its cookie
+// did not take; the app's own arguments are coin and at.
+const Q = new URLSearchParams(location.search);
+const TOKEN = Q.get("token") || "";
+const MOBILE = Q.has("mobile");
+if (MOBILE) document.body.classList.add("mobile");
+const FONT = getComputedStyle(document.body).fontFamily;
+
+async function api(url) {
+  const headers = {};
+  if (TOKEN) headers["Authorization"] = "Bearer " + TOKEN;
+  const r = await fetch(url, { headers });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+// the four tokens of the Control Strip's ticker, in its order, each with
+// its coin — the strip's own struck coin in the token's colour — and the
+// colour its line is drawn in
+const TOKENS = ["SOL", "PUMP", "MET", "SKR"];
+const NAMES = { SOL: "Solana", PUMP: "pump.fun", MET: "Meteora", SKR: "Seeker" };
+const LINE = { SOL: "#9945ff", PUMP: "#19c37d", MET: "#f54b00", SKR: "#14b8a6" };
+const UNDER = { SOL: "#efe8ff", PUMP: "#e2f7ec", MET: "#ffe9df", SKR: "#dff4f1" };
+const coinIcon = (face, hi, lo, mark) => `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="${face}" d="M5 1h6v1H5zM3 2h10v1H3zM2 3h12v2H2zM1 5h14v6H1zM2 11h12v2H2zM3 13h10v1H3zM5 14h6v1H5z"/>
+  <path fill="${hi}" d="M5 1h5v1H5zM3 2h2v1H3zM2 3h1v2H2zM1 5h1v4H1z"/>
+  <path fill="#fff" d="M5 2h2v1H5zM4 3h1v1H4z"/>
+  <path fill="${lo}" d="M6 14h5v1H6zM11 13h2v1H11zM13 11h1v2H13zM14 7h1v4H14z"/>
+  ${mark}
+  <path fill="#000" d="M5 0h6v1H5zM3 1h2v1H3zM11 1h2v1H11zM2 2h1v1H2zM13 2h1v1H13zM1 3h1v2H1zM14 3h1v2H14zM0 5h1v6H0zM15 5h1v6H15zM1 11h1v2H1zM14 11h1v2H14zM2 13h1v1H2zM13 13h1v1H13zM3 14h2v1H3zM11 14h2v1H11zM5 15h6v1H5z"/>
+</svg>`;
+const COINS = {
+  SOL: coinIcon("#9945ff", "#c9a3ff", "#6b2fc4",
+    `<path fill="#14f195" d="M5 4h6v1H5zM4 5h6v1H4zM4 7h6v1H4zM5 8h6v1H5zM5 10h6v1H5zM4 11h6v1H4z"/>`),
+  PUMP: coinIcon("#19c37d", "#8ff0c0", "#0e7a4d",
+    `<path fill="#000" d="M5 5h6v1H5zM4 6h1v1H4zM11 6h1v1H11zM3 7h1v2H3zM12 7h1v2H12zM4 9h1v1H4zM11 9h1v1H11zM5 10h6v1H5z"/>
+  <path fill="#fff" d="M5 6h3v1H5zM4 7h4v2H4zM5 9h3v1H5z"/>
+  <path fill="#8ff0c0" d="M8 6h3v1H8zM8 7h4v2H8zM8 9h3v1H8z"/>`),
+  MET: coinIcon("#f54b00", "#ff9a6e", "#b03600",
+    `<path fill="#f5bd00" d="M7 3h2v1H7zM10 3h2v1H10zM6 4h2v1H6zM9 4h2v1H9zM12 4h1v1H12zM5 5h2v1H5zM8 5h2v1H8zM11 5h2v1H11zM7 6h2v1H7zM10 6h2v1H10zM7 7h1v1H7zM9 7h2v1H9zM12 7h1v1H12zM8 8h2v1H8zM11 8h2v1H11zM10 9h2v1H10zM10 10h1v1H10z"/>
+  <path fill="#6e45ff" d="M4 6h2v1H4zM4 7h1v1H4zM6 7h1v1H6zM5 8h2v1H5zM4 9h2v1H4zM7 9h2v1H7zM3 10h2v1H3zM6 10h2v1H6zM9 10h1v1H9zM3 11h1v1H3zM5 11h2v1H5zM8 11h2v1H8zM4 12h2v1H4zM8 12h1v1H8zM4 13h1v1H4z"/>
+  <path fill="#000" d="M9 3h1v1H9zM8 4h1v1H8zM11 4h1v1H11zM7 5h1v1H7zM10 5h1v1H10zM6 6h1v1H6zM9 6h1v1H9zM12 6h1v1H12zM5 7h1v1H5zM8 7h1v1H8zM11 7h1v1H11zM7 8h1v1H7zM10 8h1v1H10zM6 9h1v1H6zM9 9h1v1H9zM5 10h1v1H5zM8 10h1v1H8zM4 11h1v1H4z"/>`),
+  SKR: coinIcon("#14b8a6", "#8ee8dc", "#0b7a6e",
+    `<path fill="#000" d="M5 3h6v10H5z"/>
+  <path fill="#fff" d="M6 5h4v6H6z"/>`),
+};
+
+// what the window shows: the token, the hours of the day on the line, the
+// move selected on it (a notice's or the menu's, by the move's time), the
+// last answer and the sample under the pointer
+let token = TOKENS.includes((Q.get("coin") || "").toUpperCase()) ? Q.get("coin").toUpperCase() : "SOL";
+let hours = 24;
+let selAt = +Q.get("at") || 0;
+let data = null, hover = -1, loadT = 0, paused = false;
+try { const t = localStorage.getItem("exe_solana_token"); if (!Q.get("coin") && TOKENS.includes(t)) token = t; } catch (e) {}
+
+// ---- figures ----
+// four significant figures; a run of zeros after the point folds into a
+// small sunk count, as the ticker writes a price: 0.004269 is $0.0₂4269
+function fig(v, from = 3) {
+  const [m, e] = v.toExponential(3).split("e");
+  if (-e - 1 < from) return [v.toPrecision(4)];
+  return ["0.0", { sub: String(-e - 1) }, m.replace(".", "")];
+}
+const usdParts = v => v >= 1 ? ["$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })] : ["$", ...fig(v)];
+const usd = v => usdParts(v).map(p => typeof p === "string" ? p : p.sub.replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d])).join("");
+function usdDOM(node, v) {
+  node.replaceChildren(...usdParts(v).map(p => {
+    if (typeof p === "string") return p;
+    const s = document.createElement("sub"); s.textContent = p.sub; return s;
+  }));
+}
+const pct = c => (c < 0 ? "−" : "+") + Math.abs(c).toFixed(1) + "%";
+const clock = t => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+const dayClock = t => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+// ---- the view ----
+// the samples of the hours shown, the moves among them, and the span of
+// time the line covers: it ends at the last sample, so the right edge is now
+function view() {
+  if (!data || !data.samples.length) return null;
+  const xs = data.samples, last = xs[xs.length - 1].t, t0 = last - hours * 3600;
+  let i = 0;
+  while (i < xs.length && xs[i].t < t0) i++;
+  const s = xs.slice(i);
+  const moves = (data.moves || []).map(m => ({ ...m, ms: new Date(m.t).getTime() })).filter(m => m.ms / 1000 >= t0 && m.ms / 1000 <= last + 60);
+  return { s, t0, t1: last, moves };
+}
+const isSel = m => selAt > 0 && Math.abs(m.ms - selAt) < 90 * 1000;
+
+// ---- draw ----
+// Each sample is a minute. The line is drawn on a canvas in device pixels,
+// so it stays crisp at any scale; a gap of over five minutes (the daemon
+// was down) breaks it. Under the line sits a pale flat of the token's
+// colour, no gradient. A big move is a dot on the line, its change
+// beside it; the selected one wears a black ring and its words.
+function draw() {
+  const cv = $("#cv"), box = $("#field");
+  const w = box.clientWidth, h = box.clientHeight;
+  if (!w || !h) return;
+  const dpr = window.devicePixelRatio || 1, W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, W, H);
+  const v = view();
+  $("#empty").hidden = !!(v && v.s.length > 1);
+  if (!v || v.s.length < 2) return;
+  const px = n => Math.round(n * dpr);
+  const L = px(8), R = px(54), T = px(14), B = px(20);
+  const x0 = L, x1 = W - R, y0 = T, y1 = H - B;
+  const X = t => x0 + (t - v.t0) / (v.t1 - v.t0) * (x1 - x0);
+  // the price scale: the range's low and high, padded, on a nice step
+  let lo = Infinity, hi = -Infinity;
+  for (const s of v.s) { if (s.p < lo) lo = s.p; if (s.p > hi) hi = s.p; }
+  if (hi === lo) { hi *= 1.001; lo *= 0.999; }
+  const pad = (hi - lo) * 0.08;
+  const step = niceStep((hi - lo + 2 * pad) / 4);
+  const ymin = Math.floor((lo - pad) / step) * step, ymax = Math.ceil((hi + pad) / step) * step;
+  const Y = p => y1 - (p - ymin) / (ymax - ymin) * (y1 - y0);
+  const dec = Math.max(0, -Math.floor(Math.log10(step)));
+  const small = `${px(10)}px ${FONT}`;
+  // the grid: a line per price step, a line per whole hour on the tick
+  // (every four hours of a day, every hour of six), in the viewer's clock
+  g.lineWidth = Math.max(1, px(1));
+  g.strokeStyle = "#e4e4e4"; g.fillStyle = "#777"; g.font = small;
+  g.textBaseline = "middle"; g.textAlign = "left";
+  for (let p = ymin; p <= ymax + step / 2; p += step) {
+    const y = Math.round(Y(p)) + 0.5;
+    g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke();
+    g.fillText("$" + p.toFixed(dec), x1 + px(5), y);
+  }
+  // a label per tick, the ticks far enough apart for the labels: a narrow
+  // chart (a phone's) labels every eighth hour of a day
+  let every = hours > 6 ? 4 : 1;
+  while (every < hours && (x1 - x0) / (hours / every) < px(64)) every *= 2;
+  const d0 = new Date(v.t0 * 1000); d0.setMinutes(0, 0, 0);
+  g.textAlign = "center"; g.textBaseline = "top";
+  for (let d = d0; d.getTime() / 1000 <= v.t1; d = new Date(d.getTime() + 3600 * 1000)) {
+    if (d.getHours() % every || d.getTime() / 1000 < v.t0) continue;
+    const x = Math.round(X(d.getTime() / 1000)) + 0.5;
+    g.strokeStyle = "#e4e4e4";
+    g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
+    g.fillText(clock(d), x, y1 + px(5));
+  }
+  // the flat under the line, then the line, each run between gaps its own path
+  const runs = [];
+  let run = [];
+  for (let i = 0; i < v.s.length; i++) {
+    if (i && v.s[i].t - v.s[i - 1].t > 5 * 60) { if (run.length > 1) runs.push(run); run = []; }
+    run.push(v.s[i]);
+  }
+  if (run.length > 1) runs.push(run);
+  for (const r of runs) {
+    g.beginPath();
+    g.moveTo(X(r[0].t), y1);
+    for (const s of r) g.lineTo(X(s.t), Y(s.p));
+    g.lineTo(X(r[r.length - 1].t), y1);
+    g.closePath();
+    g.fillStyle = UNDER[token]; g.fill();
+  }
+  g.lineWidth = Math.max(1, Math.round(dpr)); g.lineJoin = "round"; g.lineCap = "round";
+  g.strokeStyle = LINE[token];
+  for (const r of runs) {
+    g.beginPath();
+    r.forEach((s, i) => i ? g.lineTo(X(s.t), Y(s.p)) : g.moveTo(X(s.t), Y(s.p)));
+    g.stroke();
+  }
+  // the pointer's minute: a hair, a dot, and the price and time at the top
+  if (hover >= 0 && hover < v.s.length) {
+    const s = v.s[hover], x = Math.round(X(s.t)) + 0.5;
+    g.strokeStyle = "#999"; g.lineWidth = Math.max(1, px(1));
+    g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
+    g.fillStyle = LINE[token];
+    g.beginPath(); g.arc(X(s.t), Y(s.p), px(3), 0, 7); g.fill();
+    label(g, x, y0, clock(s.t * 1000) + "  " + usd(s.p), { dpr, below: true, w: W });
+  }
+  // the moves: a dot each, red down and green up, the change beside it;
+  // the selected one ringed black, its title in a box
+  const dots = [];
+  for (const m of v.moves) {
+    const s = nearest(v.s, m.ms / 1000);
+    if (!s) continue;
+    const x = X(s.t), y = Y(m.price > 0 && Math.abs(m.price / s.p - 1) < 0.05 ? m.price : s.p);
+    const col = m.change < 0 ? "#b01c1c" : "#1f7a3a";
+    if (isSel(m)) {
+      g.fillStyle = "#000"; g.beginPath(); g.arc(x, y, px(6), 0, 7); g.fill();
+    }
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(x, y, px(5), 0, 7); g.fill();
+    g.fillStyle = col; g.beginPath(); g.arc(x, y, px(3.5), 0, 7); g.fill();
+    dots.push({ m, x: x / dpr, y: y / dpr });
+    const above = y - y0 > px(30);
+    if (isSel(m)) label(g, x, above ? y - px(9) : y + px(9), m.title || pct(m.change), { dpr, below: !above, w: W, bold: true, col });
+    else {
+      g.fillStyle = col; g.font = `bold ${px(10)}px ${FONT}`; g.textAlign = "center"; g.textBaseline = above ? "bottom" : "top";
+      g.fillText(pct(m.change), x, above ? y - px(7) : y + px(7));
+    }
+  }
+  cv._dots = dots;
+}
+// a nice step for the price grid: 1, 2 or 5 times a power of ten
+function niceStep(raw) {
+  const p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+  return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
+}
+// a small white box of words with a black line round it, kept inside the
+// chart's width; above its anchor, or below it
+function label(g, x, y, text, o) {
+  const px = n => Math.round(n * o.dpr);
+  g.font = `${o.bold ? "bold " : ""}${px(10)}px ${FONT}`;
+  const tw = Math.ceil(g.measureText(text).width), bw = tw + px(10), bh = px(16);
+  let bx = Math.round(x - bw / 2);
+  bx = Math.max(px(2), Math.min(o.w - bw - px(2), bx));
+  const by = Math.round(o.below ? y + px(3) : y - px(3) - bh);
+  g.fillStyle = "#fff"; g.fillRect(bx, by, bw, bh);
+  g.strokeStyle = "#000"; g.lineWidth = Math.max(1, px(1));
+  g.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+  g.fillStyle = o.col || "#000"; g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillText(text, bx + px(5), by + bh / 2);
+}
+// the sample nearest a time, within three minutes
+function nearest(xs, t) {
+  let lo = 0, hi = xs.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (xs[mid].t < t) lo = mid + 1; else hi = mid; }
+  const c = [xs[lo], xs[lo - 1]].filter(Boolean).sort((a, b) => Math.abs(a.t - t) - Math.abs(b.t - t))[0];
+  return c && Math.abs(c.t - t) <= 180 ? c : null;
+}
+
+// ---- the head, the list, the status line ----
+function paint() {
+  const v = view();
+  $("#coin").innerHTML = COINS[token].replace('width="16" height="16"', 'width="32" height="32"');
+  const price = $("#price"), change = $("#change"), sub = $("#sub");
+  if (!v || !v.s.length) {
+    price.textContent = "—"; change.textContent = "—"; change.className = "none"; sub.textContent = "";
+  } else {
+    const first = v.s[0], last = v.s[v.s.length - 1];
+    usdDOM(price, last.p);
+    const c = (last.p / first.p - 1) * 100;
+    change.textContent = pct(c) + " · " + hours + " h";
+    change.className = c < 0 ? "down" : "up";
+    let lo = v.s[0], hi = v.s[0];
+    for (const s of v.s) { if (s.p < lo.p) lo = s; if (s.p > hi.p) hi = s; }
+    sub.textContent = `High ${usd(hi.p)} at ${clock(hi.t * 1000)} · Low ${usd(lo.p)} at ${clock(lo.t * 1000)}`;
+  }
+  // the moves of the range, newest first, six at most
+  const list = $("#moves");
+  list.replaceChildren();
+  const moves = v ? v.moves.slice().sort((a, b) => b.ms - a.ms) : [];
+  if (!moves.length) {
+    const d = document.createElement("div"); d.className = "none";
+    d.textContent = v ? `No big move of ${token} in the last ${hours} hours.` : "";
+    list.append(d);
+  }
+  for (const m of moves.slice(0, 6)) {
+    const row = document.createElement("div"); row.className = "row" + (isSel(m) ? " sel" : "");
+    const t = document.createElement("span"); t.className = "t"; t.textContent = dayClock(m.ms);
+    const ti = document.createElement("span"); ti.className = "ti " + (m.change < 0 ? "down" : "up"); ti.textContent = pct(m.change) + " in " + (m.window === "1h" ? "an hour" : "24 hours");
+    const b = document.createElement("span"); b.className = "b"; b.textContent = (m.body || "") + (m.held_back ? " · held back" : "");
+    row.append(t, ti, b);
+    row.addEventListener("click", () => { selAt = isSel(m) ? 0 : m.ms; paint(); draw(); });
+    list.append(row);
+  }
+  if (moves.length > 6) {
+    const d = document.createElement("div"); d.className = "more";
+    d.textContent = `and ${moves.length - 6} more`;
+    list.append(d);
+  }
+  // the status line: the source and its last answer, the samples shown
+  const st = data && data.status;
+  if (!data) $("#st-left").textContent = "Checking…";
+  else if (st && st.last_err && (!st.last_ok || Date.now() - new Date(st.last_ok).getTime() > 5 * 60 * 1000)) $("#st-left").textContent = "Coinbase did not answer: " + st.last_err;
+  else $("#st-left").textContent = "Coinbase spot, one sample a minute" + (st && st.last_ok ? " · updated " + clock(new Date(st.last_ok).getTime()) : "");
+  $("#st-right").textContent = v ? `${v.s.length.toLocaleString()} minutes` : "";
+  $("#empty").textContent = !data ? "" : data.samples.length < 2 ? "The daemon has no samples of " + token + " yet. It takes one a minute." : "";
+  document.title = NAMES[token] + " — " + token;
+}
+
+async function load() {
+  try {
+    data = await api("/v1/prices/history?token=" + token);
+    loadT = Date.now();
+  } catch (e) {
+    data = data && data.token === token ? data : null;
+    $("#st-left").textContent = "The daemon did not answer: " + e.message;
+    $("#st-right").textContent = "";
+    draw();
+    return;
+  }
+  paint(); draw();
+}
+function setToken(t) {
+  token = t;
+  try { localStorage.setItem("exe_solana_token", t); } catch (e) {}
+  for (const b of document.querySelectorAll("#tokens button")) b.classList.toggle("on", b.dataset.t === t);
+  data = null; hover = -1;
+  paint(); draw(); load();
+}
+
+// ---- the controls ----
+for (const t of TOKENS) {
+  const b = document.createElement("button");
+  b.className = "ghost" + (t === token ? " on" : ""); b.dataset.t = t;
+  b.innerHTML = COINS[t] + `<span class="w">${t}</span>`;
+  b.addEventListener("click", () => { if (t !== token) { selAt = 0; setToken(t); } });
+  $("#tokens").append(b);
+}
+for (const b of document.querySelectorAll("#range button")) b.addEventListener("click", () => {
+  hours = +b.dataset.h;
+  for (const o of document.querySelectorAll("#range button")) o.classList.toggle("on", o === b);
+  hover = -1; paint(); draw();
+});
+// the pointer over the line: its minute; a press near a dot selects the move
+const field = $("#field");
+function sampleAt(ev) {
+  const v = view(); if (!v) return -1;
+  const r = field.getBoundingClientRect(), x = ev.clientX - r.left;
+  const w = field.clientWidth, L = 8, R = 54;
+  const t = v.t0 + (x - L) / (w - L - R) * (v.t1 - v.t0);
+  if (t < v.t0 - 60 || t > v.t1 + 60) return -1;
+  let lo = 0, hi = v.s.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (v.s[mid].t < t) lo = mid + 1; else hi = mid; }
+  if (lo > 0 && Math.abs(v.s[lo - 1].t - t) < Math.abs(v.s[lo].t - t)) lo--;
+  return lo;
+}
+field.addEventListener("pointermove", ev => { const i = sampleAt(ev); if (i !== hover) { hover = i; draw(); } });
+field.addEventListener("pointerleave", () => { if (hover >= 0) { hover = -1; draw(); } });
+field.addEventListener("pointerdown", ev => {
+  const r = field.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+  const dots = $("#cv")._dots || [];
+  const hit = dots.find(d => Math.hypot(d.x - x, d.y - y) <= 9);
+  if (hit) { selAt = isSel(hit.m) ? 0 : hit.m.ms; paint(); draw(); }
+  else if (ev.pointerType === "touch") { hover = sampleAt(ev); draw(); }
+});
+new ResizeObserver(() => draw()).observe(field);
+matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener("change", draw);
+
+// ---- desktop window plumbing (same bridge as the Analytics app) ----
+window.addEventListener("pointerdown", () => {
+  if (window.parent !== window) parent.postMessage({ exe: "focus" }, location.origin);
+}, { capture: true, passive: true });
+const grow = $("#grow");
+if (window.parent === window) grow.style.display = "none";
+grow.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  grow.setPointerCapture(e.pointerId);
+  const sx = e.clientX, sy = e.clientY;
+  const move = ev =>
+    parent.postMessage({ exe: "grow", dx: ev.clientX - sx, dy: ev.clientY - sy }, location.origin);
+  const up = () => {
+    grow.removeEventListener("pointermove", move);
+    grow.removeEventListener("pointerup", up);
+    parent.postMessage({ exe: "grow-end" }, location.origin);
+  };
+  grow.addEventListener("pointermove", move);
+  grow.addEventListener("pointerup", up);
+  parent.postMessage({ exe: "grow-start" }, location.origin);
+});
+// the desktop opens the window again on a move: a notice's, the menu's
+window.addEventListener("message", e => {
+  if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string") return;
+  if (e.data.exe === "open") {
+    const t = String(e.data.coin || "").toUpperCase();
+    selAt = +e.data.at || 0;
+    if (TOKENS.includes(t) && t !== token) setToken(t); else { paint(); draw(); if (Date.now() - loadT > 30 * 1000) load(); }
+  } else if (e.data.exe === "hide") paused = true;
+  else if (e.data.exe === "show") { paused = false; if (Date.now() - loadT > 30 * 1000) load(); }
+});
+// a sample a minute: the window asks just past each whole minute, as the
+// daemon samples just past it
+function tick() {
+  if (!paused && !document.hidden) load();
+  const ms = 60 * 1000 - (Date.now() % (60 * 1000)) + 8 * 1000;
+  setTimeout(tick, ms);
+}
+paint();
+load().then(() => { const ms = 60 * 1000 - (Date.now() % (60 * 1000)) + 8 * 1000; setTimeout(tick, ms); });
+</script>
+</body>
+</html>

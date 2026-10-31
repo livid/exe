@@ -740,6 +740,8 @@
 "Nothing sent: {0}": "未发送：{0}",
 "The test did not go out: {0}": "测试没有发出：{0}",
 "Recent Moves": "最近的波动",
+"Open Solana…": "打开 Solana…",
+"Open in Solana": "在 Solana 中打开",
 "Coinbase did not answer.": "Coinbase 没有回应。",
 "Weekly window": "每周窗口",
 "{0}-hour window": "{0} 小时窗口",

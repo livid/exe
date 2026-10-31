@@ -740,6 +740,8 @@
 "Nothing sent: {0}": "送信なし：{0}",
 "The test did not go out: {0}": "テストは送られませんでした：{0}",
 "Recent Moves": "最近の値動き",
+"Open Solana…": "Solana を開く…",
+"Open in Solana": "Solana で開く",
 "Coinbase did not answer.": "Coinbase から応答がありませんでした。",
 "Weekly window": "週の枠",
 "{0}-hour window": "{0} 時間枠",

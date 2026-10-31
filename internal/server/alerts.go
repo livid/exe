@@ -222,7 +222,8 @@ func (s *Server) alertTick(ctx context.Context, now time.Time) {
 		}
 		r := rec
 		go func() {
-			n, errs := s.pushAll(context.Background(), pushMessage{Title: r.Title, Body: r.Body, Tag: "px-" + r.Token, URL: "/"})
+			show := "app:solana?coin=" + r.Token + "&at=" + strconv.FormatInt(r.T.UnixMilli(), 10) // the Solana app, the move ringed
+			n, errs := s.pushAll(context.Background(), pushMessage{Title: r.Title, Body: r.Body, Tag: "px-" + r.Token, URL: "/#show=" + show, Show: show})
 			for _, e := range errs {
 				log.Printf("price alerts: push: %s", e)
 			}
@@ -481,4 +482,39 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		rules[tok] = map[string]float64{"hour": r.Hour, "day": r.Day}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"alerts": out, "rules": rules, "cap": alertCap, "status": status})
+}
+
+// GET /v1/prices/history?token=SOL — the Solana app's day: the token's
+// samples (one a minute, the 25 hours the alerts keep), its moves of the
+// last two days and the rule they qualified by, out of the alerts' own
+// state. The samples are what the rule judged, so a move marked on the
+// line sits on the price it was judged at.
+func (s *Server) handlePriceHistory(w http.ResponseWriter, r *http.Request) {
+	tok := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("token")))
+	if tok == "" {
+		tok = "SOL"
+	}
+	rule, ok := alertRules[tok]
+	if !ok {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf("token is one of %s", strings.Join(alertTokens, ", ")))
+		return
+	}
+	samples, moves := []priceSample{}, []alertRec{}
+	var status map[string]any
+	s.alertMu.Lock()
+	if st := s.alerts; st != nil {
+		samples = append(samples, st.Samples[tok]...)
+		for _, a := range st.Alerts {
+			if a.Token == tok {
+				moves = append(moves, a)
+			}
+		}
+		status = map[string]any{"last_ok": st.LastOK, "last_err": st.LastErr}
+	}
+	s.alertMu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token": tok, "samples": samples, "moves": moves,
+		"rule": map[string]float64{"hour": rule.Hour, "day": rule.Day}, "cap": alertCap,
+		"status": status, "now": time.Now().UTC(),
+	})
 }

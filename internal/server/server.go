@@ -413,6 +413,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/cloudflare/stats", s.handleCFStats)
 	mux.HandleFunc("GET /v1/cloudflare/analytics", s.handleCFAnalytics)
 	mux.HandleFunc("GET /v1/prices", s.handlePrices)
+	mux.HandleFunc("GET /v1/prices/history", s.handlePriceHistory)
 	mux.HandleFunc("GET /v1/alerts", s.handleAlerts)
 	mux.HandleFunc("GET /v1/push/key", s.handlePushKey)
 	mux.HandleFunc("POST /v1/push/subscribe", s.handlePushSubscribe)
