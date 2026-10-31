@@ -8,4 +8,4 @@ before it said is kept in CHANGELOG.md.
 - **A link** can open an app: add `#show=app:Ping` to the desktop's address and Ping's window comes forward.
 - **Codex**'s sidebar puts sessions you last messaged first; **New** puts a fresh session at the top.
 - **Big price moves** of the Solana ticker stay on the desktop as a notice, with the time of the move, until you close it, instead of a toast that fades.
-- **Solana**, a new built-in app, draws a day of SOL, PUMP, MET or SKR as a line with its big moves marked. Open it from the Solana ticker's menu, or click a big-move notice.
+- **Solana**, a new built-in app, is a trading chart of SOL, PUMP, MET or SKR: candles or a line, 1m to 1d, dragged back through Coinbase's history, with each big move marked. Open it from the Solana ticker's menu, or click a big-move notice.

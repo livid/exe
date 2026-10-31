@@ -430,7 +430,7 @@ portal.jup.ag goes in `jupiter.api_key` of `~/.exe/config.json`.
 
 The same menu turns notifications on. **Notifications: turn them on**,
 further down, says how. **Open Solana…** opens the Solana app on the token
-the tile wears: its day as a line (the chapter **Solana**). A line of
+the tile wears: its chart (the chapter **Solana**). A line of
 **Recent Moves** opens the app on that move.
 
 ### Control Strip: agent usage
@@ -536,7 +536,7 @@ while the four are spent is counted into the next one. Each move is also a
 notice on the desktop, with the time of the move, which stays until you
 close it; a newer move of the same token takes its place. **Recent Moves** in the ticker's menu lists
 the last eight. Click the words of a notice, and the Solana app opens on
-that move: the day's line, the move ringed.
+that move: the chart, the move ringed.
 
 ### Notifications: weather
 
@@ -3284,7 +3284,7 @@ These are part of exe itself, and each has a chapter of its own.
 | **Blue Pencil** | `bluepencil` | A proofreader that runs on your own model. | [Blue Pencil](https://exe.v2core.com/docs/using/blue-pencil) |
 | **Dict** | `dict` | A dictionary from English and five other languages into Chinese, Japanese or Korean. | [Dict](https://exe.v2core.com/docs/using/dict) |
 | **Analytics** | `analytics` | The traffic Cloudflare's edge saw for the hostnames this node publishes. | [Analytics](https://exe.v2core.com/docs/using/analytics) |
-| **Solana** | `solana` | A day of SOL, PUMP, MET or SKR as a line, its big moves marked. | [Solana](https://exe.v2core.com/docs/using/solana) |
+| **Solana** | `solana` | A trading chart of SOL, PUMP, MET or SKR, candles or a line, its big moves marked. | [Solana](https://exe.v2core.com/docs/using/solana) |
 | **Welcome** | `welcome` | exe in six cards. It has no desktop icon: choose **Help → Welcome…**. | [The desktop](https://exe.v2core.com/docs/using/the-desktop) |
 | **Extras** | `extras` | Turns the extra apps, Planet, Easel and Projects on and off. It has no desktop icon: press **Extras…** on Welcome's Apps card. | This chapter, under **Extras** |
 
@@ -4917,33 +4917,45 @@ stream open.
 
 ## Solana
 
-**Solana** draws a day of a token's price as a line: SOL, PUMP, MET or
-SKR, from the same prices the Control Strip's ticker shows. Each big move
-of the token stands on the line as a dot, red down and green up, with its
-change beside it.
+**Solana** is a price chart of SOL, PUMP, MET or SKR, the tokens of the
+Control Strip's ticker, drawn from Coinbase's candles the way a trading
+chart draws them. Each big move of the token stands on its candle as a
+dot, red down and green up, with its change beside it.
 
 - **Open it** from its desktop icon, from **Open Solana…** in the Solana
   ticker's menu, or by a click on the words of a big-move notice. Opened
-  on a move, the app rings that move on the line and writes its words in
-  a box.
-- **Pick a token** with the four buttons at the top. **6 h** and **24 h**
-  set how much of the day the line shows.
-- **The head** gives the price now, its change over the hours shown, and
-  the high and the low of those hours with their times.
-- **Rest the pointer** on the line to read the price at any minute. Click
-  a dot, or a row in the list under the chart, to ring a move; click it
-  again to let it go.
+  on a move, the app brings that move into view, rings it, and writes its
+  words in a box.
+- **Pick a token** with the four buttons at the top.
+- **The head** gives the price now, its change over 24 hours, and the
+  day's high and low with their times, from the daemon's own minute
+  samples.
+- **The chart's row**, at its top left: **1m**, **5m**, **15m**, **1h**,
+  **4h** and **1d** set what a candle covers, **Line** and **Candles**
+  set how the chart is drawn, and **Now** brings the newest candle back
+  after you dragged into the past.
+- **Drag the chart** to the right to see older candles: the app fetches
+  further pages as you go, back to the pair's first day on Coinbase.
+  Turn the mouse wheel over it to make the candles wider or narrower.
+- **Rest the pointer** on the chart to read a candle: the legend at the
+  top left gives its open, high, low and close, and the cross marks its
+  time under the plot and the price on the axis. Click a dot, or a row in
+  the list under the chart, to ring a move; click it again to let it go.
 
-The daemon samples each token once a minute, whether or not a desktop is
-open, and keeps 25 hours of samples, so the line starts where the daemon's
-own day does: a daemon started an hour ago shows an hour. A big move is one
-that passed the ticker's thresholds (**Notifications: big price moves**,
-under The desktop); a move the day's cap held back shows too, marked
-"held back".
+The candles are Coinbase Exchange's, fetched by the daemon and shared by
+every desktop open on the node: a page of 300 at a time (150 for 4h,
+which the daemon folds from the hour's candles on four-hour UTC
+boundaries). A minute with no trade has no candle, so a quiet pair shows
+gaps. A big move is one that passed the ticker's thresholds
+(**Notifications: big price moves**, under The desktop); a move the day's
+cap held back shows too, marked "held back".
 
-For a script or an agent, `GET /v1/prices/history?token=SOL` is the
-window's data: the samples (`t` in seconds, `p` in dollars), the token's
-moves of the last two days, and its rule. A link opens the app on a move:
+For a script or an agent, `GET /v1/prices/candles?token=SOL&tf=1h` is a
+page of candles, each `[time, open, high, low, close, volume]`, oldest
+first, up to the one holding now; `end=<unix seconds>` asks for the page
+up to that time. `GET /v1/prices/history?token=SOL` is the head's data:
+the day's samples (`t` in seconds, `p` in dollars), the token's moves of
+the last two days, and its rule. A link opens the app on a move:
 `#show=app:solana?coin=SOL&at=<ms>` on the desktop's address, `at` the
 move's time in milliseconds. The push a big move sends carries that link,
 so a tap on it lands on the move.

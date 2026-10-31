@@ -133,6 +133,10 @@ type Server struct {
 	// pair list (prices.go).
 	pricesMu sync.Mutex
 	prices   map[string]pricesEntry
+	// Cached Coinbase candles for the Solana app, by token, timeframe
+	// and page (candles.go).
+	candlesMu sync.Mutex
+	candles   map[string]candlesEntry
 
 	// Cached tailscale CLI answer for the Control Strip's Tailscale
 	// module (tailscale.go).
@@ -414,6 +418,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/cloudflare/analytics", s.handleCFAnalytics)
 	mux.HandleFunc("GET /v1/prices", s.handlePrices)
 	mux.HandleFunc("GET /v1/prices/history", s.handlePriceHistory)
+	mux.HandleFunc("GET /v1/prices/candles", s.handleCandles)
 	mux.HandleFunc("GET /v1/alerts", s.handleAlerts)
 	mux.HandleFunc("GET /v1/push/key", s.handlePushKey)
 	mux.HandleFunc("POST /v1/push/subscribe", s.handlePushSubscribe)

@@ -34,25 +34,32 @@ button.ghost { background: var(--g300); color: var(--black);
 button.ghost:active { background: #666; color: #fff;
   box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
     inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
-/* the chosen token and range stay depressed, like a Platinum segmented control */
+/* the chosen token, timeframe and kind stay depressed, like a Platinum segmented control */
 button.ghost.on { background: #888; color: #fff;
   box-shadow: inset 1px 1px 0 #666, inset -1px -1px 0 #aaa,
     inset 2px 2px 0 #777, inset -2px -2px 0 #999; }
+button.ghost:disabled { color: #999; border-color: #999;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #bbb, inset 2px 2px 0 #fff, inset -2px -2px 0 #ccc; }
 .seg { display: flex; gap: 0; flex: none; }
 .seg button { border-radius: 0; border-right-width: 0; padding: 2px 9px; }
 .seg button:first-child { border-radius: 3px 0 0 3px; }
 .seg button:last-child { border-radius: 0 3px 3px 0; border-right-width: 1px; }
 /* a token's button wears its coin, the Control Strip's own */
 #tokens button svg { width: 16px; height: 16px; vertical-align: -4px; margin-right: 4px; }
-#range { margin-left: auto; }
+/* the chart's own row, at its top left: the timeframe, the kind, and Now
+   when the chart was dragged back */
+#tools { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0 12px 6px; align-items: center; }
+#tools .seg button { padding: 2px 7px; font-variant-numeric: tabular-nums; }
+#now { margin-left: auto; }
 /* a narrow window (a phone's) keeps the coins and drops the words */
 @media (max-width: 400px) {
   #tokens button .w { display: none; }
   #tokens button svg { margin-right: 0; }
+  #tools .seg button { padding: 2px 5px; }
 }
 
-/* the head: the coin, the price now, its change over the range shown,
-   and the range's high and low */
+/* the head: the coin, the price now, its change over the day, and the
+   day's high and low */
 #head { display: flex; align-items: center; gap: 12px; padding: 0 12px 8px; }
 #coin svg { width: 32px; height: 32px; display: block; }
 #figs { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -66,17 +73,18 @@ button.ghost.on { background: #888; color: #fff;
 #sub { font-size: 11px; color: #555; line-height: 14px; font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 14px; }
 
-/* the chart: a sunken white field, the desktop's field block */
+/* the chart: a sunken white field, the desktop's field block; it takes
+   the pointer's drag, so the browser gets none of its touches */
 #field { flex: 1; min-height: 120px; margin: 0 12px; position: relative; background: #fff;
-  border: 1px solid var(--black); touch-action: none;
+  border: 1px solid var(--black); touch-action: none; overflow: hidden;
   box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
     1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
 #field canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: #777; font-size: 11px; text-align: center; padding: 0 20px; }
 
-/* the moves of the range shown: a short table under the chart, the
-   selected one in the desktop's highlight */
+/* the token's moves of the last two days: a short table under the chart,
+   the selected one in the desktop's highlight */
 #moves { margin: 8px 12px 10px; font-size: 11px; line-height: 14px; }
 #moves .row { display: flex; gap: 8px; padding: 2px 4px; align-items: baseline; }
 #moves .row.sel { background: var(--hl); color: #fff; }
@@ -107,10 +115,6 @@ body.mobile #status { padding-right: 8px; }
 <body>
 <div id="bar">
   <span class="seg" id="tokens"></span>
-  <span class="seg" id="range">
-    <button class="ghost" data-h="6">6 h</button>
-    <button class="ghost on" data-h="24">24 h</button>
-  </span>
 </div>
 <div id="head">
   <div id="coin"></div>
@@ -118,6 +122,14 @@ body.mobile #status { padding-right: 8px; }
     <div id="top"><span id="price">—</span><span id="change" class="none">—</span></div>
     <div id="sub"></div>
   </div>
+</div>
+<div id="tools">
+  <span class="seg" id="tfs"></span>
+  <span class="seg" id="kinds">
+    <button class="ghost" data-k="line">Line</button>
+    <button class="ghost" data-k="candles">Candles</button>
+  </span>
+  <button class="ghost" id="now" disabled>Now</button>
 </div>
 <div id="field">
   <canvas id="cv"></canvas>
@@ -189,14 +201,33 @@ const COINS = {
   <path fill="#fff" d="M6 5h4v6H6z"/>`),
 };
 
-// what the window shows: the token, the hours of the day on the line, the
-// move selected on it (a notice's or the menu's, by the move's time), the
-// last answer and the sample under the pointer
+// the timeframes, as a trading chart names them, each the seconds a
+// candle covers; the daemon serves them from Coinbase's candles
+const TFS = [["1m", 60], ["5m", 300], ["15m", 900], ["1h", 3600], ["4h", 14400], ["1d", 86400]];
+const STEP = Object.fromEntries(TFS);
+
+// what the window shows: the token, the timeframe, the kind of chart, the
+// move selected (a notice's or the menu's, by the move's time), the day's
+// samples and moves, the candles loaded, and the view over them
 let token = TOKENS.includes((Q.get("coin") || "").toUpperCase()) ? Q.get("coin").toUpperCase() : "SOL";
-let hours = 24;
+let tf = "1h", kind = "candles";
 let selAt = +Q.get("at") || 0;
-let data = null, hover = -1, loadT = 0, paused = false;
-try { const t = localStorage.getItem("exe_solana_token"); if (!Q.get("coin") && TOKENS.includes(t)) token = t; } catch (e) {}
+let data = null, dataT = 0, paused = false;
+try {
+  const t = localStorage.getItem("exe_solana_token"); if (!Q.get("coin") && TOKENS.includes(t)) token = t;
+  const f = localStorage.getItem("exe_solana_tf"); if (STEP[f]) tf = f;
+  const k = localStorage.getItem("exe_solana_kind"); if (k === "line" || k === "candles") kind = k;
+} catch (e) {}
+// the candles of one token and timeframe, by their time; oldest and
+// newest; whether Coinbase has run out of past (an empty page), whether a
+// page is on its way
+let series = { key: "", map: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+// the view: cw is a candle's slot in CSS px (the wheel changes it); rightT
+// is the time at the plot's right edge, or null to follow the newest
+// candle with two empty slots after it, as a trading chart does
+let cw = 7, rightT = null;
+let hover = null; // { x, y } in CSS px over the field, or null
+let drag = null;
 
 // ---- figures ----
 // four significant figures; a run of zeros after the point folds into a
@@ -214,30 +245,60 @@ function usdDOM(node, v) {
     const s = document.createElement("sub"); s.textContent = p.sub; return s;
   }));
 }
+// a price on the axis or in a legend: plain figures, cents from a dollar,
+// four significant figures under it, and never fewer than the grid asks
+const plain = (v, dec) => v.toFixed(dec);
+const decFor = v => v >= 1 ? 2 : Math.max(2, 3 - Math.floor(Math.log10(v)));
 const pct = c => (c < 0 ? "−" : "+") + Math.abs(c).toFixed(1) + "%";
 const clock = t => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+const day = t => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+// a date in the status line says its year when it is not this year's
+const dayYear = t => new Date(t).toLocaleDateString(undefined, new Date(t).getFullYear() === new Date().getFullYear() ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
 const dayClock = t => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const month = t => new Date(t).toLocaleDateString(undefined, { month: "short" });
 
-// ---- the view ----
-// the samples of the hours shown, the moves among them, and the span of
-// time the line covers: it ends at the last sample, so the right edge is now
-function view() {
-  if (!data || !data.samples.length) return null;
-  const xs = data.samples, last = xs[xs.length - 1].t, t0 = last - hours * 3600;
-  let i = 0;
-  while (i < xs.length && xs[i].t < t0) i++;
-  const s = xs.slice(i);
-  const moves = (data.moves || []).map(m => ({ ...m, ms: new Date(m.t).getTime() })).filter(m => m.ms / 1000 >= t0 && m.ms / 1000 <= last + 60);
-  return { s, t0, t1: last, moves };
+// ---- the candles ----
+const step = () => STEP[tf];
+function resetSeries() {
+  series = { key: token + "|" + tf, map: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+  rightT = null; hover = null;
 }
-const isSel = m => selAt > 0 && Math.abs(m.ms - selAt) < 90 * 1000;
+// one page: the newest (end 0) or the one ending at end; a page already
+// loaded is merged candle by candle, so a refresh of the newest only
+// changes what changed
+async function loadPage(end) {
+  const key = series.key;
+  if (series.loading) return;
+  series.loading = true;
+  const q = "/v1/prices/candles?token=" + token + "&tf=" + tf + (end ? "&end=" + end : "");
+  let r;
+  try { r = await api(q); } catch (e) {
+    if (series.key === key) { series.loading = false; series.err = e.message; status(); }
+    return;
+  }
+  if (series.key !== key) return; // the window moved on
+  series.loading = false; series.err = "";
+  series.fetched = r.fetched_at ? new Date(r.fetched_at).getTime() : Date.now();
+  for (const c of r.candles) series.map.set(c[0], c);
+  if (end && !r.candles.length) series.exhausted = true;
+  const ts = [...series.map.keys()];
+  series.oldest = ts.length ? Math.min(...ts) : 0;
+  series.newest = ts.length ? Math.max(...ts) : 0;
+  if (!end && !r.candles.length) series.exhausted = true;
+  draw(); status();
+}
+// the view's right edge, in seconds: where it was dragged, or two slots
+// past the newest candle
+const viewRight = () => rightT !== null ? rightT : series.newest + 2 * step();
+const following = () => rightT === null;
 
 // ---- draw ----
-// Each sample is a minute. The line is drawn on a canvas in device pixels,
-// so it stays crisp at any scale; a gap of over five minutes (the daemon
-// was down) breaks it. Under the line sits a pale flat of the token's
-// colour, no gradient. A big move is a dot on the line, its change
-// beside it; the selected one wears a black ring and its words.
+// Drawn on a canvas in device pixels, so it stays crisp at any scale. Each
+// candle has a slot cw wide; the price axis stands at the right, the
+// time axis under the plot, the legend at the top left reads the candle
+// under the pointer (the newest, when none is). A big move is a dot on
+// its candle, red down and green up, its change beside it; the selected
+// one wears a black ring and its words.
 function draw() {
   const cv = $("#cv"), box = $("#field");
   const w = box.clientWidth, h = box.clientHeight;
@@ -246,89 +307,105 @@ function draw() {
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   const g = cv.getContext("2d");
   g.clearRect(0, 0, W, H);
-  const v = view();
-  $("#empty").hidden = !!(v && v.s.length > 1);
-  if (!v || v.s.length < 2) return;
   const px = n => Math.round(n * dpr);
-  const L = px(8), R = px(54), T = px(14), B = px(20);
+  const st = step(), cwD = Math.max(2, Math.round(cw * dpr));
+  const L = px(6), R = px(58), T = px(22), B = px(20);
   const x0 = L, x1 = W - R, y0 = T, y1 = H - B;
-  const X = t => x0 + (t - v.t0) / (v.t1 - v.t0) * (x1 - x0);
-  // the price scale: the range's low and high, padded, on a nice step
+  const right = viewRight(), slots = Math.floor((x1 - x0) / cwD);
+  const leftT = right - slots * st;
+  const X = t => x1 - (right - t) / st * cwD - cwD / 2; // a candle's centre
+  // the candles in view, oldest first
+  const seen = [];
+  const tFirst = Math.floor(leftT / st) * st;
+  for (let t = tFirst; t <= right; t += st) { const c = series.map.get(t); if (c) seen.push(c); }
+  $("#empty").hidden = seen.length > 0 || series.loading;
+  $("#empty").textContent = series.err ? "The daemon did not answer: " + series.err
+    : series.exhausted && !series.map.size ? "Coinbase has no " + tf + " candles of " + token + "." : "";
+  if (!seen.length) { cv._dots = []; needMore(leftT); return; }
+  // the price scale: the view's low and high, padded, on a nice step
   let lo = Infinity, hi = -Infinity;
-  for (const s of v.s) { if (s.p < lo) lo = s.p; if (s.p > hi) hi = s.p; }
+  for (const c of seen) { if (c[3] < lo) lo = c[3]; if (c[2] > hi) hi = c[2]; }
   if (hi === lo) { hi *= 1.001; lo *= 0.999; }
   const pad = (hi - lo) * 0.08;
-  const step = niceStep((hi - lo + 2 * pad) / 4);
-  const ymin = Math.floor((lo - pad) / step) * step, ymax = Math.ceil((hi + pad) / step) * step;
+  const pstep = niceStep((hi - lo + 2 * pad) / 5);
+  const ymin = Math.floor((lo - pad) / pstep) * pstep, ymax = Math.ceil((hi + pad) / pstep) * pstep;
   const Y = p => y1 - (p - ymin) / (ymax - ymin) * (y1 - y0);
-  const dec = Math.max(0, -Math.floor(Math.log10(step)));
+  const dec = Math.max(-Math.floor(Math.log10(pstep)), decFor(hi));
   const small = `${px(10)}px ${FONT}`;
-  // the grid: a line per price step, a line per whole hour on the tick
-  // (every four hours of a day, every hour of six), in the viewer's clock
   g.lineWidth = Math.max(1, px(1));
-  g.strokeStyle = "#e4e4e4"; g.fillStyle = "#777"; g.font = small;
-  g.textBaseline = "middle"; g.textAlign = "left";
-  for (let p = ymin; p <= ymax + step / 2; p += step) {
+  g.font = small; g.fillStyle = "#777";
+  // the price grid and axis
+  g.textBaseline = "middle"; g.textAlign = "left"; g.strokeStyle = "#e4e4e4";
+  for (let p = ymin; p <= ymax + pstep / 2; p += pstep) {
     const y = Math.round(Y(p)) + 0.5;
     g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke();
-    g.fillText("$" + p.toFixed(dec), x1 + px(5), y);
+    g.fillText(plain(p, dec), x1 + px(5), y);
   }
-  // a label per tick, the ticks far enough apart for the labels: a narrow
-  // chart (a phone's) labels every eighth hour of a day
-  let every = hours > 6 ? 4 : 1;
-  while (every < hours && (x1 - x0) / (hours / every) < px(64)) every *= 2;
-  const d0 = new Date(v.t0 * 1000); d0.setMinutes(0, 0, 0);
+  // the time grid and axis: ticks far enough apart for their labels,
+  // on the clock's own boundaries in the viewer's zone
   g.textAlign = "center"; g.textBaseline = "top";
-  for (let d = d0; d.getTime() / 1000 <= v.t1; d = new Date(d.getTime() + 3600 * 1000)) {
-    if (d.getHours() % every || d.getTime() / 1000 < v.t0) continue;
-    const x = Math.round(X(d.getTime() / 1000)) + 0.5;
-    g.strokeStyle = "#e4e4e4";
-    g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
-    g.fillText(clock(d), x, y1 + px(5));
+  for (const [t, text] of timeTicks(leftT, right, st, cwD, px(64))) {
+    const x = Math.round(X(t)) + 0.5;
+    if (x < x0 || x > x1) continue;
+    g.strokeStyle = "#e4e4e4"; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
+    g.fillStyle = "#777"; g.fillText(text, x, y1 + px(5));
   }
-  // the flat under the line, then the line, each run between gaps its own path
-  const runs = [];
-  let run = [];
-  for (let i = 0; i < v.s.length; i++) {
-    if (i && v.s[i].t - v.s[i - 1].t > 5 * 60) { if (run.length > 1) runs.push(run); run = []; }
-    run.push(v.s[i]);
-  }
-  if (run.length > 1) runs.push(run);
-  for (const r of runs) {
+  // the plot, clipped to its box
+  g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
+  if (kind === "line") {
+    const col = LINE[token];
     g.beginPath();
-    g.moveTo(X(r[0].t), y1);
-    for (const s of r) g.lineTo(X(s.t), Y(s.p));
-    g.lineTo(X(r[r.length - 1].t), y1);
-    g.closePath();
-    g.fillStyle = UNDER[token]; g.fill();
-  }
-  g.lineWidth = Math.max(1, Math.round(dpr)); g.lineJoin = "round"; g.lineCap = "round";
-  g.strokeStyle = LINE[token];
-  for (const r of runs) {
+    g.moveTo(X(seen[0][0]), y1);
+    for (const c of seen) g.lineTo(X(c[0]), Y(c[4]));
+    g.lineTo(X(seen[seen.length - 1][0]), y1);
+    g.closePath(); g.fillStyle = UNDER[token]; g.fill();
+    g.lineWidth = Math.max(1, Math.round(dpr)); g.lineJoin = "round"; g.lineCap = "round"; g.strokeStyle = col;
     g.beginPath();
-    r.forEach((s, i) => i ? g.lineTo(X(s.t), Y(s.p)) : g.moveTo(X(s.t), Y(s.p)));
+    seen.forEach((c, i) => i ? g.lineTo(X(c[0]), Y(c[4])) : g.moveTo(X(c[0]), Y(c[4])));
     g.stroke();
-  }
-  // the pointer's minute: a hair, a dot, and the price and time at the top
-  if (hover >= 0 && hover < v.s.length) {
-    const s = v.s[hover], x = Math.round(X(s.t)) + 0.5;
-    g.strokeStyle = "#999"; g.lineWidth = Math.max(1, px(1));
-    g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
-    g.fillStyle = LINE[token];
-    g.beginPath(); g.arc(X(s.t), Y(s.p), px(3), 0, 7); g.fill();
-    label(g, x, y0, clock(s.t * 1000) + "  " + usd(s.p), { dpr, below: true, w: W });
-  }
-  // the moves: a dot each, red down and green up, the change beside it;
-  // the selected one ringed black, its title in a box
-  const dots = [];
-  for (const m of v.moves) {
-    const s = nearest(v.s, m.ms / 1000);
-    if (!s) continue;
-    const x = X(s.t), y = Y(m.price > 0 && Math.abs(m.price / s.p - 1) < 0.05 ? m.price : s.p);
-    const col = m.change < 0 ? "#b01c1c" : "#1f7a3a";
-    if (isSel(m)) {
-      g.fillStyle = "#000"; g.beginPath(); g.arc(x, y, px(6), 0, 7); g.fill();
+  } else {
+    const body = Math.max(1, cwD - Math.max(1, Math.round(cwD * 0.3)));
+    const wick = Math.max(1, px(1));
+    for (const c of seen) {
+      const up = c[4] >= c[1], col = up ? "#1f7a3a" : "#b01c1c";
+      const xc = Math.round(X(c[0]));
+      const yo = Math.round(Y(c[1])), yc = Math.round(Y(c[4])), yh = Math.round(Y(c[2])), yl = Math.round(Y(c[3]));
+      g.fillStyle = col;
+      g.fillRect(xc - Math.floor(wick / 2), yh, wick, Math.max(1, yl - yh));
+      const top = Math.min(yo, yc), hgt = Math.max(1, Math.abs(yc - yo));
+      g.fillRect(xc - Math.floor(body / 2), top, body, hgt);
     }
+  }
+  // the pointer's candle: a cross, the price at the axis, the time under it
+  let legendC = seen[seen.length - 1];
+  const dots = [];
+  if (hover) {
+    const hx = hover.x * dpr, hy = hover.y * dpr;
+    const tb = Math.round((right - (x1 - hx - cwD / 2) / cwD * st) / st) * st;
+    const c = series.map.get(tb);
+    if (c) legendC = c;
+    const x = Math.round(X(tb)) + 0.5, y = Math.round(hy) + 0.5;
+    g.strokeStyle = "#999"; g.setLineDash([px(3), px(3)]); g.lineWidth = Math.max(1, px(1));
+    g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
+    if (hy >= y0 && hy <= y1) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); }
+    g.setLineDash([]);
+    g.restore(); // the labels sit on the axes, outside the clip
+    if (hy >= y0 && hy <= y1) {
+      const p = ymin + (y1 - hy) / (y1 - y0) * (ymax - ymin);
+      tag(g, x1 + px(2), y, plain(p, dec), { dpr, side: "right", w: W });
+    }
+    tag(g, x, y1 + px(2), st >= 86400 ? day(tb * 1000) : dayClock(tb * 1000), { dpr, side: "below", w: W });
+    g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
+  }
+  // the moves: a dot on the candle holding each, its change beside it;
+  // the selected one ringed black with its words in a box
+  const moves = data ? data.moves.map(m => ({ ...m, ms: new Date(m.t).getTime() })) : [];
+  for (const m of moves) {
+    const tb = Math.floor(m.ms / 1000 / st) * st, c = series.map.get(tb);
+    if (!c || tb < leftT || tb > right) continue;
+    const price = m.price > 0 ? Math.min(c[2], Math.max(c[3], m.price)) : c[4];
+    const x = X(tb), y = Y(price), col = m.change < 0 ? "#b01c1c" : "#1f7a3a";
+    if (isSel(m)) { g.fillStyle = "#000"; g.beginPath(); g.arc(x, y, px(6), 0, 7); g.fill(); }
     g.fillStyle = "#fff"; g.beginPath(); g.arc(x, y, px(5), 0, 7); g.fill();
     g.fillStyle = col; g.beginPath(); g.arc(x, y, px(3.5), 0, 7); g.fill();
     dots.push({ m, x: x / dpr, y: y / dpr });
@@ -339,12 +416,57 @@ function draw() {
       g.fillText(pct(m.change), x, above ? y - px(7) : y + px(7));
     }
   }
+  g.restore();
   cv._dots = dots;
+  // the legend: the token, the timeframe, and the candle's open, high,
+  // low and close in its colour
+  if (legendC) {
+    const up = legendC[4] >= legendC[1];
+    g.font = `${px(10)}px ${FONT}`; g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#555";
+    const head = token + " · " + tf + "  ";
+    g.fillText(head, x0 + px(6), px(5));
+    const hw = g.measureText(head).width;
+    g.fillStyle = up ? "#1f7a3a" : "#b01c1c";
+    g.fillText(`O ${plain(legendC[1], dec)}  H ${plain(legendC[2], dec)}  L ${plain(legendC[3], dec)}  C ${plain(legendC[4], dec)}`, x0 + px(6) + hw, px(5));
+  }
+  $("#now").disabled = following();
+  needMore(leftT);
+}
+// the past: when the view nears the oldest candle loaded, the page before
+// it is asked for, until Coinbase answers with none
+function needMore(leftT) {
+  if (series.exhausted || series.loading || !series.oldest) return;
+  if (leftT - 20 * step() < series.oldest) loadPage(series.oldest - step());
 }
 // a nice step for the price grid: 1, 2 or 5 times a power of ten
 function niceStep(raw) {
   const p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
   return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
+}
+// the time axis: a tick every so many seconds, the spacing the first that
+// keeps labels minPx apart; under a day the ticks count from each local
+// midnight (so a clock change never drifts them), from a day on they are
+// midnights, Mondays, or the first of each month
+function timeTicks(leftT, right, st, cwD, minPx) {
+  const IV = [60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 172800, 604800, 2592000];
+  const iv = IV.find(v => v / st * cwD >= minPx) || 2592000;
+  const out = [];
+  const d = new Date(leftT * 1000); d.setHours(0, 0, 0, 0);
+  for (let k = 0; k < 40000; k++) {
+    const m0 = new Date(d.getFullYear(), d.getMonth(), d.getDate() + k), m1 = new Date(d.getFullYear(), d.getMonth(), d.getDate() + k + 1);
+    const a = m0.getTime() / 1000, b = m1.getTime() / 1000;
+    if (a > right) break;
+    if (iv < 86400) {
+      for (let t = a; t < b; t += iv) if (t >= leftT && t <= right) out.push([t, t === a ? day(t * 1000) : clock(t * 1000)]);
+    } else if (iv === 86400 || iv === 172800) {
+      if (a >= leftT && (iv === 86400 || k % 2 === 0)) out.push([a, m0.getDate() === 1 ? month(a * 1000) : day(a * 1000)]);
+    } else if (iv === 604800) {
+      if (a >= leftT && m0.getDay() === 1) out.push([a, m0.getDate() <= 7 ? month(a * 1000) : day(a * 1000)]);
+    } else if (a >= leftT && m0.getDate() === 1) {
+      out.push([a, m0.getMonth() === 0 ? String(m0.getFullYear()) : month(a * 1000)]);
+    }
+  }
+  return out;
 }
 // a small white box of words with a black line round it, kept inside the
 // chart's width; above its anchor, or below it
@@ -361,38 +483,47 @@ function label(g, x, y, text, o) {
   g.fillStyle = o.col || "#000"; g.textAlign = "left"; g.textBaseline = "middle";
   g.fillText(text, bx + px(5), by + bh / 2);
 }
-// the sample nearest a time, within three minutes
-function nearest(xs, t) {
-  let lo = 0, hi = xs.length - 1;
-  while (lo < hi) { const mid = (lo + hi) >> 1; if (xs[mid].t < t) lo = mid + 1; else hi = mid; }
-  const c = [xs[lo], xs[lo - 1]].filter(Boolean).sort((a, b) => Math.abs(a.t - t) - Math.abs(b.t - t))[0];
-  return c && Math.abs(c.t - t) <= 180 ? c : null;
+// an axis tag: the pointer's price on the right axis, its time under the plot
+function tag(g, x, y, text, o) {
+  const px = n => Math.round(n * o.dpr);
+  g.font = `${px(10)}px ${FONT}`;
+  const tw = Math.ceil(g.measureText(text).width), bw = tw + px(6), bh = px(14);
+  let bx = o.side === "right" ? Math.round(x) : Math.round(x - bw / 2), by = o.side === "right" ? Math.round(y - bh / 2) : Math.round(y);
+  bx = Math.max(0, Math.min(o.w - bw, bx));
+  g.fillStyle = "#262626"; g.fillRect(bx, by, bw, bh);
+  g.fillStyle = "#fff"; g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillText(text, bx + px(3), by + bh / 2);
 }
+const isSel = m => selAt > 0 && Math.abs(m.ms - selAt) < 90 * 1000;
 
 // ---- the head, the list, the status line ----
+// the day: the price now, its change over 24 hours, the high and the low,
+// from the daemon's own minute samples; and the moves of two days
 function paint() {
-  const v = view();
   $("#coin").innerHTML = COINS[token].replace('width="16" height="16"', 'width="32" height="32"');
   const price = $("#price"), change = $("#change"), sub = $("#sub");
-  if (!v || !v.s.length) {
+  const xs = data && data.samples.length ? data.samples : null;
+  if (!xs) {
     price.textContent = "—"; change.textContent = "—"; change.className = "none"; sub.textContent = "";
   } else {
-    const first = v.s[0], last = v.s[v.s.length - 1];
+    const last = xs[xs.length - 1], t0 = last.t - 86400;
+    let i = 0; while (i < xs.length - 1 && xs[i].t < t0) i++;
+    const first = xs[i];
     usdDOM(price, last.p);
     const c = (last.p / first.p - 1) * 100;
-    change.textContent = pct(c) + " · " + hours + " h";
+    change.textContent = pct(c) + " · 24 h";
     change.className = c < 0 ? "down" : "up";
-    let lo = v.s[0], hi = v.s[0];
-    for (const s of v.s) { if (s.p < lo.p) lo = s; if (s.p > hi.p) hi = s; }
+    let lo = first, hi = first;
+    for (let k = i; k < xs.length; k++) { const s = xs[k]; if (s.p < lo.p) lo = s; if (s.p > hi.p) hi = s; }
     sub.textContent = `High ${usd(hi.p)} at ${clock(hi.t * 1000)} · Low ${usd(lo.p)} at ${clock(lo.t * 1000)}`;
   }
-  // the moves of the range, newest first, six at most
+  // the moves of two days, newest first, six at most
   const list = $("#moves");
   list.replaceChildren();
-  const moves = v ? v.moves.slice().sort((a, b) => b.ms - a.ms) : [];
+  const moves = data ? data.moves.map(m => ({ ...m, ms: new Date(m.t).getTime() })).sort((a, b) => b.ms - a.ms) : [];
   if (!moves.length) {
     const d = document.createElement("div"); d.className = "none";
-    d.textContent = v ? `No big move of ${token} in the last ${hours} hours.` : "";
+    d.textContent = data ? `No big move of ${token} in the last two days.` : "";
     list.append(d);
   }
   for (const m of moves.slice(0, 6)) {
@@ -401,7 +532,7 @@ function paint() {
     const ti = document.createElement("span"); ti.className = "ti " + (m.change < 0 ? "down" : "up"); ti.textContent = pct(m.change) + " in " + (m.window === "1h" ? "an hour" : "24 hours");
     const b = document.createElement("span"); b.className = "b"; b.textContent = (m.body || "") + (m.held_back ? " · held back" : "");
     row.append(t, ti, b);
-    row.addEventListener("click", () => { selAt = isSel(m) ? 0 : m.ms; paint(); draw(); });
+    row.addEventListener("click", () => { selAt = isSel(m) ? 0 : m.ms; if (selAt) showMove(m.ms); paint(); draw(); });
     list.append(row);
   }
   if (moves.length > 6) {
@@ -409,26 +540,36 @@ function paint() {
     d.textContent = `and ${moves.length - 6} more`;
     list.append(d);
   }
-  // the status line: the source and its last answer, the samples shown
-  const st = data && data.status;
-  if (!data) $("#st-left").textContent = "Checking…";
-  else if (st && st.last_err && (!st.last_ok || Date.now() - new Date(st.last_ok).getTime() > 5 * 60 * 1000)) $("#st-left").textContent = "Coinbase did not answer: " + st.last_err;
-  else $("#st-left").textContent = "Coinbase spot, one sample a minute" + (st && st.last_ok ? " · updated " + clock(new Date(st.last_ok).getTime()) : "");
-  $("#st-right").textContent = v ? `${v.s.length.toLocaleString()} minutes` : "";
-  $("#empty").textContent = !data ? "" : data.samples.length < 2 ? "The daemon has no samples of " + token + " yet. It takes one a minute." : "";
   document.title = NAMES[token] + " — " + token;
+  status();
+}
+// the view moves to show a move, when the move is off it
+function showMove(ms) {
+  const st = step(), t = Math.floor(ms / 1000 / st) * st;
+  const box = $("#field"), dpr = window.devicePixelRatio || 1;
+  const slots = Math.floor((box.clientWidth - 64) / cw);
+  const right = viewRight();
+  if (t < right - slots * st + 2 * st || t > right) rightT = Math.min(t + Math.floor(slots * 0.6) * st, series.newest + 2 * st);
+  if (rightT !== null && rightT >= series.newest + 2 * st) rightT = null;
+}
+function status() {
+  const st = data && data.status;
+  if (series.err) $("#st-left").textContent = "The daemon did not answer: " + series.err;
+  else if (!series.fetched) $("#st-left").textContent = "Checking…";
+  else if (st && st.last_err && (!st.last_ok || Date.now() - new Date(st.last_ok).getTime() > 5 * 60 * 1000)) $("#st-left").textContent = "Coinbase did not answer: " + st.last_err;
+  else $("#st-left").textContent = "Coinbase candles · " + tf + " · updated " + clock(series.fetched) + (series.exhausted ? " · the beginning" : "");
+  // the span in view
+  const box = $("#field"), slots = Math.floor((box.clientWidth - 64) / cw), right = Math.min(viewRight(), series.newest || viewRight());
+  const left = right - slots * step();
+  $("#st-right").textContent = series.newest ? (step() >= 86400 || right - left > 2 * 86400 ? dayYear(left * 1000) + " – " + dayYear(right * 1000) : dayClock(left * 1000) + " – " + clock(right * 1000)) : "";
 }
 
-async function load() {
+async function loadDay() {
   try {
     data = await api("/v1/prices/history?token=" + token);
-    loadT = Date.now();
+    dataT = Date.now();
   } catch (e) {
     data = data && data.token === token ? data : null;
-    $("#st-left").textContent = "The daemon did not answer: " + e.message;
-    $("#st-right").textContent = "";
-    draw();
-    return;
   }
   paint(); draw();
 }
@@ -436,8 +577,20 @@ function setToken(t) {
   token = t;
   try { localStorage.setItem("exe_solana_token", t); } catch (e) {}
   for (const b of document.querySelectorAll("#tokens button")) b.classList.toggle("on", b.dataset.t === t);
-  data = null; hover = -1;
-  paint(); draw(); load();
+  data = null; resetSeries();
+  paint(); draw(); loadDay(); loadPage(0);
+}
+function setTF(f) {
+  tf = f;
+  try { localStorage.setItem("exe_solana_tf", f); } catch (e) {}
+  for (const b of document.querySelectorAll("#tfs button")) b.classList.toggle("on", b.dataset.f === f);
+  resetSeries(); draw(); status(); loadPage(0);
+}
+function setKind(k) {
+  kind = k;
+  try { localStorage.setItem("exe_solana_kind", k); } catch (e) {}
+  for (const b of document.querySelectorAll("#kinds button")) b.classList.toggle("on", b.dataset.k === k);
+  draw();
 }
 
 // ---- the controls ----
@@ -448,34 +601,81 @@ for (const t of TOKENS) {
   b.addEventListener("click", () => { if (t !== token) { selAt = 0; setToken(t); } });
   $("#tokens").append(b);
 }
-for (const b of document.querySelectorAll("#range button")) b.addEventListener("click", () => {
-  hours = +b.dataset.h;
-  for (const o of document.querySelectorAll("#range button")) o.classList.toggle("on", o === b);
-  hover = -1; paint(); draw();
-});
-// the pointer over the line: its minute; a press near a dot selects the move
-const field = $("#field");
-function sampleAt(ev) {
-  const v = view(); if (!v) return -1;
-  const r = field.getBoundingClientRect(), x = ev.clientX - r.left;
-  const w = field.clientWidth, L = 8, R = 54;
-  const t = v.t0 + (x - L) / (w - L - R) * (v.t1 - v.t0);
-  if (t < v.t0 - 60 || t > v.t1 + 60) return -1;
-  let lo = 0, hi = v.s.length - 1;
-  while (lo < hi) { const mid = (lo + hi) >> 1; if (v.s[mid].t < t) lo = mid + 1; else hi = mid; }
-  if (lo > 0 && Math.abs(v.s[lo - 1].t - t) < Math.abs(v.s[lo].t - t)) lo--;
-  return lo;
+for (const [f] of TFS) {
+  const b = document.createElement("button");
+  b.className = "ghost" + (f === tf ? " on" : ""); b.dataset.f = f; b.textContent = f;
+  b.addEventListener("click", () => { if (f !== tf) setTF(f); });
+  $("#tfs").append(b);
 }
-field.addEventListener("pointermove", ev => { const i = sampleAt(ev); if (i !== hover) { hover = i; draw(); } });
-field.addEventListener("pointerleave", () => { if (hover >= 0) { hover = -1; draw(); } });
+for (const b of document.querySelectorAll("#kinds button")) {
+  b.classList.toggle("on", b.dataset.k === kind);
+  b.addEventListener("click", () => { if (b.dataset.k !== kind) setKind(b.dataset.k); });
+}
+$("#now").addEventListener("click", () => { rightT = null; draw(); status(); });
+
+// the chart takes the pointer: a drag pans the view through time, a press
+// on a dot selects its move, the wheel changes a candle's width about the
+// pointer, and rest shows the cross
+const field = $("#field");
 field.addEventListener("pointerdown", ev => {
-  const r = field.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
-  const dots = $("#cv")._dots || [];
-  const hit = dots.find(d => Math.hypot(d.x - x, d.y - y) <= 9);
-  if (hit) { selAt = isSel(hit.m) ? 0 : hit.m.ms; paint(); draw(); }
-  else if (ev.pointerType === "touch") { hover = sampleAt(ev); draw(); }
+  if (ev.button !== undefined && ev.button !== 0) return;
+  const r = field.getBoundingClientRect();
+  drag = { x: ev.clientX, y: ev.clientY, right: viewRight(), moved: false, id: ev.pointerId };
+  field.setPointerCapture(ev.pointerId);
+  hover = { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  draw();
 });
-new ResizeObserver(() => draw()).observe(field);
+field.addEventListener("pointermove", ev => {
+  const r = field.getBoundingClientRect();
+  if (drag) {
+    const dx = ev.clientX - drag.x;
+    if (Math.abs(dx) > 3 || Math.abs(ev.clientY - drag.y) > 3) drag.moved = true;
+    if (drag.moved) {
+      const st = step(), slots = Math.floor((field.clientWidth - 64) / cw);
+      let right = drag.right - dx / cw * st;
+      // the newest candle never leaves the view, nor does the oldest
+      // Coinbase has, once it is known
+      right = Math.min(right, series.newest + (slots - 3) * st);
+      if (series.exhausted && series.oldest) right = Math.max(right, series.oldest + Math.min(slots, 5) * st);
+      rightT = right;
+      hover = null;
+      draw(); status();
+      return;
+    }
+  }
+  hover = { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  draw();
+});
+function dragEnd(ev) {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (!d.moved) {
+    const r = field.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    const hit = ($("#cv")._dots || []).find(p => Math.hypot(p.x - x, p.y - y) <= 9);
+    if (hit) { selAt = isSel(hit.m) ? 0 : hit.m.ms; paint(); }
+  } else if (rightT !== null && rightT >= series.newest + 1.5 * step()) rightT = null; // back at the newest: follow it
+  if (ev.pointerType === "touch") hover = null;
+  draw(); status();
+}
+field.addEventListener("pointerup", dragEnd);
+field.addEventListener("pointercancel", dragEnd);
+field.addEventListener("pointerleave", () => { if (!drag && hover) { hover = null; draw(); } });
+field.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const r = field.getBoundingClientRect(), x = ev.clientX - r.left;
+  const st = step(), plotRight = field.clientWidth - 58;
+  const was = cw;
+  cw = Math.max(2, Math.min(30, cw * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  if (cw === was) return;
+  // the time under the pointer stays under it
+  const right = viewRight(), tAt = right - (plotRight - x) / was * st;
+  rightT = tAt + (plotRight - x) / cw * st;
+  const slots = Math.floor((field.clientWidth - 64) / cw);
+  rightT = Math.min(rightT, series.newest + (slots - 3) * st);
+  if (rightT >= series.newest + 1.5 * st) rightT = null;
+  draw(); status();
+}, { passive: false });
+new ResizeObserver(() => { draw(); status(); }).observe(field);
 matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener("change", draw);
 
 // ---- desktop window plumbing (same bridge as the Analytics app) ----
@@ -505,19 +705,22 @@ window.addEventListener("message", e => {
   if (e.data.exe === "open") {
     const t = String(e.data.coin || "").toUpperCase();
     selAt = +e.data.at || 0;
-    if (TOKENS.includes(t) && t !== token) setToken(t); else { paint(); draw(); if (Date.now() - loadT > 30 * 1000) load(); }
+    if (TOKENS.includes(t) && t !== token) setToken(t);
+    else { if (selAt) showMove(selAt); paint(); draw(); if (Date.now() - dataT > 30 * 1000) loadDay(); }
   } else if (e.data.exe === "hide") paused = true;
-  else if (e.data.exe === "show") { paused = false; if (Date.now() - loadT > 30 * 1000) load(); }
+  else if (e.data.exe === "show") { paused = false; if (Date.now() - dataT > 30 * 1000) { loadDay(); loadPage(0); } }
 });
-// a sample a minute: the window asks just past each whole minute, as the
-// daemon samples just past it
+// the newest page again every half minute (a minute's candle changes as
+// it fills), the day's samples just past each whole minute
 function tick() {
-  if (!paused && !document.hidden) load();
-  const ms = 60 * 1000 - (Date.now() % (60 * 1000)) + 8 * 1000;
-  setTimeout(tick, ms);
+  if (!paused && !document.hidden) { loadPage(0); if (Date.now() - dataT > 55 * 1000) loadDay(); }
+  setTimeout(tick, 30 * 1000);
 }
 paint();
-load().then(() => { const ms = 60 * 1000 - (Date.now() % (60 * 1000)) + 8 * 1000; setTimeout(tick, ms); });
+resetSeries();
+loadDay();
+loadPage(0).then(() => { if (selAt) { showMove(selAt); draw(); status(); } });
+setTimeout(tick, 30 * 1000);
 </script>
 </body>
 </html>
