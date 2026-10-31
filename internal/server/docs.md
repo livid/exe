@@ -4932,8 +4932,13 @@ dot, red down and green up, with its change beside it.
   samples.
 - **The chart's row**, at its top left: **1m**, **5m**, **15m**, **1h**,
   **4h** and **1d** set what a candle covers, **Line** and **Candles**
-  set how the chart is drawn, and **Now** brings the newest candle back
-  after you dragged into the past.
+  set how the chart is drawn, **Vol** and **RSI** show or hide the two
+  panes under the price, and **Now** brings the newest candle back after
+  you dragged into the past.
+- **Under the price**, as a trading chart stacks them: a pane of volume
+  bars, each in its candle's colour, the busiest candle in view setting
+  the scale; and a pane of RSI over 14 candles, Wilder's way, with its 30
+  and 70 lines. The legend of each reads the candle under the pointer.
 - **Drag the chart** to the right to see older candles: the app fetches
   further pages as you go, back to the pair's first day on Coinbase.
   Turn the mouse wheel over it to make the candles wider or narrower.

@@ -46,8 +46,9 @@ button.ghost:disabled { color: #999; border-color: #999;
 .seg button:last-child { border-radius: 0 3px 3px 0; border-right-width: 1px; }
 /* a token's button wears its coin, the Control Strip's own */
 #tokens button svg { width: 16px; height: 16px; vertical-align: -4px; margin-right: 4px; }
-/* the chart's own row, at its top left: the timeframe, the kind, and Now
-   when the chart was dragged back */
+/* the chart's own row, at its top left: the timeframe, the kind, the
+   panes under the price (volume, RSI), and Now when the chart was dragged
+   back */
 #tools { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0 12px 6px; align-items: center; }
 #tools .seg button { padding: 2px 7px; font-variant-numeric: tabular-nums; }
 #now { margin-left: auto; }
@@ -128,6 +129,10 @@ body.mobile #status { padding-right: 8px; }
   <span class="seg" id="kinds">
     <button class="ghost" data-k="line">Line</button>
     <button class="ghost" data-k="candles">Candles</button>
+  </span>
+  <span class="seg" id="panes">
+    <button class="ghost" data-p="vol">Vol</button>
+    <button class="ghost" data-p="rsi">RSI</button>
   </span>
   <button class="ghost" id="now" disabled>Now</button>
 </div>
@@ -210,18 +215,20 @@ const STEP = Object.fromEntries(TFS);
 // move selected (a notice's or the menu's, by the move's time), the day's
 // samples and moves, the candles loaded, and the view over them
 let token = TOKENS.includes((Q.get("coin") || "").toUpperCase()) ? Q.get("coin").toUpperCase() : "SOL";
-let tf = "1h", kind = "candles";
+let tf = "1h", kind = "candles", showVol = true, showRSI = true;
 let selAt = +Q.get("at") || 0;
 let data = null, dataT = 0, paused = false;
 try {
   const t = localStorage.getItem("exe_solana_token"); if (!Q.get("coin") && TOKENS.includes(t)) token = t;
   const f = localStorage.getItem("exe_solana_tf"); if (STEP[f]) tf = f;
   const k = localStorage.getItem("exe_solana_kind"); if (k === "line" || k === "candles") kind = k;
+  if (localStorage.getItem("exe_solana_vol") === "0") showVol = false;
+  if (localStorage.getItem("exe_solana_rsi") === "0") showRSI = false;
 } catch (e) {}
 // the candles of one token and timeframe, by their time; oldest and
 // newest; whether Coinbase has run out of past (an empty page), whether a
 // page is on its way
-let series = { key: "", map: new Map(), times: [], oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+let series = { key: "", map: new Map(), times: [], rsi: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
 // the view: cw is a candle's slot in CSS px (the wheel changes it); rightT
 // is the time at the plot's right edge, or null to follow the newest
 // candle with two empty slots after it, as a trading chart does
@@ -260,7 +267,7 @@ const month = t => new Date(t).toLocaleDateString(undefined, { month: "short" })
 // ---- the candles ----
 const step = () => STEP[tf];
 function resetSeries() {
-  series = { key: token + "|" + tf, map: new Map(), times: [], oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+  series = { key: token + "|" + tf, map: new Map(), times: [], rsi: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
   rightT = null; hover = null;
 }
 // one page: the newest (end 0) or the one ending at end; a page already
@@ -285,9 +292,37 @@ async function loadPage(end) {
   series.times = ts;
   series.oldest = ts.length ? ts[0] : 0;
   series.newest = ts.length ? ts[ts.length - 1] : 0;
+  computeRSI();
   if (!end && !r.candles.length) series.exhausted = true;
   draw(); status();
 }
+// RSI over 14 candles, Wilder's way, as TradingView's RSI is: the first
+// average gain and loss are plain means of the first 14 changes, then
+// each smooths the last by a fourteenth. Computed over the whole series
+// loaded, a quiet slot counted as a flat candle, once per page that
+// lands; a value stands from the fifteenth candle on.
+const RSI_N = 14;
+function computeRSI() {
+  const st = step(), ts = series.times, out = new Map();
+  if (ts.length >= 2) {
+    let prevClose = series.map.get(ts[0])[4], gains = 0, losses = 0, n = 0, avgG = 0, avgL = 0;
+    for (let t = ts[0] + st; t <= series.newest; t += st) {
+      const c = series.map.get(t), close = c ? c[4] : prevClose;
+      const d = close - prevClose, gain = d > 0 ? d : 0, loss = d < 0 ? -d : 0;
+      n++;
+      if (n < RSI_N) { gains += gain; losses += loss; }
+      else {
+        if (n === RSI_N) { avgG = (gains + gain) / RSI_N; avgL = (losses + loss) / RSI_N; }
+        else { avgG = (avgG * (RSI_N - 1) + gain) / RSI_N; avgL = (avgL * (RSI_N - 1) + loss) / RSI_N; }
+        out.set(t, avgL === 0 ? 100 : 100 - 100 / (1 + avgG / avgL));
+      }
+      prevClose = close;
+    }
+  }
+  series.rsi = out;
+}
+// a volume, short: 1.23M, 45.6K
+const vol = v => v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "K" : v.toFixed(0);
 // the newest candle before a time, or null: the one a quiet slot's flat
 // candle takes its price from
 function lastBefore(t) {
@@ -304,10 +339,13 @@ const following = () => rightT === null;
 // ---- draw ----
 // Drawn on a canvas in device pixels, so it stays crisp at any scale. Each
 // candle has a slot cw wide; the price axis stands at the right, the
-// time axis under the plot, the legend at the top left reads the candle
-// under the pointer (the newest, when none is). A big move is a dot on
-// its candle, red down and green up, its change beside it; the selected
-// one wears a black ring and its words.
+// time axis under the panes, the legend at the top left reads the candle
+// under the pointer (the newest, when none is). Under the price, as a
+// trading chart stacks them, a pane of volume bars in the candle's colour
+// and a pane of RSI with its 30 and 70 lines, each with its own scale and
+// legend, all three sharing the time. A big move is a dot on its candle,
+// red down and green up, its change beside it; the selected one wears a
+// black ring and its words.
 function draw() {
   const cv = $("#cv"), box = $("#field");
   const w = box.clientWidth, h = box.clientHeight;
@@ -319,7 +357,14 @@ function draw() {
   const px = n => Math.round(n * dpr);
   const st = step(), cwD = Math.max(2, Math.round(cw * dpr));
   const L = px(6), R = px(58), T = px(22), B = px(20);
-  const x0 = L, x1 = W - R, y0 = T, y1 = H - B;
+  const x0 = L, x1 = W - R, yTop = T, yBot = H - B;
+  // the panes: volume and RSI take their share of the height, the price the rest
+  const total = yBot - yTop;
+  const volH = showVol ? Math.max(px(44), Math.round(total * 0.16)) : 0;
+  const rsiH = showRSI ? Math.max(px(56), Math.round(total * 0.22)) : 0;
+  const y0 = yTop, y1 = yBot - volH - rsiH;
+  const v0 = y1, v1 = v0 + volH, r0 = v1, r1 = yBot;
+  const lg = px(14); // a lower pane's legend row, at its top
   const right = viewRight(), slots = Math.floor((x1 - x0) / cwD);
   const leftT = right - slots * st;
   const X = t => x1 - (right - t) / st * cwD - cwD / 2; // a candle's centre
@@ -350,25 +395,35 @@ function draw() {
   const Y = p => y1 - (p - ymin) / (ymax - ymin) * (y1 - y0);
   const dec = Math.max(-Math.floor(Math.log10(pstep)), decFor(hi));
   const small = `${px(10)}px ${FONT}`;
-  g.lineWidth = Math.max(1, px(1));
+  const hair = Math.max(1, px(1));
+  const body = Math.max(1, cwD - Math.max(1, Math.round(cwD * 0.3)));
+  g.lineWidth = hair;
   g.font = small; g.fillStyle = "#777";
   // the price grid and axis
   g.textBaseline = "middle"; g.textAlign = "left"; g.strokeStyle = "#e4e4e4";
   for (let p = ymin; p <= ymax + pstep / 2; p += pstep) {
     const y = Math.round(Y(p)) + 0.5;
+    if (y < y0 || y > y1) continue;
     g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke();
     g.fillText(plain(p, dec), x1 + px(5), y);
   }
-  // the time grid and axis: ticks far enough apart for their labels,
-  // on the clock's own boundaries in the viewer's zone
+  // the time grid, through every pane, and the axis under them: ticks far
+  // enough apart for their labels, on the clock's own boundaries in the
+  // viewer's zone
   g.textAlign = "center"; g.textBaseline = "top";
   for (const [t, text] of timeTicks(leftT, right, st, cwD, px(64))) {
     const x = Math.round(X(t)) + 0.5;
     if (x < x0 || x > x1) continue;
-    g.strokeStyle = "#e4e4e4"; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
-    g.fillStyle = "#777"; g.fillText(text, x, y1 + px(5));
+    g.strokeStyle = "#e4e4e4"; g.beginPath(); g.moveTo(x, yTop); g.lineTo(x, yBot); g.stroke();
+    g.fillStyle = "#777"; g.fillText(text, x, yBot + px(5));
   }
-  // the plot, clipped to its box
+  // a line parts the panes
+  g.strokeStyle = "#bbb";
+  for (const y of [showVol || showRSI ? y1 : -1, showVol && showRSI ? v1 : -1]) {
+    if (y < 0) continue;
+    g.beginPath(); g.moveTo(x0, Math.round(y) + 0.5); g.lineTo(W, Math.round(y) + 0.5); g.stroke();
+  }
+  // the price, clipped to its pane
   g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
   if (kind === "line") {
     const col = LINE[token];
@@ -382,19 +437,64 @@ function draw() {
     seen.forEach((c, i) => i ? g.lineTo(X(c[0]), Y(c[4])) : g.moveTo(X(c[0]), Y(c[4])));
     g.stroke();
   } else {
-    const body = Math.max(1, cwD - Math.max(1, Math.round(cwD * 0.3)));
-    const wick = Math.max(1, px(1));
     for (const c of seen) {
       const up = c[4] >= c[1], col = up ? "#1f7a3a" : "#b01c1c";
       const xc = Math.round(X(c[0]));
       const yo = Math.round(Y(c[1])), yc = Math.round(Y(c[4])), yh = Math.round(Y(c[2])), yl = Math.round(Y(c[3]));
       g.fillStyle = col;
-      g.fillRect(xc - Math.floor(wick / 2), yh, wick, Math.max(wick, yl - yh));
-      const top = Math.min(yo, yc), hgt = Math.max(wick, Math.abs(yc - yo)); // a flat candle is a line a CSS pixel thick
+      g.fillRect(xc - Math.floor(hair / 2), yh, hair, Math.max(hair, yl - yh));
+      const top = Math.min(yo, yc), hgt = Math.max(hair, Math.abs(yc - yo)); // a flat candle is a line a CSS pixel thick
       g.fillRect(xc - Math.floor(body / 2), top, body, hgt);
     }
   }
-  // the pointer's candle: a cross, the price at the axis, the time under it
+  g.restore();
+  // the volume: a bar per candle in the candle's colour, the pane's top
+  // the busiest candle in view; its figure on the axis
+  let vmax = 0;
+  if (showVol) {
+    for (const c of seen) if (c[5] > vmax) vmax = c[5];
+    g.save(); g.beginPath(); g.rect(x0, v0, x1 - x0, v1 - v0); g.clip();
+    for (const c of seen) {
+      if (!(c[5] > 0)) continue;
+      const bh = Math.max(hair, Math.round((c[5] / vmax) * (v1 - v0 - lg - px(2))));
+      g.fillStyle = c[4] >= c[1] ? "rgba(31,122,58,.5)" : "rgba(176,28,28,.5)";
+      g.fillRect(Math.round(X(c[0])) - Math.floor(body / 2), v1 - bh, body, bh);
+    }
+    g.restore();
+    g.font = small; g.fillStyle = "#777"; g.textAlign = "left"; g.textBaseline = "top";
+    if (vmax > 0) g.fillText(vol(vmax), x1 + px(5), v0 + lg);
+  }
+  // RSI: the 30 and 70 lines with a faint band between, the line in
+  // TradingView's purple, its scale 0 to 100
+  const RSI_COL = "#7e57c2";
+  const RY = v => r1 - px(2) - (v / 100) * (r1 - r0 - lg - px(4));
+  if (showRSI) {
+    g.fillStyle = "rgba(126,87,194,.08)"; g.fillRect(x0, Math.round(RY(70)), x1 - x0, Math.round(RY(30)) - Math.round(RY(70)));
+    g.strokeStyle = "#aaa"; g.setLineDash([px(3), px(3)]); g.lineWidth = hair;
+    g.font = small; g.fillStyle = "#777"; g.textAlign = "left"; g.textBaseline = "middle";
+    for (const v of [70, 30]) {
+      const y = Math.round(RY(v)) + 0.5;
+      g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke();
+      g.fillText(String(v), x1 + px(5), y);
+    }
+    g.setLineDash([]);
+    g.save(); g.beginPath(); g.rect(x0, r0, x1 - x0, r1 - r0); g.clip();
+    g.strokeStyle = RSI_COL; g.lineWidth = Math.max(1, Math.round(dpr)); g.lineJoin = "round";
+    g.beginPath();
+    let pen = false;
+    for (const c of seen) {
+      const v = series.rsi.get(c[0]);
+      if (v === undefined) { pen = false; continue; }
+      if (pen) g.lineTo(X(c[0]), RY(v)); else g.moveTo(X(c[0]), RY(v));
+      pen = true;
+    }
+    g.stroke();
+    g.restore();
+    g.lineWidth = hair;
+  }
+  // the pointer's candle: a hair through every pane, a hair across the
+  // pane it is in, the time under the plot, and the figure on the axis:
+  // the price, the volume or the RSI
   let legendC = seen[seen.length - 1];
   const dots = [];
   if (hover) {
@@ -403,20 +503,20 @@ function draw() {
     const c = seenAt.get(tb);
     if (c) legendC = c;
     const x = Math.round(X(tb)) + 0.5, y = Math.round(hy) + 0.5;
-    g.strokeStyle = "#999"; g.setLineDash([px(3), px(3)]); g.lineWidth = Math.max(1, px(1));
-    g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
-    if (hy >= y0 && hy <= y1) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); }
+    g.strokeStyle = "#999"; g.setLineDash([px(3), px(3)]); g.lineWidth = hair;
+    g.beginPath(); g.moveTo(x, yTop); g.lineTo(x, yBot); g.stroke();
+    let figure = null;
+    if (hy >= y0 && hy <= y1) figure = plain(ymin + (y1 - hy) / (y1 - y0) * (ymax - ymin), dec);
+    else if (showVol && hy > v0 + lg && hy <= v1 && vmax > 0) figure = vol((v1 - hy) / (v1 - v0 - lg - px(2)) * vmax);
+    else if (showRSI && hy > r0 + lg && hy <= r1) figure = Math.max(0, Math.min(100, (r1 - px(2) - hy) / (r1 - r0 - lg - px(4)) * 100)).toFixed(1);
+    if (figure !== null) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); }
     g.setLineDash([]);
-    g.restore(); // the labels sit on the axes, outside the clip
-    if (hy >= y0 && hy <= y1) {
-      const p = ymin + (y1 - hy) / (y1 - y0) * (ymax - ymin);
-      tag(g, x1 + px(2), y, plain(p, dec), { dpr, side: "right", w: W });
-    }
-    tag(g, x, y1 + px(2), st >= 86400 ? day(tb * 1000) : dayClock(tb * 1000), { dpr, side: "below", w: W });
-    g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
+    if (figure !== null) tag(g, x1 + px(2), y, figure, { dpr, side: "right", w: W });
+    tag(g, x, yBot + px(2), st >= 86400 ? day(tb * 1000) : dayClock(tb * 1000), { dpr, side: "below", w: W });
   }
   // the moves: a dot on the candle holding each, its change beside it;
   // the selected one ringed black with its words in a box
+  g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
   const moves = data ? data.moves.map(m => ({ ...m, ms: new Date(m.t).getTime() })) : [];
   for (const m of moves) {
     const tb = Math.floor(m.ms / 1000 / st) * st, c = seenAt.get(tb);
@@ -436,16 +536,24 @@ function draw() {
   }
   g.restore();
   cv._dots = dots;
-  // the legend: the token, the timeframe, and the candle's open, high,
-  // low and close in its colour
+  // the legends: the token, the timeframe, and the candle's open, high,
+  // low and close in its colour; the candle's volume; its RSI
   if (legendC) {
-    const up = legendC[4] >= legendC[1];
-    g.font = `${px(10)}px ${FONT}`; g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#555";
+    const up = legendC[4] >= legendC[1], col = up ? "#1f7a3a" : "#b01c1c";
+    g.font = small; g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = "#555";
     const head = token + " · " + tf + "  ";
     g.fillText(head, x0 + px(6), px(5));
-    const hw = g.measureText(head).width;
-    g.fillStyle = up ? "#1f7a3a" : "#b01c1c";
-    g.fillText(`O ${plain(legendC[1], dec)}  H ${plain(legendC[2], dec)}  L ${plain(legendC[3], dec)}  C ${plain(legendC[4], dec)}`, x0 + px(6) + hw, px(5));
+    g.fillStyle = col;
+    g.fillText(`O ${plain(legendC[1], dec)}  H ${plain(legendC[2], dec)}  L ${plain(legendC[3], dec)}  C ${plain(legendC[4], dec)}`, x0 + px(6) + g.measureText(head).width, px(5));
+    if (showVol) {
+      g.fillStyle = "#555"; g.fillText("Vol  ", x0 + px(6), v0 + px(3));
+      g.fillStyle = col; g.fillText(vol(legendC[5]), x0 + px(6) + g.measureText("Vol  ").width, v0 + px(3));
+    }
+    if (showRSI) {
+      const v = series.rsi.get(legendC[0]);
+      g.fillStyle = "#555"; g.fillText("RSI 14  ", x0 + px(6), r0 + px(3));
+      g.fillStyle = RSI_COL; g.fillText(v === undefined ? "—" : v.toFixed(2), x0 + px(6) + g.measureText("RSI 14  ").width, r0 + px(3));
+    }
   }
   $("#now").disabled = following();
   needMore(leftT);
@@ -628,6 +736,16 @@ for (const [f] of TFS) {
 for (const b of document.querySelectorAll("#kinds button")) {
   b.classList.toggle("on", b.dataset.k === kind);
   b.addEventListener("click", () => { if (b.dataset.k !== kind) setKind(b.dataset.k); });
+}
+for (const b of document.querySelectorAll("#panes button")) {
+  const on = () => b.dataset.p === "vol" ? showVol : showRSI;
+  b.classList.toggle("on", on());
+  b.addEventListener("click", () => {
+    if (b.dataset.p === "vol") showVol = !showVol; else showRSI = !showRSI;
+    try { localStorage.setItem("exe_solana_" + b.dataset.p, on() ? "1" : "0"); } catch (e) {}
+    b.classList.toggle("on", on());
+    draw();
+  });
 }
 $("#now").addEventListener("click", () => { rightT = null; draw(); status(); });
 
