@@ -133,6 +133,7 @@ body.mobile #status { padding-right: 8px; }
   <span class="seg" id="panes">
     <button class="ghost" data-p="vol">Vol</button>
     <button class="ghost" data-p="rsi">RSI</button>
+    <button class="ghost" data-p="bb">BB</button>
   </span>
   <button class="ghost" id="now" disabled>Now</button>
 </div>
@@ -215,7 +216,7 @@ const STEP = Object.fromEntries(TFS);
 // move selected (a notice's or the menu's, by the move's time), the day's
 // samples and moves, the candles loaded, and the view over them
 let token = TOKENS.includes((Q.get("coin") || "").toUpperCase()) ? Q.get("coin").toUpperCase() : "SOL";
-let tf = "1h", kind = "candles", showVol = true, showRSI = true;
+let tf = "1h", kind = "candles", showVol = true, showRSI = true, showBB = true;
 let selAt = +Q.get("at") || 0;
 let data = null, dataT = 0, paused = false;
 try {
@@ -224,11 +225,12 @@ try {
   const k = localStorage.getItem("exe_solana_kind"); if (k === "line" || k === "candles") kind = k;
   if (localStorage.getItem("exe_solana_vol") === "0") showVol = false;
   if (localStorage.getItem("exe_solana_rsi") === "0") showRSI = false;
+  if (localStorage.getItem("exe_solana_bb") === "0") showBB = false;
 } catch (e) {}
 // the candles of one token and timeframe, by their time; oldest and
 // newest; whether Coinbase has run out of past (an empty page), whether a
 // page is on its way
-let series = { key: "", map: new Map(), times: [], rsi: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+let series = { key: "", map: new Map(), times: [], rsi: new Map(), bb: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
 // the view: cw is a candle's slot in CSS px (the wheel changes it); rightT
 // is the time at the plot's right edge, or null to follow the newest
 // candle with two empty slots after it, as a trading chart does
@@ -267,7 +269,7 @@ const month = t => new Date(t).toLocaleDateString(undefined, { month: "short" })
 // ---- the candles ----
 const step = () => STEP[tf];
 function resetSeries() {
-  series = { key: token + "|" + tf, map: new Map(), times: [], rsi: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
+  series = { key: token + "|" + tf, map: new Map(), times: [], rsi: new Map(), bb: new Map(), oldest: 0, newest: 0, exhausted: false, loading: false, fetched: 0, err: "" };
   rightT = null; hover = null;
 }
 // one page: the newest (end 0) or the one ending at end; a page already
@@ -292,20 +294,33 @@ async function loadPage(end) {
   series.times = ts;
   series.oldest = ts.length ? ts[0] : 0;
   series.newest = ts.length ? ts[ts.length - 1] : 0;
-  computeRSI();
+  computeIndicators();
   if (!end && !r.candles.length) series.exhausted = true;
   draw(); status();
 }
-// RSI over 14 candles, Wilder's way, as TradingView's RSI is: the first
-// average gain and loss are plain means of the first 14 changes, then
-// each smooths the last by a fourteenth. Computed over the whole series
-// loaded, a quiet slot counted as a flat candle, once per page that
-// lands; a value stands from the fifteenth candle on.
-const RSI_N = 14;
-function computeRSI() {
-  const st = step(), ts = series.times, out = new Map();
-  if (ts.length >= 2) {
+// The indicators, computed over the whole series loaded, a quiet slot
+// counted as a flat candle, once per page that lands. RSI over 14
+// candles, Wilder's way, as TradingView's RSI is: the first average gain
+// and loss are plain means of the first 14 changes, then each smooths
+// the last by a fourteenth; a value stands from the fifteenth candle on.
+// Bollinger Bands as TradingView draws them: the basis a plain mean of
+// the last 20 closes, the bands two standard deviations (of the
+// population) out; they stand from the twentieth candle on.
+const RSI_N = 14, BB_N = 20, BB_K = 2;
+function computeIndicators() {
+  const st = step(), ts = series.times, rsi = new Map(), bb = new Map();
+  if (ts.length >= 1) {
     let prevClose = series.map.get(ts[0])[4], gains = 0, losses = 0, n = 0, avgG = 0, avgL = 0;
+    const win = []; let sum = 0, sumSq = 0;
+    const take = (t, close) => {
+      win.push(close); sum += close; sumSq += close * close;
+      if (win.length > BB_N) { const gone = win.shift(); sum -= gone; sumSq -= gone * gone; }
+      if (win.length === BB_N) {
+        const mean = sum / BB_N, sd = Math.sqrt(Math.max(0, sumSq / BB_N - mean * mean));
+        bb.set(t, [mean, mean + BB_K * sd, mean - BB_K * sd]);
+      }
+    };
+    take(ts[0], prevClose);
     for (let t = ts[0] + st; t <= series.newest; t += st) {
       const c = series.map.get(t), close = c ? c[4] : prevClose;
       const d = close - prevClose, gain = d > 0 ? d : 0, loss = d < 0 ? -d : 0;
@@ -314,12 +329,13 @@ function computeRSI() {
       else {
         if (n === RSI_N) { avgG = (gains + gain) / RSI_N; avgL = (losses + loss) / RSI_N; }
         else { avgG = (avgG * (RSI_N - 1) + gain) / RSI_N; avgL = (avgL * (RSI_N - 1) + loss) / RSI_N; }
-        out.set(t, avgL === 0 ? 100 : 100 - 100 / (1 + avgG / avgL));
+        rsi.set(t, avgL === 0 ? 100 : 100 - 100 / (1 + avgG / avgL));
       }
+      take(t, close);
       prevClose = close;
     }
   }
-  series.rsi = out;
+  series.rsi = rsi; series.bb = bb;
 }
 // a volume, short: 1.23M, 45.6K
 const vol = v => v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "K" : v.toFixed(0);
@@ -356,7 +372,7 @@ function draw() {
   g.clearRect(0, 0, W, H);
   const px = n => Math.round(n * dpr);
   const st = step(), cwD = Math.max(2, Math.round(cw * dpr));
-  const L = px(6), R = px(58), T = px(22), B = px(20);
+  const L = px(6), R = px(58), T = px(showBB ? 34 : 22), B = px(20);
   const x0 = L, x1 = W - R, yTop = T, yBot = H - B;
   // the panes: volume and RSI take their share of the height, the price the rest
   const total = yBot - yTop;
@@ -385,9 +401,11 @@ function draw() {
   $("#empty").textContent = series.err ? "The daemon did not answer: " + series.err
     : series.exhausted && !series.map.size ? "Coinbase has no " + tf + " candles of " + token + "." : "";
   if (!seen.length) { cv._dots = []; needMore(leftT); return; }
-  // the price scale: the view's low and high, padded, on a nice step
+  // the price scale: the view's low and high, the bands within it when
+  // they show, padded, on a nice step
   let lo = Infinity, hi = -Infinity;
   for (const c of seen) { if (c[3] < lo) lo = c[3]; if (c[2] > hi) hi = c[2]; }
+  if (showBB) for (const c of seen) { const b = series.bb.get(c[0]); if (b) { if (b[2] < lo) lo = b[2]; if (b[1] > hi) hi = b[1]; } }
   if (hi === lo) { hi *= 1.001; lo *= 0.999; }
   const pad = (hi - lo) * 0.08;
   const pstep = niceStep((hi - lo + 2 * pad) / 5);
@@ -445,6 +463,26 @@ function draw() {
       g.fillRect(xc - Math.floor(hair / 2), yh, hair, Math.max(hair, yl - yh));
       const top = Math.min(yo, yc), hgt = Math.max(hair, Math.abs(yc - yo)); // a flat candle is a line a CSS pixel thick
       g.fillRect(xc - Math.floor(body / 2), top, body, hgt);
+    }
+  }
+  // the Bollinger Bands over the price: a faint fill between the bands,
+  // the bands and the basis in TradingView's blue
+  const BB_COL = "#2962ff";
+  if (showBB) {
+    const pts = seen.map(c => [X(c[0]), series.bb.get(c[0])]).filter(p => p[1]);
+    if (pts.length > 1) {
+      g.beginPath();
+      pts.forEach(([x, b], i) => i ? g.lineTo(x, Y(b[1])) : g.moveTo(x, Y(b[1])));
+      for (let i = pts.length - 1; i >= 0; i--) g.lineTo(pts[i][0], Y(pts[i][1][2]));
+      g.closePath(); g.fillStyle = "rgba(41,98,255,.07)"; g.fill();
+      g.lineJoin = "round"; g.lineCap = "round";
+      for (const [k, width, alpha] of [[1, 1, .8], [2, 1, .8], [0, 1.4, 1]]) {
+        g.lineWidth = Math.max(1, Math.round(width * dpr)); g.strokeStyle = `rgba(41,98,255,${alpha})`;
+        g.beginPath();
+        pts.forEach(([x, b], i) => i ? g.lineTo(x, Y(b[k])) : g.moveTo(x, Y(b[k])));
+        g.stroke();
+      }
+      g.lineWidth = hair;
     }
   }
   g.restore();
@@ -545,6 +583,11 @@ function draw() {
     g.fillText(head, x0 + px(6), px(5));
     g.fillStyle = col;
     g.fillText(`O ${plain(legendC[1], dec)}  H ${plain(legendC[2], dec)}  L ${plain(legendC[3], dec)}  C ${plain(legendC[4], dec)}`, x0 + px(6) + g.measureText(head).width, px(5));
+    if (showBB) {
+      const b = series.bb.get(legendC[0]), bh = `BB ${BB_N} ${BB_K}  `;
+      g.fillStyle = "#555"; g.fillText(bh, x0 + px(6), px(17));
+      g.fillStyle = BB_COL; g.fillText(b ? `${plain(b[0], dec)}  ${plain(b[1], dec)}  ${plain(b[2], dec)}` : "—", x0 + px(6) + g.measureText(bh).width, px(17));
+    }
     if (showVol) {
       g.fillStyle = "#555"; g.fillText("Vol  ", x0 + px(6), v0 + px(3));
       g.fillStyle = col; g.fillText(vol(legendC[5]), x0 + px(6) + g.measureText("Vol  ").width, v0 + px(3));
@@ -738,10 +781,10 @@ for (const b of document.querySelectorAll("#kinds button")) {
   b.addEventListener("click", () => { if (b.dataset.k !== kind) setKind(b.dataset.k); });
 }
 for (const b of document.querySelectorAll("#panes button")) {
-  const on = () => b.dataset.p === "vol" ? showVol : showRSI;
+  const on = () => b.dataset.p === "vol" ? showVol : b.dataset.p === "rsi" ? showRSI : showBB;
   b.classList.toggle("on", on());
   b.addEventListener("click", () => {
-    if (b.dataset.p === "vol") showVol = !showVol; else showRSI = !showRSI;
+    if (b.dataset.p === "vol") showVol = !showVol; else if (b.dataset.p === "rsi") showRSI = !showRSI; else showBB = !showBB;
     try { localStorage.setItem("exe_solana_" + b.dataset.p, on() ? "1" : "0"); } catch (e) {}
     b.classList.toggle("on", on());
     draw();

@@ -4933,12 +4933,15 @@ dot, red down and green up, with its change beside it.
 - **The chart's row**, at its top left: **1m**, **5m**, **15m**, **1h**,
   **4h** and **1d** set what a candle covers, **Line** and **Candles**
   set how the chart is drawn, **Vol** and **RSI** show or hide the two
-  panes under the price, and **Now** brings the newest candle back after
-  you dragged into the past.
+  panes under the price, **BB** the Bollinger Bands over it, and **Now**
+  brings the newest candle back after you dragged into the past.
 - **Under the price**, as a trading chart stacks them: a pane of volume
   bars, each in its candle's colour, the busiest candle in view setting
   the scale; and a pane of RSI over 14 candles, Wilder's way, with its 30
   and 70 lines. The legend of each reads the candle under the pointer.
+- **Over the price**, Bollinger Bands as TradingView draws them: the
+  basis a mean of the last 20 closes, the bands two standard deviations
+  out, in blue, with their three figures on a second legend line.
 - **Drag the chart** to the right to see older candles: the app fetches
   further pages as you go, back to the pair's first day on Coinbase.
   Turn the mouse wheel over it to make the candles wider or narrower.
