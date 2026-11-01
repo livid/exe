@@ -506,7 +506,7 @@ restyling: `internal/server/ui/index.html` (the desktop),
   5px from the sides, the first line bold. A notice with an `at` starts
   its second line with that time, as Recent Moves writes it, then ` · `.
   A notice is 418px wide at most, 16px from the left, its frame 2px above
-  the Control Strip (26px from the bottom), and notices stack 8px apart
+  the Control Strip (26px from the bottom), and notices stack 2px apart
   upwards; on a phone they
   span the screen inside the 16px gutters. A pressed box keeps its ring
   and bevel; the 6px well inside is a ramp from `#444` at the top left to

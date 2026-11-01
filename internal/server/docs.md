@@ -610,6 +610,7 @@ Tailscale is refused.
 A notice is a toast that waits for you. It shows above the Control Strip
 on every desk and phone that has exe open, and it stays there, through
 reloads and restarts, until you press its close box on any one of them.
+Stacked notices share the same small gap as the space above the Control Strip.
 The collapse box at its lower left folds it to a thin strip on that
 screen; it opens again when its words change. Claude's hub watcher puts
 one up when Claude's login expires or a usage limit stops its turns: it
