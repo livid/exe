@@ -227,6 +227,26 @@ try {
   if (localStorage.getItem("exe_solana_rsi") === "0") showRSI = false;
   if (localStorage.getItem("exe_solana_bb") === "0") showBB = false;
 } catch (e) {}
+// The page's anchor names the token and the timeframe (#coin=SOL&tf=1h),
+// so a bookmark of the app at its own address opens on them. The anchor
+// wins over what this browser chose last; a coin the desktop asks for
+// (?coin=, opening the app on a move) wins over the anchor. The title says
+// the two as well, for the bookmark's name.
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const c = (h.get("coin") || "").toUpperCase(), f = h.get("tf") || "";
+  return { coin: TOKENS.includes(c) ? c : "", tf: STEP[f] ? f : "" };
+}
+function writeAddress() {
+  const h = "#coin=" + token + "&tf=" + tf;
+  if (location.hash !== h) history.replaceState(history.state, "", h);
+  document.title = NAMES[token] + " — " + token + " · " + tf;
+}
+{
+  const h = readHash();
+  if (h.coin && !TOKENS.includes((Q.get("coin") || "").toUpperCase())) token = h.coin;
+  if (h.tf) tf = h.tf;
+}
 // the candles of one token and timeframe, by their time; oldest and
 // newest; whether Coinbase has run out of past (an empty page), whether a
 // page is on its way
@@ -710,7 +730,6 @@ function paint() {
     d.textContent = `and ${moves.length - 6} more`;
     list.append(d);
   }
-  document.title = NAMES[token] + " — " + token;
   status();
 }
 // the view moves to show a move, when the move is off it
@@ -747,14 +766,17 @@ function setToken(t) {
   token = t;
   try { localStorage.setItem("exe_solana_token", t); } catch (e) {}
   for (const b of document.querySelectorAll("#tokens button")) b.classList.toggle("on", b.dataset.t === t);
+  writeAddress();
   data = null; resetSeries();
   paint(); draw(); loadDay(); loadPage(0);
 }
-function setTF(f) {
+// load false: the token changes next, and setToken loads the candles
+function setTF(f, load = true) {
   tf = f;
   try { localStorage.setItem("exe_solana_tf", f); } catch (e) {}
   for (const b of document.querySelectorAll("#tfs button")) b.classList.toggle("on", b.dataset.f === f);
-  resetSeries(); draw(); status(); loadPage(0);
+  writeAddress();
+  if (load) { resetSeries(); draw(); status(); loadPage(0); }
 }
 function setKind(k) {
   kind = k;
@@ -890,12 +912,21 @@ window.addEventListener("message", e => {
   } else if (e.data.exe === "hide") paused = true;
   else if (e.data.exe === "show") { paused = false; if (Date.now() - dataT > 30 * 1000) { loadDay(); loadPage(0); } }
 });
+// an anchor typed, or a bookmark of another token or timeframe opened,
+// while the page is open; a wrong or partial anchor is written out whole
+window.addEventListener("hashchange", () => {
+  const h = readHash(), t = h.coin || token, f = h.tf || tf;
+  if (t !== token) { selAt = 0; setTF(f, false); setToken(t); }
+  else if (f !== tf) setTF(f);
+  writeAddress();
+});
 // the newest page again every half minute (a minute's candle changes as
 // it fills), the day's samples just past each whole minute
 function tick() {
   if (!paused && !document.hidden) { loadPage(0); if (Date.now() - dataT > 55 * 1000) loadDay(); }
   setTimeout(tick, 30 * 1000);
 }
+writeAddress();
 paint();
 resetSeries();
 loadDay();

@@ -4927,6 +4927,10 @@ dot, red down and green up, with its change beside it.
   on a move, the app brings that move into view, rings it, and writes its
   words in a box.
 - **Pick a token** with the four buttons at the top.
+- **Bookmark a chart**: open the app at its own address, `/apps/solana/`
+  on the desktop's host, and the address ends in the token and the
+  timeframe, such as `#coin=PUMP&tf=15m`. It follows each button you press,
+  so a bookmark of the page opens on that token and timeframe.
 - **The head** gives the price now, its change over 24 hours, and the
   day's high and low with their times, from the daemon's own minute
   samples.
