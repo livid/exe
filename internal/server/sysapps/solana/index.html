@@ -566,7 +566,7 @@ function draw() {
     g.fillStyle = col; g.beginPath(); g.arc(x, y, px(3.5), 0, 7); g.fill();
     dots.push({ m, x: x / dpr, y: y / dpr });
     const above = y - y0 > px(30);
-    if (isSel(m)) label(g, x, above ? y - px(9) : y + px(9), m.title || pct(m.change), { dpr, below: !above, w: W, bold: true, col });
+    if (isSel(m)) label(g, x, above ? y - px(9) : y + px(9), m.title || pct(m.change), { dpr, below: !above, l: x0, r: x1, bold: true, col });
     else {
       g.fillStyle = col; g.font = `bold ${px(10)}px ${FONT}`; g.textAlign = "center"; g.textBaseline = above ? "bottom" : "top";
       g.fillText(pct(m.change), x, above ? y - px(7) : y + px(7));
@@ -638,13 +638,14 @@ function timeTicks(leftT, right, st, cwD, minPx) {
   return out;
 }
 // a small white box of words with a black line round it, kept inside the
-// chart's width; above its anchor, or below it
+// plot (o.l to o.r): the moves are drawn clipped to it, so a box past
+// either side would lose its edge; above its anchor, or below it
 function label(g, x, y, text, o) {
   const px = n => Math.round(n * o.dpr);
   g.font = `${o.bold ? "bold " : ""}${px(10)}px ${FONT}`;
   const tw = Math.ceil(g.measureText(text).width), bw = tw + px(10), bh = px(16);
   let bx = Math.round(x - bw / 2);
-  bx = Math.max(px(2), Math.min(o.w - bw - px(2), bx));
+  bx = Math.max(o.l + px(2), Math.min(o.r - bw - px(2), bx));
   const by = Math.round(o.below ? y + px(3) : y - px(3) - bh);
   g.fillStyle = "#fff"; g.fillRect(bx, by, bw, bh);
   g.strokeStyle = "#000"; g.lineWidth = Math.max(1, px(1));
