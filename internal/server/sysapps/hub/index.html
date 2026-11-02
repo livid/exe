@@ -328,6 +328,70 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-latest { font-size: 10px; color: #777; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-latest b { color: var(--black); }
 .p-del { margin-left: auto; }
+/* reactions (exe-hub PLAN.md, Reactions): the row of emoji a post was
+   given, after its pictures and before its foot line, drawn as the hub's
+   own pages draw it — flat on the post, no button face; the mouse over
+   one draws a 1px rounded line, a press greys it, and one this node gave
+   keeps the line in the highlight blue, its count blue with it. Without
+   a mouse (a phone) every one keeps a light line, so it still reads as
+   a button, and the buttons stand 30px tall for a finger. */
+.rxs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 20px; }
+.rxs .rx { display: inline-flex; align-items: center; box-sizing: border-box; height: 20px; margin: 0; padding: 0 7px;
+  font: inherit; font-size: 11px; line-height: 14px; color: var(--black); background: transparent;
+  border: 1px solid transparent; border-radius: 3px; box-shadow: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+@media (hover: hover) { .rxs .rx:hover { border-color: var(--black); } }
+@media (hover: none) { .rxs .rx { border-color: #bbb; } }
+.rxs .rx:active { background: #ddd; border-color: var(--black); }
+.rxs .rx.mine { border-color: var(--hl); }
+.rxs .rx.mine .n { color: var(--hl); }
+.rxs .rx .em { font-size: 14px; line-height: 14px; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.rxs .rx .n { margin-left: 5px; font-variant-numeric: tabular-nums; }
+body.mobile .rxs { gap: 8px; margin-top: 10px; }
+body.mobile .rxs .rx { height: 30px; padding: 0 10px; }
+body.mobile .rxs .rx .em { font-size: 16px; line-height: 16px; }
+/* Add Reaction: a small push button holding a smiley with a plus, at the
+   right of the foot line, before Delete; pressed (.open) while its
+   picker is up, the glyph in the pressed face's greys */
+.rx-add { margin-left: auto; align-self: center; display: inline-flex; align-items: center; min-width: 0; height: auto; padding: 3px 6px; }
+.rx-add svg { display: block; width: 18px; height: 10px; shape-rendering: crispEdges; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .rx-add svg { shape-rendering: geometricPrecision; } }
+.rx-add .k { fill: currentColor; }
+.rx-add .w { fill: #fff; }
+.rx-add.open .k { fill: #262626; }
+.rx-add.open .w { fill: #999; }
+.rx-add + .p-del { margin-left: 0; }
+/* the picker (PLAN.md, Reactions — Add Reaction): the contextual menu's
+   dress hung under its button, right edges aligned, 244px wide: a search
+   field at its head, Frequently Used (this browser's eight most used,
+   the picker's own first eight until then) over a rule, then Smileys and
+   More, eight to a row; the 15px status line names the emoji under the
+   pointer, as Key Caps does. A cell inverts under the pointer as a menu
+   row does; one this node gave wears the row's blue rounded line. */
+#rxp { position: fixed; z-index: 32; box-sizing: border-box; width: 244px; max-width: calc(100vw - 8px); padding: 0; background: var(--g300);
+  border: 1px solid var(--black); box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 var(--g500), 2px 2px 0 rgba(38,38,38,.85); }
+#rxp .rxp-q { padding: 8px 8px 6px; }
+#rxp input { display: block; box-sizing: border-box; width: 100%; height: 20px; margin: 0; padding: 2px 5px; font-size: 12px; line-height: 14px; }
+#rxp .rxp-h { padding: 0 8px; font-size: 11px; font-weight: bold; line-height: 16px; }
+#rxp .rxp-b { overflow-y: auto; overscroll-behavior: contain; }
+#rxp .rxp-g { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); padding: 2px 6px 6px; }
+#rxp .rxp-sep { height: 0; margin: 0 0 4px; border-top: 1px solid #999; border-bottom: 1px solid #fff; }
+#rxp .rxp-none { padding: 0 8px 8px; font-size: 11px; color: #555; }
+#rxp .ec { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 26px; margin: 0; padding: 0;
+  border: 1px solid transparent; border-radius: 0; background: transparent; box-shadow: none; color: inherit;
+  font-size: 16px; line-height: 1; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+#rxp .ec.mine { border-color: var(--hl); border-radius: 3px; }
+#rxp .ec.on { background: var(--hl); }
+#rxp .rxp-s { height: 15px; line-height: 15px; padding: 0 8px; border-top: 1px solid var(--black); font-size: 11px; color: #333;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.mobile #rxp .ec { height: 36px; font-size: 22px; }
+/* who reacted: the contextual menu at the pointer — its head the emoji,
+   its name and the count, bold and dimmed; a person a line with their
+   14px picture; Remove My Reaction under a rule when this node gave it */
+.dd-head.rx-h { font-weight: bold; color: #808080; }
+.dd-head.rx-p { white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.dd-head.rx-p .p-ava { display: inline-block; vertical-align: -3px; margin-right: 4px; }
+.dd-head.rx-dim { color: #808080; }
 /* a nested reply in a thread: stepped in under the reply it answers,
    a thin rule marking the fold — the public pages' numbers, scaled down */
 /* a reply steps in per level until the indent would eat two fifths of
@@ -936,6 +1000,13 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) ageT
 let hub = "";        // hub base URL
 let hubInfo = null;  // GET /v1/hub
 let who = null;      // {id, name, pubkey} from the daemon
+// the picker's own 24 (exe-hub PLAN.md, Reactions — Add Reaction), in its
+// order: the first eight its Frequently Used until this browser has used
+// some; a search reaches every emoji the hub names
+const RX_QUICK = ["👍", "❤️", "🎉", "🔥", "👀", "🙏", "😂", "🚀", "😀", "😅", "😍", "🤔", "😮", "😢", "👏", "🙌", "💯", "✅", "⭐", "☕", "🍜", "🦉", "🐛", "🤝"];
+const RX_USED = "exe-hub-reactions"; // this browser's counts of the emoji it gave, any emoji
+// Add Reaction's glyph, the hub pages' own: a smiley and a plus, 18 by 10
+const RX_GLYPH = '<svg viewBox="0 0 18 10" width="18" height="10" aria-hidden="true"><path class="w" d="M3 1h5v1h-5zM2 2h7v1h-7zM1 3h2v2h-2zM4 3h3v2h-3zM8 3h2v2h-2zM1 5h9v1h-9zM1 6h1v1h-1zM3 6h5v1h-5zM9 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM3 8h5v1h-5z"/><path class="k" d="M3 0h5v1H3zM1 1h2v1H1zM8 1h2v1H8zM1 2h1v1H1zM9 2h1v1H9zM0 3h1v4H0zM10 3h1v4h-1zM3 3h1v2H3zM7 3h1v2H7zM2 6h1v1H2zM8 6h1v1H8zM1 7h1v1H1zM3 7h5v1H3zM9 7h1v1H9zM1 8h2v1H1zM8 8h2v1H8zM3 9h5v1H3zM15 3h1v5h-1zM13 5h5v1h-5z"/></svg>';
 let myProfile = null;
 let view = { kind: "feed" }; // or {kind:"thread", id} or {kind:"search", q, oldest}
 let replyTarget = null;      // in a thread: the post the composer answers; null = the view's head
@@ -1303,6 +1374,206 @@ async function markBox(post, li, e) {
     li.classList.toggle("done", done);
   } catch (err) { say(err.message, true); }
   li.classList.remove("pending");
+}
+
+// ---- reactions (exe-hub PLAN.md, Reactions) ----
+// A post's row of reactions is drawn from the `reactions` its JSON
+// carries ({emoji, by}): a button per emoji with its count, one this
+// node gave marked mine. A click gives that emoji or takes it back — one
+// signed post.react through the daemon, the node's own key, no prompt,
+// the state asked for and never a toggle, as a to-do mark is — and the
+// button turns at once, back if the hub refuses. A right-click, or a
+// finger held half a second, opens who gave it. The hub's post.react
+// event redraws the row from a fresh fetch of the post: the event names
+// the post alone, so a count is never guessed (Codex, 2026-11-02).
+const postNode = id => feedEl.querySelector(`.post[data-id="${CSS.escape(id)}"]`);
+const rxTip = (n, mine) => (mine ? (n === 1 ? "You" : "You and " + (n - 1) + " more") : n + (n === 1 ? " person" : " people")) + ". Right-click to see who.";
+function rxRow(post, reactions) {
+  const list = (reactions || []).filter(r => r && r.emoji && Array.isArray(r.by) && r.by.length);
+  if (!list.length) return null;
+  const row = el("div", { class: "rxs" });
+  for (const r of list) {
+    const mine = !!(who && r.by.includes(who.id));
+    const b = el("button", { class: "rx" + (mine ? " mine" : ""), "data-e": r.emoji, "data-ids": r.by.join(" "), title: rxTip(r.by.length, mine) },
+      el("span", { class: "em" }, r.emoji), el("span", { class: "n" }, String(r.by.length)));
+    b.onclick = e => {
+      e.stopPropagation();
+      if (b.dataset.held) { delete b.dataset.held; return; } // the lift after a hold is no press
+      rxGive(post, r.emoji, !b.classList.contains("mine"));
+    };
+    b.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); rxWho(post, r.emoji, e.clientX, e.clientY); };
+    let hold = 0;
+    b.onpointerdown = e => {
+      if (e.pointerType === "mouse") return;
+      hold = setTimeout(() => { b.dataset.held = "1"; setTimeout(() => delete b.dataset.held, 1000); rxWho(post, r.emoji, e.clientX, e.clientY); }, 500);
+    };
+    b.onpointerup = b.onpointercancel = b.onpointerleave = () => clearTimeout(hold);
+    row.append(b);
+  }
+  return row;
+}
+// what a post node's row says, in the JSON's shape
+const rxRead = node => [...node.querySelectorAll(":scope > .rxs .rx")].map(b => ({ emoji: b.dataset.e, by: (b.dataset.ids || "").split(" ").filter(Boolean) }));
+// the row set to what a post carries, in place: replaced, removed, or put before the foot
+function rxSet(node, post, reactions) {
+  const old = node.querySelector(":scope > .rxs"), fresh = rxRow(post, reactions);
+  if (old && fresh) old.replaceWith(fresh);
+  else if (old) old.remove();
+  else if (fresh) { const foot = node.querySelector(":scope > .p-foot"); foot ? foot.before(fresh) : node.append(fresh); }
+}
+async function rxGive(post, emoji, on) {
+  const node = who && postNode(post);
+  if (!node) return;
+  const before = rxRead(node);
+  const list = before.map(r => ({ emoji: r.emoji, by: r.emoji === emoji ? r.by.filter(i => i !== who.id) : r.by.slice() }));
+  let r = list.find(x => x.emoji === emoji);
+  if (on) { if (!r) { r = { emoji, by: [] }; list.push(r); } r.by.push(who.id); }
+  rxSet(node, post, list.filter(x => x.by.length));
+  try {
+    await publish("post.react", { post, emoji, on });
+    if (on) rxCount(emoji);
+  } catch (err) {
+    say(err.message, true);
+    const cur = postNode(post);
+    if (cur) rxSet(cur, post, before);
+  }
+}
+function rxCount(e) {
+  try { const u = JSON.parse(localStorage.getItem(RX_USED) || "{}") || {}; u[e] = (+u[e] || 0) + 1; localStorage.setItem(RX_USED, JSON.stringify(u)); } catch (x) {}
+}
+// every emoji's name and keywords, from the hub (GET /v1/emoji/en, in
+// Unicode's order), asked for once, at the first word typed or the first
+// menu of who reacted; the picker's own 24 stand alone until then
+let rxNames = null, rxAsked = null;
+const rxLoad = () => rxAsked || (rxAsked = hget("/v1/emoji/en")
+  .then(rows => { rxNames = new Map(rows.map(r => [r[0], { name: r[1] || "", keys: (r[2] || "").toLowerCase() }])); })
+  .catch(() => { rxAsked = null; }));
+const rxName = e => (rxNames && rxNames.get(e) || {}).name || "";
+// a skin tone's sequence stands in a search only when a word names its
+// tone (the part of its name after the colon), so "thumbs" finds 👍 and
+// "thumbs dark" 👍🏿; a name that begins with the words first, then one
+// with a word that does, then the rest, each in Unicode's order
+const RX_TONE = /[\u{1F3FB}-\u{1F3FF}]/u;
+function rxSearch(words) {
+  const hits = [];
+  let i = 0;
+  for (const [e, r] of rxNames) {
+    i++;
+    const name = r.name.toLowerCase(), text = name + " " + r.keys;
+    if (!words.every(w => text.includes(w))) continue;
+    if (RX_TONE.test(e) && !words.some(w => (name.split(":")[1] || "").includes(w))) continue;
+    const rank = name.startsWith(words.join(" ")) ? 0 : name.split(/[\s:,-]+/).some(x => x.startsWith(words[0])) ? 1 : 2;
+    hits.push([rank, i, e]);
+  }
+  return hits.sort((a, b) => a[0] - b[0] || a[1] - b[1]).slice(0, 64).map(h => h[2]);
+}
+// the picker: one open at a time, closed by a press outside, Escape, the
+// feed scrolling, a pick, or a second press of its button
+let rxpEl = null, rxpFrom = null;
+function rxClose() {
+  if (rxpEl) { rxpEl.remove(); rxpEl = null; }
+  if (rxpFrom) { rxpFrom.classList.remove("open"); rxpFrom = null; }
+}
+function rxPicker(btn, post) {
+  if (rxpFrom === btn) { rxClose(); return; }
+  rxClose();
+  hideMenu();
+  const node = postNode(post);
+  const mine = new Set((node ? rxRead(node) : []).filter(r => who && r.by.includes(who.id)).map(r => r.emoji));
+  let used = {};
+  try { used = JSON.parse(localStorage.getItem(RX_USED) || "{}") || {}; } catch (e) {}
+  const u = e => +used[e] || 0;
+  const ranked = Object.keys(used).filter(e => u(e) > 0).sort((a, b) => u(b) - u(a) || (RX_QUICK.indexOf(a) + 1 || 99) - (RX_QUICK.indexOf(b) + 1 || 99));
+  const freq = [...new Set(ranked.concat(RX_QUICK))].slice(0, 8);
+  const more = RX_QUICK.filter(e => !freq.includes(e)).slice(0, 16);
+  const q = el("input", { type: "text", placeholder: "Search", autocomplete: "off", enterkeyhint: "go" });
+  const box = el("div", { class: "rxp-b" }), status = el("div", { class: "rxp-s" });
+  const pick = el("div", { id: "rxp" }, el("div", { class: "rxp-q" }, q), box, status);
+  let under = "";
+  const tell = e => { under = e; status.textContent = e ? e + "  " + rxName(e) + (mine.has(e) ? " · yours, click to take it back" : "") : "Choose an emoji."; };
+  const cell = e => el("button", { class: "ec" + (mine.has(e) ? " mine" : ""), "data-e": e }, e);
+  const grid = cells => el("div", { class: "rxp-g" }, ...cells.map(cell));
+  const browse = () => {
+    box.replaceChildren(el("div", { class: "rxp-h" }, "Frequently Used"), grid(freq), el("div", { class: "rxp-sep" }), el("div", { class: "rxp-h" }, "Smileys and More"), grid(more));
+    box.scrollTop = 0;
+  };
+  let typed = 0;
+  const find = async () => {
+    const words = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean), at = ++typed;
+    if (!words.length) { browse(); return; }
+    await rxLoad();
+    if (at !== typed || !pick.isConnected) return; // a later word, or the picker gone
+    const hits = rxNames ? rxSearch(words) : [];
+    box.replaceChildren(el("div", { class: "rxp-h" }, "Results"));
+    if (hits.length) box.append(grid(hits));
+    else box.append(el("div", { class: "rxp-none" }, rxNames ? "No emoji is named “" + q.value.trim() + "”." : "The hub's names are out of reach."));
+    box.scrollTop = 0;
+  };
+  browse();
+  tell("");
+  rxLoad().then(() => { if (pick.isConnected) tell(under); }); // the names, for the status line and a search
+  pick.addEventListener("pointerover", e => {
+    const c = e.target.closest(".ec");
+    for (const x of pick.querySelectorAll(".ec.on")) if (x !== c) x.classList.remove("on");
+    if (c && e.pointerType !== "touch") { c.classList.add("on"); tell(c.dataset.e); }
+  });
+  pick.addEventListener("pointerleave", () => { for (const x of pick.querySelectorAll(".ec.on")) x.classList.remove("on"); tell(""); });
+  pick.addEventListener("mousedown", e => { if (!e.target.closest("input")) e.preventDefault(); }); // the field keeps the caret
+  pick.addEventListener("click", e => {
+    const c = e.target.closest(".ec");
+    if (!c) return;
+    const em = c.dataset.e;
+    rxClose();
+    rxGive(post, em, !mine.has(em));
+  });
+  q.oninput = find;
+  q.onkeydown = e => {
+    if (e.key === "Enter") { e.preventDefault(); const c = box.querySelector(".ec"); if (c) c.click(); }
+  };
+  document.body.append(pick);
+  rxpEl = pick;
+  rxpFrom = btn;
+  btn.classList.add("open");
+  // the cells keep the height they browse at, so the status line stays
+  // put while a search narrows them, and what a search finds past it
+  // scrolls; hung under its button, right edges aligned, above it when
+  // the window's foot is too near
+  box.style.height = Math.min(box.offsetHeight, Math.max(120, innerHeight - 90)) + "px";
+  const r = btn.getBoundingClientRect();
+  pick.style.left = Math.max(4, Math.min(r.right - pick.offsetWidth, innerWidth - pick.offsetWidth - 4)) + "px";
+  const below = r.bottom + 2;
+  pick.style.top = (below + pick.offsetHeight > innerHeight - 4 ? Math.max(4, r.top - pick.offsetHeight - 2) : below) + "px";
+  q.focus({ preventScroll: true });
+}
+document.addEventListener("pointerdown", e => { if (rxpEl && !e.target.closest("#rxp") && !(rxpFrom && rxpFrom.contains(e.target))) rxClose(); }, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") rxClose(); });
+window.addEventListener("blur", rxClose);
+feedEl.addEventListener("scroll", rxClose, { passive: true });
+// who reacted: the list comes from the hub with names and pictures; a hub
+// out of reach leaves the ids the button carries, each named by itself
+let rxAsking = 0;
+async function rxWho(post, emoji, x, y) {
+  const ask = ++rxAsking;
+  let got = null;
+  try {
+    const [out] = await Promise.all([hget("/v1/post/" + post + "/reactions"), rxLoad()]);
+    got = (out.reactions || []).find(r => r.emoji === emoji) || null;
+  } catch (e) {}
+  if (ask !== rxAsking) return;
+  const node = postNode(post);
+  if (!got) {
+    const r = node && rxRead(node).find(r => r.emoji === emoji);
+    got = { emoji, people: (r ? r.by : []).map(id => ({ id, name: "" })) };
+  }
+  const me = who && who.id, n = got.people.length;
+  const items = [{ head: [emoji + "  " + rxName(emoji) + " · " + n + (n === 1 ? " person" : " people")], cls: "rx-h" }, "-"];
+  // the node first among them, as You, then in the order they gave it
+  const shown = [...got.people].sort((a, c) => (c.id === me) - (a.id === me)).slice(0, 7);
+  for (const p of shown) items.push({ head: [avatarEl(p.id, p.avatar), p.id === me ? "You" : (p.name || p.id)], cls: "rx-p" });
+  if (n > shown.length) items.push({ head: ["and " + (n - shown.length) + " more"], cls: "rx-dim" });
+  if (me && got.people.some(p => p.id === me)) items.push("-", { label: "Remove My Reaction", act: () => rxGive(post, emoji, false) });
+  rxClose();
+  showMenu(x, y, items);
 }
 // A table — Markdown's pipe table, GFM's form, read exactly as the hub
 // reads it (exe-hub internal/card/table.go; its testdata/tables.json
@@ -1719,6 +1990,8 @@ function renderPost(p, opts = {}) {
     }
     node.append(box);
   }
+  const rx = rxRow(p.id, p.reactions); // the emoji the post was given, once it has any
+  if (rx) node.append(rx);
   const foot = el("div", { class: "p-foot" });
   if (!opts.inThread) {
     if (p.reply_to) {
@@ -1758,6 +2031,12 @@ function renderPost(p, opts = {}) {
     const rp = el("span", { class: "p-replies" }, "Reply");
     rp.onclick = e => { e.stopPropagation(); setReplyTarget(p); };
     foot.append(rp);
+  }
+  if (who) { // the node can sign: Add Reaction, its picker hung under it
+    const add = el("button", { class: "ghost sm rx-add", title: "Add Reaction" });
+    add.innerHTML = RX_GLYPH;
+    add.onclick = e => { e.stopPropagation(); rxPicker(add, p.id); };
+    foot.append(add);
   }
   if (who && p.author === who.id) {
     const x = el("button", { class: "ghost sm danger p-del", title: "Delete this post" }, "×");
@@ -2233,6 +2512,12 @@ function connectEvents() {
       // every post card quoting it comes off: the link stays a link,
       // as the hub now serves it
       for (const c of feedEl.querySelectorAll(".p-quote")) if (c.dataset.quote === m.id) holdPlace(() => c.remove());
+      return;
+    }
+    if (m.type === "post.react") { // a reaction came or went: the row is redrawn from the post, which says who gave what
+      const cur = seen(m.id);
+      if (!cur) return;
+      try { const out = await hget("/v1/post/" + m.id); rxSet(cur, m.id, out.post.reactions); } catch (e) {}
       return;
     }
     if (m.type === "post.card") { // the post's link card landed: redraw it in place
@@ -4037,7 +4322,7 @@ function showMenu(x, y, items, pin) {
   hideMenu();
   ctxEl.replaceChildren(...items.map(it => {
     if (it === "-") return el("div", { class: "dd-sep" });
-    if (it.head) return el("div", { class: "dd-head" + (it.wide ? " wide" : "") }, ...it.head);
+    if (it.head) return el("div", { class: "dd-head" + (it.wide ? " wide" : "") + (it.cls ? " " + it.cls : "") }, ...it.head);
     const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") }, it.label);
     if (!it.dis) d.onclick = () => { hideMenu(); it.act(); };
     return d;

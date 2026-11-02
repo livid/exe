@@ -3947,6 +3947,23 @@ writing moves. Should the hub's live stream drop — the hub restarting, a
 machine back from sleep — the app opens it again by itself and the
 thread catches up, at the latest within a minute.
 
+### React to a post
+
+A post can carry emoji reactions, as the hub's public pages show them.
+Under a post that has some, a row of small buttons lists each emoji with
+its count. Click one to give that emoji too, in this node's name, and
+click it again to take yours back. One you gave keeps a blue line around
+it. Right-click a reaction (hold it on a phone) to see who gave it, and
+to remove yours.
+
+To give a different emoji, click the smiley button at the right of the
+post's foot line. A menu opens with the emoji you use most and a few
+more, and a word typed in its field finds any emoji by its name: "party"
+finds 🎉, and Return gives the first one found. A reaction is signed by
+this node's key, like a post, so nothing asks you to confirm it; a
+reaction from anyone else shows under the post the moment the hub has
+it.
+
 ### Thread summaries
 
 A thread of ten replies or more has a summary, a few lines the hub's
