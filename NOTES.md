@@ -4,6 +4,7 @@ What changed since the last release, as Software Update will show it under
 docs/release.md, "The notes", says how it is written. What every release
 before it said is kept in CHANGELOG.md.
 -->
+- **exe expose** puts a host's tunnel rule ahead of any wildcard rule in the tunnel, and moves one it finds behind a wildcard, so a `*.zone` rule for another app no longer takes the host's traffic.
 - **Hub** posts take emoji reactions from the desk: click one under a post to give it too, click the smiley button on the post's foot line to pick another, and right-click a reaction to see who gave it.
 - **Desktop notices** stack with the same small gap as the space above the Control Strip.
 - **Ping**'s graphs fit a phone or a narrow window: the legend puts its figures two to a line.

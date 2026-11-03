@@ -320,8 +320,9 @@ func (c *Client) EnsureDNS(ctx context.Context, fqdn string) error {
 }
 
 // SyncIngress makes every hostname in services route to its service value:
-// existing rules are rewritten, hostnames without a rule get one appended
-// before the catch-all. One read-modify-write, so rules for other apps
+// existing rules are rewritten, hostnames without a rule get one placed
+// before any wildcard rule and the catch-all, and a rule of ours found
+// after a wildcard is moved ahead of it. One read-modify-write, so rules for other apps
 // sharing the tunnel are untouched. Returns the hostnames whose rules
 // actually changed; no PUT is issued when everything already matches.
 func (c *Client) SyncIngress(ctx context.Context, services map[string]string) ([]string, error) {
@@ -366,21 +367,20 @@ func (c *Client) SyncIngress(ctx context.Context, services map[string]string) ([
 			changed = append(changed, h)
 		}
 	}
+	var moved []string
+	rules, moved = hoistIngress(rules, services)
+	changed = append(changed, moved...)
 	if len(missing) > 0 {
-		catchAll := map[string]any{"service": "http_status:404"}
-		if n := len(rules); n > 0 {
-			if m, ok := rules[n-1].(map[string]any); ok {
-				if h, _ := m["hostname"].(string); h == "" {
-					catchAll = m
-					rules = rules[:n-1]
-				}
-			}
+		hosts := make([]string, 0, len(missing))
+		for h := range missing {
+			hosts = append(hosts, h)
 		}
-		for h, svc := range missing {
-			rules = append(rules, map[string]any{"hostname": h, "service": svc})
+		sort.Strings(hosts)
+		for _, h := range hosts {
+			rules = insertIngress(rules, map[string]any{"hostname": h, "service": missing[h]})
 			changed = append(changed, h)
 		}
-		rules = append(rules, catchAll)
+		rules = ensureCatchAll(rules)
 	}
 	if len(changed) == 0 {
 		return nil, nil
@@ -427,19 +427,85 @@ func (c *Client) EnsureIngress(ctx context.Context, fqdn, service string) error 
 			break
 		}
 	}
-	if !updated {
-		newRule := map[string]any{"hostname": fqdn, "service": service}
-		catchAll := map[string]any{"service": "http_status:404"}
-		if n := len(rules); n > 0 {
-			if m, ok := rules[n-1].(map[string]any); ok {
-				if h, _ := m["hostname"].(string); h == "" {
-					catchAll = m
-					rules = rules[:n-1]
-				}
-			}
-		}
-		rules = append(rules, newRule, catchAll)
+	if updated {
+		rules, _ = hoistIngress(rules, map[string]string{fqdn: service})
+	} else {
+		rules = ensureCatchAll(insertIngress(rules, map[string]any{"hostname": fqdn, "service": service}))
 	}
 	cfg["ingress"] = rules
 	return c.do(ctx, "PUT", path, map[string]any{"config": cfg}, nil)
+}
+
+// cloudflared takes the first ingress rule whose hostname matches, so an
+// exact hostname placed after a wildcard rule for its zone ("*.v2ex.pro")
+// is never reached. The helpers below keep exe's rules ahead of every
+// wildcard rule and of the catch-all.
+
+func ruleHost(r any) (string, bool) {
+	m, ok := r.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	h, _ := m["hostname"].(string)
+	return h, true
+}
+
+func isShadow(h string) bool { return h == "" || strings.HasPrefix(h, "*.") }
+
+// firstShadow is the index of the first wildcard or catch-all rule, or
+// len(rules) when there is none.
+func firstShadow(rules []any) int {
+	for i, r := range rules {
+		if h, ok := ruleHost(r); ok && isShadow(h) {
+			return i
+		}
+	}
+	return len(rules)
+}
+
+// insertIngress puts rule before the first wildcard or catch-all rule.
+func insertIngress(rules []any, rule map[string]any) []any {
+	at := firstShadow(rules)
+	out := make([]any, 0, len(rules)+1)
+	out = append(out, rules[:at]...)
+	out = append(out, rule)
+	return append(out, rules[at:]...)
+}
+
+// hoistIngress moves every exact-hostname rule of managed that sits after
+// a wildcard or catch-all rule to just before the first of those. Rules
+// of other apps stay where they are. Returns the hostnames moved, sorted.
+func hoistIngress(rules []any, managed map[string]string) ([]any, []string) {
+	var moved []string
+	for {
+		idx := -1
+		for i := firstShadow(rules) + 1; i < len(rules); i++ {
+			h, ok := ruleHost(rules[i])
+			if _, want := managed[h]; ok && want && !isShadow(h) {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			break
+		}
+		r := rules[idx].(map[string]any)
+		rest := make([]any, 0, len(rules)-1)
+		rest = append(rest, rules[:idx]...)
+		rest = append(rest, rules[idx+1:]...)
+		rules = insertIngress(rest, r)
+		moved = append(moved, r["hostname"].(string))
+	}
+	sort.Strings(moved)
+	return rules, moved
+}
+
+// ensureCatchAll keeps a catch-all rule (one without a hostname) last.
+func ensureCatchAll(rules []any) []any {
+	if n := len(rules); n > 0 {
+		if h, ok := ruleHost(rules[n-1]); ok && h == "" {
+			return rules
+		}
+	}
+	return append(rules, map[string]any{"service": "http_status:404"})
 }
