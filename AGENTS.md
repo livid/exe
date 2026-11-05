@@ -46,8 +46,10 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   spark.
 - Build: `export PATH=$PATH:/usr/local/go/bin && make build` (Go is not on
   the tool shell's PATH). Restart: `XDG_RUNTIME_DIR=/run/user/1000
-  systemctl --user restart exe` — no sudo; VMs return through
-  `~/.exe/autostart`, the agent tmux servers survive. The desktop and the
+  systemctl --user restart exe` — no sudo; the VMs keep
+  running and the new daemon adopts them (`internal/vmm/adopt_linux.go`;
+  only a host shutdown stops them, and `~/.exe/autostart` brings them
+  back), the agent tmux servers survive. The desktop and the
   sysapps ship inside the binary, so their changes need build + restart;
   exe-apps do not. Rebuild and restart once a feature is done.
 - The homepage, https://exe.v2core.com, is
