@@ -72,6 +72,14 @@ type Manager interface {
 	Get(ctx context.Context, name string) (*Info, error)
 }
 
+// Keeper is implemented by managers whose VMs can outlive the daemon (Linux
+// under systemd): the next daemon adopts a VM that still runs instead of
+// booting it. KeepsVMs reports whether the VMs running now may be left
+// running when this daemon stops.
+type Keeper interface {
+	KeepsVMs() bool
+}
+
 // ImageEnsurer is implemented by managers that can pre-fetch their base image.
 type ImageEnsurer interface {
 	EnsureImage(ctx context.Context) (string, error)

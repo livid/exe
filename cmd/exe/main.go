@@ -118,6 +118,11 @@ func main() {
 		err = cmdUninstall(args)
 	case "daemon":
 		err = cmdDaemon(args)
+	case adoptsVMsCommand:
+		// asked by a daemon about to stop: does the binary that runs
+		// next adopt the VMs it would leave running (keepVMs)
+		fmt.Println(adoptsVMsCommand)
+		return
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -428,7 +433,11 @@ func cmdServe() error {
 	if config.SSHEnabled(curSSH) {
 		log.Printf("ssh gate on %s: `ssh -p %s exe@<this host>` is the lobby, `ssh -p %s <vm>@<this host>` is the VM", curSSH, portOf(curSSH), portOf(curSSH))
 	}
-	log.Printf("note: VMs run inside this process and power off when it exits")
+	if srv.KeepsVMs() {
+		log.Printf("note: VMs keep running when this process stops, and the next daemon adopts them; a host shutdown stops them")
+	} else {
+		log.Printf("note: VMs run inside this process and power off when it exits")
+	}
 
 	// Bring back the VMs that were running when the last daemon stopped:
 	// a spawn-and-exit restart names them in EXE_AUTOSTART, a stop under

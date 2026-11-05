@@ -2217,8 +2217,24 @@ made of on Linux, macOS and Windows.
 
 ### When exe restarts
 
-VMs run inside the exe daemon. When it stops or restarts, they shut down
-with it, and the ones that were running start again when it comes back.
+On Linux, where systemd runs exe, the VMs keep running when the daemon
+restarts: after an update, after **Restart** in the desktop and after
+`systemctl --user restart exe`. The next daemon takes each running VM over
+as it is. What runs inside does not notice, and a site published from a VM
+answers again as soon as the daemon is back.
+
+- **To stop a VM**, use `exe stop demo` or its window, as before.
+- **A shutdown of the host** stops the VMs first, and they start again when
+  the daemon comes back.
+- **`systemctl --user stop exe`** leaves the VMs running as well. Stop them
+  first with `exe stop` when they should not run on without the daemon.
+- **The daemon stops the VMs with it**, as it did before, in two cases: the
+  exe on disk is an older one that could not take them over, or the unit
+  has no `KillMode=process`. `journalctl --user -u exe` says which.
+
+On macOS and on Windows, and when you start `exe serve` by hand, the VMs
+run inside the daemon. When it stops or restarts, they shut down with it,
+and the ones that were running start again when it comes back.
 
 ### A machine that cannot run VMs
 

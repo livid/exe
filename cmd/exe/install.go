@@ -1036,8 +1036,8 @@ func unitText(l layout, home string) string {
 # KillMode=process is deliberate: the daemon starts tmux servers for the
 # Terminal, Claude Code and Codex windows and they live in this unit's
 # cgroup. Signalling only the main process keeps them up across a restart.
-# On the way down the daemon stops its VMs itself and records them, so they
-# come back with the next start.
+# The VMs run on across a restart as well, and the next daemon adopts them;
+# the daemon stops them itself only when the host goes down.
 [Unit]
 Description=exe daemon
 

@@ -264,10 +264,10 @@ service. Reapply `setcap` whenever the helper binary is replaced. The
 checked-in unit is specific to `/www/exe` and `/home/livid/.exe`.
 
 After `make build`, `systemctl --user restart exe` runs the new binary;
-`journalctl --user -u exe` is the log. The daemon stops its VMs on the way
-down and starts them again on the way up, and the unit's `KillMode=process`
-leaves the tmux servers behind the Terminal, Claude Code and Codex windows
-running across the restart. The restart endpoint (`POST
+`journalctl --user -u exe` is the log. The unit's `KillMode=process`
+signals only the daemon, so the VMs keep running across the restart, as do
+the tmux servers behind the Terminal, Claude Code and Codex windows, and
+the new daemon adopts the VMs as they are. The restart endpoint (`POST
 /v1/daemon/restart`, the desktop's Restart item) does the same under
 systemd: it exits and lets the manager start the new binary.
 

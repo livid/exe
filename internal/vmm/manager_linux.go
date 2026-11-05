@@ -63,10 +63,18 @@ type fcManager struct {
 	createMu  sync.Mutex
 	dlMu      sync.Mutex
 	stateLock *os.File
+
+	// keep: the VMs outlive this daemon and the next one adopts them
+	// (adopt_linux.go). Off, a Firecracker dies with the daemon.
+	keep bool
 }
 
+// fcRuntime is one running Firecracker: a child of this daemon (cmd), or
+// one a previous daemon started and this one adopted (pidfd, no cmd).
 type fcRuntime struct {
 	cmd     *exec.Cmd
+	pid     int
+	pidfd   int
 	done    chan struct{}
 	state   string
 	exitErr error
@@ -192,7 +200,10 @@ func New(opts Options) (Manager, error) {
 		running:     make(map[string]*fcRuntime),
 		locks:       make(map[string]*sync.Mutex),
 		stateLock:   stateLock,
+		keep:        keepVMsDefault() && pidfdWorks(),
 	}
+	// the survivors first: the sweep below would take their TAPs away
+	manager.adoptRunning()
 	if err := manager.reconcileNetworks(); err != nil {
 		releaseStateLock(stateLock)
 		return nil, fmt.Errorf("reconcile stale Firecracker networking: %w", err)
@@ -772,6 +783,14 @@ func (m *fcManager) Start(ctx context.Context, name string) (*Info, error) {
 	}
 	m.mu.Unlock()
 
+	// before the network is touched: a guest some other process still runs
+	// on this disk keeps its TAP, and gets no twin
+	runLock, err := m.lockRun(name)
+	if err != nil {
+		return nil, err
+	}
+	defer runLock.Close()
+
 	kernel, err := m.ensureKernel(ctx)
 	if err != nil {
 		return nil, err
@@ -804,9 +823,12 @@ func (m *fcManager) Start(ctx context.Context, name string) (*Info, error) {
 	cmd.Stdout = console
 	cmd.Stderr = console
 	cmd.Dir = m.vmDir(name)
-	sys := &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGKILL,
-		Setpgid:   true,
+	// Firecracker inherits the run lock and holds it while it lives.
+	cmd.ExtraFiles = []*os.File{runLock}
+	sys := &syscall.SysProcAttr{Setpgid: true}
+	if !m.keep {
+		// no next daemon is promised: the VM goes with this one
+		sys.Pdeathsig = syscall.SIGKILL
 	}
 	if os.Geteuid() == 0 {
 		sys.Credential = &syscall.Credential{
@@ -820,11 +842,18 @@ func (m *fcManager) Start(ctx context.Context, name string) (*Info, error) {
 		console.Close()
 		return nil, fmt.Errorf("start Firecracker: %w", err)
 	}
-	rt := &fcRuntime{cmd: cmd, done: make(chan struct{}), state: "starting", logFile: console}
+	rt := &fcRuntime{cmd: cmd, pid: cmd.Process.Pid, pidfd: -1, done: make(chan struct{}), state: "starting", logFile: console}
 	m.mu.Lock()
 	m.running[name] = rt
 	m.mu.Unlock()
 	started = true
+	if m.keep {
+		if err := m.writeRunRecord(name, cmd.Process.Pid); err != nil {
+			// without its record the next daemon cannot adopt this VM;
+			// the run lock still keeps it from booting a second one
+			log.Printf("vm %s: %s: %v", name, runRecordFile, err)
+		}
+	}
 	go m.waitProcess(name, mt, rt)
 
 	select {
@@ -847,16 +876,28 @@ func (m *fcManager) Start(ctx context.Context, name string) (*Info, error) {
 }
 
 func (m *fcManager) waitProcess(name string, mt *vmMeta, rt *fcRuntime) {
-	err := rt.cmd.Wait()
+	m.processEnded(name, mt, rt, rt.cmd.Wait())
+}
+
+// processEnded clears up after a VM's Firecracker has gone, whichever
+// daemon started it.
+func (m *fcManager) processEnded(name string, mt *vmMeta, rt *fcRuntime, err error) {
 	m.mu.Lock()
 	rt.exitErr = err
 	stopping := rt.state == "stopping"
 	m.mu.Unlock()
-	rt.logFile.Close()
+	if rt.logFile != nil {
+		rt.logFile.Close()
+	}
+	m.removeRunRecord(name)
 	m.cleanupNetwork(name, mt)
 	m.mu.Lock()
 	if m.running[name] == rt {
 		delete(m.running, name)
+	}
+	if rt.pidfd >= 0 {
+		unix.Close(rt.pidfd)
+		rt.pidfd = -1
 	}
 	m.mu.Unlock()
 	close(rt.done)
@@ -991,15 +1032,11 @@ func (m *fcManager) stopRuntime(ctx context.Context, name string, rt *fcRuntime)
 	if waitRuntime(ctx, rt.done, firecrackerStopTimeout) {
 		return nil
 	}
-	if rt.cmd.Process != nil {
-		_ = rt.cmd.Process.Signal(syscall.SIGTERM)
-	}
+	m.signalRuntime(rt, syscall.SIGTERM)
 	if waitRuntime(context.Background(), rt.done, 10*time.Second) {
 		return nil
 	}
-	if rt.cmd.Process != nil {
-		_ = rt.cmd.Process.Kill()
-	}
+	m.signalRuntime(rt, syscall.SIGKILL)
 	if !waitRuntime(context.Background(), rt.done, 10*time.Second) {
 		return fmt.Errorf("VM %s did not stop", name)
 	}

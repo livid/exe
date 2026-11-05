@@ -937,7 +937,8 @@ func (s *Server) handleExpose(w http.ResponseWriter, r *http.Request) {
 // handleDaemonRestart restarts the daemon: running VMs are stopped (they
 // live inside this process), a fresh copy of the binary is spawned with
 // EXE_AUTOSTART naming them so it starts them again, and this process
-// exits.
+// exits. On Linux under systemd the VMs are left running instead and the
+// next daemon adopts them (cmd/exe, keepVMs).
 func (s *Server) handleDaemonRestart(w http.ResponseWriter, r *http.Request) {
 	if _, err := os.Executable(); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -962,6 +963,13 @@ func (s *Server) RunningVMNames(ctx context.Context) []string {
 		}
 	}
 	return running
+}
+
+// KeepsVMs reports whether the running VMs can be left running when this
+// daemon stops, for the next one to adopt (vmm.Keeper).
+func (s *Server) KeepsVMs() bool {
+	k, ok := s.VMs.(vmm.Keeper)
+	return ok && k.KeepsVMs()
 }
 
 // StopVMs stops the named VMs in parallel and waits for all of them.
