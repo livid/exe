@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"exe/internal/config"
+	"exe/internal/macos9"
 	"github.com/coder/websocket"
 )
 
@@ -165,6 +166,74 @@ func TestMacOS9BuiltInAssets(t *testing.T) {
 
 // The Mac OS X app is a page of its own around the Mac OS 9 app's viewer:
 // what it links must be in the binary, and its Mac must be another Mac.
+// The Mac OS X Intel app is there where its Mac runs, Linux on x86-64,
+// with a Mac of its own under /v1/macosxintel; elsewhere neither the app,
+// its files nor its API are.
+func TestMacOSXIntelAppOnlyWhereItRuns(t *testing.T) {
+	root := t.TempDir()
+	s := New(&config.Config{}, nil, nil, "", root)
+	h := s.Handler()
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.test"+path, nil))
+		return w
+	}
+	listed := false
+	for _, a := range s.listApps() {
+		if a.Name == "macosxintel" {
+			listed = true
+			if a.Title != "Mac OS X Intel" || a.Window == nil || a.Window.Grow || !strings.Contains(a.SystemIcon, `viewBox="0 0 32 32"`) {
+				t.Fatalf("bad app metadata: %+v", a)
+			}
+		}
+	}
+	here := macos9.IntelMacHere()
+	if listed != here {
+		t.Fatalf("listed %v on a computer where the Mac runs: %v", listed, here)
+	}
+	if !here {
+		for _, p := range []string{"/apps/macosxintel/", "/v1/macosxintel"} {
+			if w := get(p); w.Code != 404 {
+				t.Errorf("%s: %d where the Mac does not run", p, w.Code)
+			}
+		}
+		return
+	}
+	page := get("/apps/macosxintel/")
+	if page.Code != 200 {
+		t.Fatalf("page: %d", page.Code)
+	}
+	for _, want := range []string{`data-api="/v1/macosxintel"`, `data-pointer-trims="0.15 0"`, `src="../macos9/app.js"`} {
+		if !strings.Contains(page.Body.String(), want) {
+			t.Errorf("page lacks %s", want)
+		}
+	}
+	if strings.Contains(page.Body.String(), `id="agent"`) {
+		t.Error("the Intel Mac's page has the agent's button")
+	}
+	// An installed PowerPC Mac OS X says nothing about the Intel one.
+	if err := os.MkdirAll(filepath.Join(root, "mac-osx"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "mac-osx", "installed.json"), []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var ppc, intel struct {
+		Installed bool
+		Trim      float64
+		Agent     any
+		Steps     []struct{ Title, Detail string }
+	}
+	for path, st := range map[string]any{"/v1/macosx": &ppc, "/v1/macosxintel": &intel} {
+		if err := json.Unmarshal(get(path).Body.Bytes(), st); err != nil {
+			t.Fatal(path, err)
+		}
+	}
+	if !ppc.Installed || intel.Installed || intel.Steps[5].Title != "Install Mac OS X" || intel.Trim != 0.15 || intel.Agent != nil {
+		t.Fatalf("the Macs are not apart: %+v %+v", ppc, intel)
+	}
+}
+
 func TestMacOSXBuiltInAppAndItsOwnMac(t *testing.T) {
 	meta, err := loadSysAppMeta("macosx")
 	if err != nil {

@@ -273,14 +273,26 @@ func (m *Manager) Finish() error {
 	return m.saveLocked()
 }
 func (m *Manager) prepare(ctx context.Context) error {
-	m.step(0, "working", "Checking for a PowerPC emulator…")
+	m.step(0, "working", m.sys.checking)
+	if m.sys.x86 {
+		if err := kvmUsable(); err != nil {
+			return err
+		}
+	}
 	if err := m.ensureRuntime(ctx); err != nil {
 		return err
 	}
-	if err := m.ensureDisplayDriver(); err != nil {
+	if m.sys.x86 {
+		if err := m.ensureOpenCore(ctx); err != nil {
+			return err
+		}
+		if err := m.ensureEFIVars(); err != nil {
+			return err
+		}
+	} else if err := m.ensureDisplayDriver(); err != nil {
 		return err
 	}
-	m.step(0, "done", "PowerPC emulator ready.")
+	m.step(0, "done", m.sys.ready)
 	installed := m.installed()
 	if !installed {
 		m.step(1, "working", m.sys.downloading)
@@ -310,7 +322,7 @@ func (m *Manager) prepare(ctx context.Context) error {
 		return err
 	}
 	m.step(3, "done", m.sys.diskReady)
-	m.step(4, "working", "Starting your Power Mac G4…")
+	m.step(4, "working", m.sys.starting)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -587,6 +599,9 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 	if err := m.recoverRuntime(); err != nil {
 		return err
 	}
+	if m.sys.x86 {
+		return m.ensureIntelRuntime(ctx)
+	}
 	dir := m.runtimePath("runtime")
 	have := false // a runtime here that works, of an older build or of the system's packages
 	if _, err := os.Stat(dir); err == nil {
@@ -626,6 +641,12 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 	if !strings.Contains(string(release), "ID=ubuntu") || !strings.Contains(string(release), "VERSION_ID=\"24.04\"") {
 		return errors.New("Install QEMU with PowerPC, VNC and user networking support on this computer, then Continue. Automatic emulator setup supports Ubuntu 24.04.")
 	}
+	return m.unpackPackages(ctx, []string{"qemu-system-ppc", "qemu-system-common", "qemu-system-data", "qemu-utils", "seabios", "libfdt1", "libslirp0", "liburing2", "libpmem1", "libndctl6", "libdaxctl1"}, validateRuntime)
+}
+
+// unpackPackages makes the runtime of Ubuntu's packages: downloaded with
+// apt-get, unpacked, checked by validate and put in place of the old.
+func (m *Manager) unpackPackages(ctx context.Context, pkgs []string, validate func(context.Context, string) error) error {
 	if _, err := exec.LookPath("apt-get"); err != nil {
 		return err
 	}
@@ -638,7 +659,6 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 		return err
 	}
 	defer os.RemoveAll(pkgDir)
-	pkgs := []string{"qemu-system-ppc", "qemu-system-common", "qemu-system-data", "qemu-utils", "seabios", "libfdt1", "libslirp0", "liburing2", "libpmem1", "libndctl6", "libdaxctl1"}
 	for i, pkg := range pkgs {
 		m.step(0, "working", fmt.Sprintf("Downloading emulator component %d of %d: %s", i+1, len(pkgs), pkg))
 		cmd := exec.CommandContext(ctx, "apt-get", "download", pkg)
@@ -669,7 +689,7 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 	if err = repairRuntimeFirmware(staging); err != nil {
 		return err
 	}
-	if err = validateRuntime(ctx, staging); err != nil {
+	if err = validate(ctx, staging); err != nil {
 		return err
 	}
 	if err = ctx.Err(); err != nil {
@@ -806,6 +826,9 @@ func verifyFile(ctx context.Context, path, digest string, size int64) error {
 	return nil
 }
 func (m *Manager) launchArgs(installer bool) []string {
+	if m.sys.x86 {
+		return m.intelLaunchArgs(installer)
+	}
 	args := append([]string{"-L", m.path("firmware"), "-name", m.sys.process}, m.sys.machine(installer)...)
 	args = append(args, "-drive", "file="+strings.ReplaceAll(m.path(m.sys.disk), ",", ",,")+",format=qcow2,media=disk", "-display", "none", "-vnc", "unix:"+m.path("vnc.sock"), "-qmp", "unix:"+m.path("qmp.sock")+",server=on,wait=off", "-monitor", "none", "-serial", "file:"+m.path("serial.log"), "-pidfile", m.path("qemu.pid"), "-daemonize")
 	if _, err := os.Stat(m.runtimePath("runtime/usr/share/qemu/openbios-ppc")); err == nil {
@@ -857,7 +880,7 @@ func (m *Manager) launch(ctx context.Context, installer bool) error {
 	m.ports = ports
 	m.mu.Unlock()
 	args := m.launchArgs(installer)
-	if err := m.startEmulator(ctx, m.binary("qemu-system-ppc"), args); err != nil {
+	if err := m.startEmulator(ctx, m.binary(m.sys.emulator), args); err != nil {
 		return err
 	}
 	for i := 0; i < 20; i++ {
@@ -900,6 +923,9 @@ func (m *Manager) pointerTrim() float64 {
 				return t
 			}
 		}
+	}
+	if len(m.sys.trims) > 0 {
+		return m.sys.trims[0]
 	}
 	return 0
 }

@@ -29,10 +29,20 @@ func (s *Server) macOSXManager() *macos9.Manager {
 	return s.macOSX
 }
 
-// mac is the Mac a request names: the two apps have the same API, one
-// under /v1/macos9 and one under /v1/macosx.
+// The Mac OS X Intel app's Mac has its root, and runtime, of its own.
+func (s *Server) macIntelManager() *macos9.Manager {
+	s.intelOnce.Do(func() { s.macIntel = macos9.NewMacOSXIntel(filepath.Join(s.StateDir, "mac-osx-intel")) })
+	return s.macIntel
+}
+
+// mac is the Mac a request names: the apps have the same API, under
+// /v1/macos9, /v1/macosx and /v1/macosxintel.
 func (s *Server) mac(r *http.Request) *macos9.Manager {
-	if r.URL.Path == "/v1/macosx" || strings.HasPrefix(r.URL.Path, "/v1/macosx/") {
+	under := func(prefix string) bool { return r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") }
+	switch {
+	case under("/v1/macosxintel"):
+		return s.macIntelManager()
+	case under("/v1/macosx"):
 		return s.macOSXManager()
 	}
 	return s.macOS9Manager()

@@ -480,18 +480,18 @@ body.mobile #cstrip { z-index: 5; }
 /* Full screen inside a Home Screen web app: preserve inline window geometry
    so leaving this view returns to the same desktop window. */
 #desktop.mac-fullscreen { z-index: 6000; }
-#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen {
+#desktop :is(#win-app-macos9, #win-app-macosx, #win-app-macosxintel).display-fullscreen {
   position: fixed; inset: 0 !important; width: auto !important; height: auto !important;
   min-width: 0; margin: 0; padding: var(--sat) var(--sar) var(--sab) var(--sal) !important;
   border: 0; box-shadow: none; background: #333; z-index: 6000 !important;
   display: flex; flex-direction: column;
 }
-#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen::before { display: none; }
-#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen > .titlebar { display: none; }
-#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen > .win-frame {
+#desktop :is(#win-app-macos9, #win-app-macosx, #win-app-macosxintel).display-fullscreen::before { display: none; }
+#desktop :is(#win-app-macos9, #win-app-macosx, #win-app-macosxintel).display-fullscreen > .titlebar { display: none; }
+#desktop :is(#win-app-macos9, #win-app-macosx, #win-app-macosxintel).display-fullscreen > .win-frame {
   display: flex; flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none;
 }
-#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen .app-frame { flex: 1; min-height: 0; height: 100% !important; }
+#desktop :is(#win-app-macos9, #win-app-macosx, #win-app-macosxintel).display-fullscreen .app-frame { flex: 1; min-height: 0; height: 100% !important; }
 /* ---- OS 9 grow box corner, a small framework any window can reuse ----
    Add class "grow" to a .window and put a 15×15 grow tile at the frame's
    bottom-right: desktop windows drop in a class="grow-box" SVG (see the
@@ -1889,6 +1889,7 @@ body.mobile th.sorted {
 <div class="dropdown" id="dd-special" hidden>
   <div class="dd-item" data-act="macos9">Mac OS 9</div>
   <div class="dd-item" data-act="macosx">Mac OS X</div>
+  <div class="dd-item" data-act="macosxintel" id="dd-mac-intel" hidden>Mac OS X Intel</div>
   <div class="dd-sep"></div>
   <div class="dd-item" data-act="join">Node Sync…</div>
   <div class="dd-item" data-act="hubjoin">Join a Hub…</div>
@@ -4735,6 +4736,7 @@ const ACTIONS = {
   winlog: openLogWin,
   macos9: () => openAppWin("macos9"),
   macosx: () => openAppWin("macosx"),
+  macosxintel: () => openAppWin("macosxintel"),
   cfstatus: () => sumOpen(),
   cfwizard: () => wizOpen(false),
   join: () => joinOpen(),
@@ -5202,6 +5204,7 @@ const DOCS_ICONS = {
   "desktop-context-menu": () => MENU_ICON,
   "mac-os-9": DOCS_APP("macos9"),
   "mac-os-x": DOCS_APP("macosx"),
+  "mac-os-x-intel": DOCS_APP("macosxintel"),
   "virtual-machines": () => macIcon("running", 16),
   "ssh-from-your-own-terminal": () => KEY_ICON,
   "the-coding-agent": () => $("#chat-icon svg").outerHTML,
@@ -6361,6 +6364,8 @@ function registerSystemAppIcons(apps) {
 async function loadApps() {
   appsList = await j("/v1/apps");
   registerSystemAppIcons(appsList);
+  // the Intel Mac's app is there only on a computer that runs it
+  $("#dd-mac-intel").hidden = !appsList.some(a => a.name === "macosxintel");
   renderIcons(lastVMs);
   // app windows restored from a layout snapshot before the list arrived get
   // their real title and height once metadata is here
@@ -6401,7 +6406,7 @@ function appFrameSrc(name, args) {
 // standard state). An app not listed yet (a window the layout opened
 // before the list came) is not known to be one, and an emulated Mac is
 // not: its window is fitted to the guest's display (fitMacOS9Window).
-const MAC_APPS = ["macos9", "macosx"]; // the Mac OS 9 app and the Mac OS X app
+const MAC_APPS = ["macos9", "macosx", "macosxintel"]; // the Mac OS 9 app, the Mac OS X app and its Intel one
 const isMacWin = w => MAC_APPS.some(name => w.id === "win-app-" + name);
 const appOneSize = a => !!a.name && !MAC_APPS.includes(a.name) && !(a.window && a.window.grow);
 // the size an app's window opens at: its app.json's, inside this viewport
@@ -13834,6 +13839,39 @@ async function tsExit(ip, name) {
     action: L("Use Exit Node"), danger: true })) return;
   tsSet({ action: "set", key: "exit_node", value: ip }, ip ? L`Traffic now leaves through ${name}.` : L("No exit node: traffic leaves on its own."));
 }
+// Desktop over HTTPS: Serve's root on port 443 proxying to this daemon, so
+// the desktop is at https://<this machine's name>/ on the tailnet, where
+// it installs as an app. The daemon turns that one rule on and off
+// (serve_desk) and never another; a root serving something else greys
+// the item and says what, and so does a tailnet without HTTPS
+// certificates, with the way to turn them on. desk.url is the address to
+// copy: the HTTPS one while it is on, else the daemon's own port where it
+// listens on the tailnet.
+const tsDesk = () => (tsLast && tsLast.desk) || {};
+// this window came in through that address, and would go with it
+function tsViaHTTPS() {
+  const d = tsDesk();
+  try { return !!d.https_url && location.origin === new URL(d.https_url).origin; } catch (e) { return false; }
+}
+async function tsServeDesk(on) {
+  const d = tsDesk();
+  if (!on && tsViaHTTPS() && !await confirmDialog({
+    message: L("Turn off the desktop's HTTPS address?"),
+    detail: L`This window came in through ${d.https_url} and loses the desktop with it. To turn it back on, open the desktop at another of its addresses.`,
+    action: L("Turn Off"), danger: true })) return;
+  tsSet({ action: "serve_desk", value: on },
+    () => tsDesk().https ? L`The desktop is at ${tsDesk().https_url}.` : L("The desktop's HTTPS address is off."));
+}
+function tsDeskItems() {
+  const d = tsDesk(), items = [{ label: L("Desktop over HTTPS"), mark: !!d.https, title: TS_TIPS.https,
+    dis: !d.https_url || (!d.https && (!!d.taken || !d.certs)), act: () => tsServeDesk(!d.https) }];
+  if (d.https) items.push({ label: d.https_url, dis: true });
+  else if (d.taken) items.push({ label: L`${d.https_url} serves ${d.taken}`, dis: true });
+  else if (d.https_url && !d.certs) items.push({ label: L("This tailnet issues no HTTPS certificates"), dis: true },
+    { label: L("Turn On HTTPS Certificates…"), act: () => window.open("https://login.tailscale.com/admin/dns", "_blank", "noopener") });
+  items.push({ label: L("Copy Desktop Address"), dis: !d.url, act: () => tsCopy(d.url, L("this desktop")) });
+  return items;
+}
 // a login link from tailscaled: opened if the browser allows, else copied
 async function tsLogin() {
   await tsSet({ action: "login" });
@@ -13872,8 +13910,10 @@ function tsServeItems() {
   return [{ label: L("Pick one to copy its address"), dis: true }, "-",
     ...rows.map(r => ({ label: r.url + " → " + r.target + (r.public ? L(" · public (Funnel)") : ""), act: () => tsCopy(r.url, L("served")) }))];
 }
-// the four preference toggles say in a tooltip what they are for
+// the four preference toggles say in a tooltip what they are for, and so
+// does Desktop over HTTPS
 const TS_TIPS = {
+  https: L("Serve this desktop at its HTTPS address on the tailnet, through Tailscale Serve. Only your tailnet's devices reach it, and over HTTPS the desktop installs as an app. Turning it off removes only that Serve rule."),
   accept_routes: L("Use the subnet routes other Tailscale devices advertise, so this machine can reach the networks behind them (an office or home LAN, say) through the tailnet."),
   accept_dns: L("Let Tailscale handle this machine's DNS: MagicDNS names such as spark-7c78 resolve, and the tailnet's DNS settings from the admin console apply here."),
   shields_up: L("Refuse every incoming connection from other Tailscale devices. This machine still reaches them; nothing reaches it — this desktop included, when you come in through Tailscale."),
@@ -13895,7 +13935,7 @@ function tsStripMenu() {
       { label: L("Tailscale Active"), mark: st === "Running" || st === "Starting", act: () => { if (st !== "Running") tsSet({ action: "up" }, () => tsHead()); } },
       { label: L("Tailscale Inactive"), mark: st === "Stopped", act: () => { if (st !== "Stopped") tsTurnOff(); } });
     if (st === "Running") {
-      items.push("-",
+      items.push("-", ...tsDeskItems(), "-",
         { label: L("Exit Node"), items: tsExitItems() },
         { label: L("Devices"), items: tsDeviceItems() },
         { label: L("Serve"), items: tsServeItems() });
@@ -13904,7 +13944,7 @@ function tsStripMenu() {
         tsToggle(L("Use Tailscale DNS"), "accept_dns"),
         { label: L("Shields Up"), mark: !!tsPrefs().shields_up, title: TS_TIPS.shields_up, act: () => tsShields(!tsPrefs().shields_up) },
         tsToggle(L("Tailscale SSH"), "ssh"));
-      items.push("-", { label: L("Copy This Machine's Address"), act: () => tsCopy(self.dns_name || self.ip, L("this machine")) });
+      items.push("-");
     }
     items.push({ label: L("Admin Console…"), act: () => window.open("https://login.tailscale.com/admin/machines", "_blank", "noopener") });
   }

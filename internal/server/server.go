@@ -47,6 +47,8 @@ type Server struct {
 	macOS9     *macos9.Manager
 	macOSXOnce sync.Once
 	macOSX     *macos9.Manager
+	intelOnce  sync.Once
+	macIntel   *macos9.Manager
 	VMs        vmm.Manager
 	Proxy      *proxy.Proxy
 	KeyPath    string
@@ -329,9 +331,14 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc(m+" /v1/svc/{name}", s.handleServiceRelay)
 		mux.HandleFunc(m+" /v1/svc/{name}/{path...}", s.handleServiceRelay)
 	}
-	// The Mac OS 9 app's Mac and the Mac OS X app's: one API, a root each
-	// (s.mac picks the Mac by the path).
-	for _, mac := range []string{"/v1/macos9", "/v1/macosx"} {
+	// The Mac OS 9 app's Mac, the Mac OS X app's and, on a computer that
+	// can run it, the Mac OS X Intel app's: one API, a root each (s.mac
+	// picks the Mac by the path).
+	macs := []string{"/v1/macos9", "/v1/macosx"}
+	if macos9.IntelMacHere() {
+		macs = append(macs, "/v1/macosxintel")
+	}
+	for _, mac := range macs {
 		mux.HandleFunc("GET "+mac, s.handleMacOS9Status)
 		mux.HandleFunc("POST "+mac+"/start", s.handleMacOS9Start)
 		mux.HandleFunc("POST "+mac+"/cancel", s.handleMacOS9Cancel)

@@ -48,9 +48,9 @@ func (m *Manager) hasShell() bool {
 func (m *Manager) AgentKeyPath() string { return m.path(filepath.Join("ssh", "id_rsa")) }
 
 // Agent is the agent's way in, with the key minted on the first ask. nil
-// for a Mac without a shell.
+// for a Mac without a shell, and for one the Chat does not work in.
 func (m *Manager) Agent() (*Agent, error) {
-	if !m.hasShell() {
+	if !m.sys.agent || !m.hasShell() {
 		return nil, nil
 	}
 	key, err := m.ensureAgentKey()

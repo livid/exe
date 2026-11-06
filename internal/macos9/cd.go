@@ -194,15 +194,15 @@ func (q *cdMonitor) call(command string, args any, out any) error {
 		return nil
 	}
 }
-func (q *cdMonitor) drive() (*cdBlock, error) {
+func (q *cdMonitor) drive(name string) (*cdBlock, error) {
 	var blocks []cdBlock
 	if err := q.call("query-block", nil, &blocks); err != nil {
 		return nil, err
 	}
 	for _, b := range blocks {
-		// This is the IDE CD drive created by both supported launch configurations.
+		// The Mac's CD drive, by the name its launch gives it (system.cdDrive).
 		// Do not accidentally target QEMU's other removable devices (floppy/SD).
-		if b.Device == "ide1-cd0" && b.Removable && b.ID != "" {
+		if b.Device == name && b.Removable && b.ID != "" {
 			return &b, nil
 		}
 	}
@@ -225,7 +225,7 @@ func (m *Manager) cdStatus(ctx context.Context) (CDStatus, error) {
 		return s, err
 	}
 	defer q.Close()
-	b, err := q.drive()
+	b, err := q.drive(m.sys.cdDrive)
 	if err != nil {
 		return s, err
 	}
@@ -258,7 +258,7 @@ func (m *Manager) ChangeCD(ctx context.Context, name string, force bool) (CDStat
 		return CDStatus{}, err
 	}
 	defer q.Close()
-	b, err := q.drive()
+	b, err := q.drive(m.sys.cdDrive)
 	if err != nil {
 		return CDStatus{}, err
 	}
@@ -275,7 +275,7 @@ func (m *Manager) ChangeCD(ctx context.Context, name string, force bool) (CDStat
 		if err = q.call("blockdev-open-tray", map[string]any{"id": b.ID}, nil); err != nil {
 			return CDStatus{}, err
 		}
-		b, err = q.drive()
+		b, err = q.drive(m.sys.cdDrive)
 		if err != nil {
 			return CDStatus{}, err
 		}

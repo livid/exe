@@ -79,6 +79,7 @@ The small Mac at its left end is the **Apple menu**.
 | Windows | **Log Viewer** | The daemon's log and the log of requests to the API. |
 | Special | **Mac OS 9** | Opens a Mac running Mac OS 9. See [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9). |
 | Special | **Mac OS X** | Opens a Mac running Mac OS X 10.4 Tiger. See [Mac OS X](https://exe.v2core.com/docs/using/mac-os-x). |
+| Special | **Mac OS X Intel** | Opens an Intel Mac running Mac OS X 10.4.11, on Linux on x86-64 only. See [Mac OS X Intel](https://exe.v2core.com/docs/using/mac-os-x-intel). |
 | Special | **Node Sync…** | Pairs this exe with another one. See [Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together). |
 | Special | **Join a Hub…** | Joins a hub, a step at a time. See [The Hub](https://exe.v2core.com/docs/using/the-hub). |
 | Special | **Cloudflare Status…** | The tunnel's state and its live counters. |
@@ -142,8 +143,8 @@ not.
   way; see
   [Arguments, paths and app names](https://exe.v2core.com/docs/using/desktop-context-menu#arguments-paths-and-app-names).
 - **A name that is not an installed app** does nothing.
-- **Mac OS 9 and Mac OS X** do not open from a link, because opening one
-  starts its Mac. Open them from their icons.
+- **Mac OS 9, Mac OS X and Mac OS X Intel** do not open from a link,
+  because opening one starts its Mac. Open them from their icons.
 - **The window is part of the layout**, so it opens on your other screens
   too.
 
@@ -388,25 +389,44 @@ online. Under them:
 | --- | --- |
 | **Tailscale Active**, **Tailscale Inactive** | Turn Tailscale on and off. |
 | **Log In…** | Stands in place of that pair when Tailscale needs a login, and opens the login link. |
+| **Desktop over HTTPS** | Serves this desktop at `https://<this machine's name>/` on the tailnet, through Tailscale Serve, and stops again. Only the tailnet's devices reach it, and over HTTPS the desktop installs as an app. While it is on, the line under it is the address. |
+| **Copy Desktop Address** | Copies the desktop's address on the tailnet: the HTTPS one while it is on, else the daemon's own port where it listens on the tailnet. |
 | **Exit Node** | Picks one of the devices that offer one, or **None**. **Allow LAN Access** is in the same submenu. |
 | **Devices** | Lists the devices that are online. Pick a row to copy its address. |
 | **Serve** | Lists the Tailscale Serve rules. Pick a row to copy its address. |
 | **Accept Routes**, **Use Tailscale DNS**, **Shields Up**, **Tailscale SSH** | Switch each setting on or off. Rest the pointer on one for what it does. |
-| **Copy This Machine's Address** | Copies this machine's name on the tailnet, or its address. |
 | **Admin Console…** | Opens Tailscale's admin console. |
 | **Check Now** | Asks Tailscale again. |
 
-The rows from **Exit Node** to **Copy This Machine's Address** are there
-while Tailscale is connected.
+The rows from **Desktop over HTTPS** to **Tailscale SSH** are there while
+Tailscale is connected.
 
-Three changes ask first, because the desktop could go with them: turning
+**Desktop over HTTPS** changes only its own Serve rule, the one for the
+address's root. It stays greyed, with the reason on the line under it, in
+two cases:
+
+- That address already serves something else, which the line names. The
+  **Serve** submenu lists it.
+- The tailnet issues no HTTPS certificates. **Turn On HTTPS
+  Certificates…** opens the admin console's DNS page, where they are
+  turned on.
+
+The first visit after it is turned on can wait several seconds while
+Tailscale fetches the certificate; exe asks the address once itself, so
+that wait is usually over by the time you open it.
+
+Four changes ask first, because the desktop could go with them: turning
 Tailscale off or raising the shields while the desktop is itself reached
-through Tailscale, and choosing an exit node while you reach the desktop
-over the local network with **Allow LAN Access** off.
+through Tailscale, turning **Desktop over HTTPS** off from a window that
+came in through that address, and choosing an exit node while you reach
+the desktop over the local network with **Allow LAN Access** off.
 
 The daemon asks the `tailscale` CLI on the machine and changes only those
-settings (`GET /v1/tailscale`, `POST /v1/tailscale/set`). It runs as
-Tailscale's operator user, so it needs no sudo.
+settings and that one Serve rule (`GET /v1/tailscale`,
+`POST /v1/tailscale/set`). It runs as Tailscale's operator user, so it
+needs no sudo. If it is not the operator, the menu says so and gives the
+command that makes it one: `sudo tailscale set --operator=<user>`, run
+once at the machine.
 
 ### Control Strip: Solana ticker
 
@@ -1522,8 +1542,8 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `welcome` | Open the Welcome window. |
 | `customize` | Open this menu's editor. |
 
-There is no separate `macos9` or `macosx` action in the customization
-format; use `app macos9` and `app macosx`.
+There is no separate `macos9`, `macosx` or `macosxintel` action in the
+customization format; use `app macos9`, `app macosx` and `app macosxintel`.
 
 ### Arguments, paths and app names
 
@@ -2060,6 +2080,94 @@ The API is the Mac OS 9 app's under another name: `GET /v1/macosx`,
 `POST /v1/macosx/start`, `/cancel` and `/finish`, the binary WebSocket at
 `/v1/macosx/console`, and for the drive `GET` and `POST /v1/macosx/cd` and
 `POST /v1/macosx/cd/upload`.
+
+## Mac OS X Intel
+
+The **Mac OS X Intel** app is a third Mac, on a node that runs Linux on an
+x86-64 processor: Mac OS X 10.4.11 for Intel Macs, on this machine's own
+processor under KVM rather than emulated, with a 100 GB hard disk of its
+own. It is the [Mac OS X](https://exe.v2core.com/docs/using/mac-os-x) app's
+Tiger as Apple sold it on the first Intel Macs, and it runs at the speed of
+one core of this machine. On a node of another kind the app is not there.
+
+What it gives up beside the PowerPC Mac: Classic, so no Mac OS 9 programs
+inside it; sound, Quartz Extreme and Core Image, which need drivers Tiger
+has for no device QEMU offers; and the agent, whose Chat works in the
+PowerPC Mac. What it gains: speed, and Rosetta, which runs PowerPC Mac OS X
+programs. The two Mac OS X apps are separate machines and can run at the
+same time.
+
+### What it needs
+
+- **KVM**, and this account allowed to use it (`/dev/kvm`, the `kvm`
+  group). Tiger for Intel does not start under QEMU's software emulation.
+- **QEMU for x86 and OVMF's 32-bit firmware.** On Ubuntu 24.04 setup
+  fetches them; elsewhere install them (`qemu-system-x86`, `ovmf-ia32`).
+- **Room on this node.** The install DVD is a 2.2 GiB download and
+  OpenCore, which starts Tiger on a machine that is not a Mac, 10 MB. The
+  hard disk takes 3 to 5 GB after installation.
+- **Memory.** The Mac has 2 GB while it runs.
+
+### Set it up the first time
+
+1. Choose **Special → Mac OS X Intel**; it is also among the built-in
+   apps. Setup checks KVM, prepares the emulator, downloads Apple's Tiger
+   10.4.11 install DVD for Intel Macs from the Internet Archive and
+   OpenCore from GitHub, checks both against their checksums, creates the
+   hard disk and starts the Mac from the DVD.
+2. Follow the guide above the Mac's screen. Choose a language, then
+   **Utilities → Disk Utility…**. Select **100.0 GB QEMU HARDDISK**, open
+   the **Erase** tab, name the disk, click **Erase** and confirm: Tiger for
+   Intel gives it the GUID partition table an Intel Mac starts from. Quit
+   Disk Utility.
+3. In the Installer click **Continue**, agree to the license, select the new
+   disk, click **Continue**, then **Install**. Copying takes about four
+   minutes.
+   At its end the Installer restarts the Mac, which closes the screen.
+   Click **Installation finished — start my Mac**.
+4. Tiger's Setup Assistant first asks to identify the keyboard, as it does
+   for any keyboard that is not Apple's: click **OK** and press the two
+   keys it shows. Then it asks for a country, a layout and your account.
+
+### The window
+
+The window is the Mac OS X app's, without **Agent** and with no sound:
+the same 1024×768 display, **Mac keys…**, **CD…** and **Full screen**. The
+pointer is where your browser's is, from the Installer on: Tiger 10.4.11
+leaves the edges of a tablet's range unused, and the window allows for it
+from the start. **Restart** and **Shut Down** in the Apple menu work as on
+the PowerPC Mac.
+
+The Mac reports itself as a Mac Pro with one Core 2 processor. It has one
+core because Tiger 10.4.11 does not start on more than one virtual
+processor.
+
+### A shell and screen sharing from this machine
+
+Remote Login and Apple Remote Desktop's VNC, once turned on in
+**System Preferences → Sharing**, are reachable from this machine and no
+other, as on the PowerPC Mac: **Setup details** shows their ports. The
+Workspace mounts the same way, from **Setup… → Mount Workspace**.
+
+### Clock and network
+
+The clock is today's, kept in universal time, and Tiger shows it in the
+time zone you choose. The installed Mac has an Intel PRO/1000 Ethernet
+adapter, which Tiger's own driver takes, with outbound NAT and DHCP over
+IPv4; networking is off while the Installer runs. Software Update still
+finds Apple's Tiger updates. They replace parts of the system OpenCore
+starts; installing them is untested.
+
+### Where it is kept
+
+The emulator, firmware settings, OpenCore, installer, setup progress and
+disk live in `~/.exe/mac-osx-intel/` (or `$EXE_HOME/mac-osx-intel/`), outside
+app-data sync.
+
+The API is the other Macs' under another name: `GET /v1/macosxintel`,
+`POST /v1/macosxintel/start`, `/cancel` and `/finish`, the binary WebSocket
+at `/v1/macosxintel/console`, and for the drive `GET` and
+`POST /v1/macosxintel/cd` and `POST /v1/macosxintel/cd/upload`.
 
 ## Virtual machines
 
@@ -3309,6 +3417,7 @@ These are part of exe itself, and each has a chapter of its own.
 |---|---|---|---|
 | **Mac OS 9** | `macos9` | A Power Mac G4 running Mac OS 9.2.2. | [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9) |
 | **Mac OS X** | `macosx` | A Power Mac G4 running Mac OS X 10.4 Tiger. | [Mac OS X](https://exe.v2core.com/docs/using/mac-os-x) |
+| **Mac OS X Intel** | `macosxintel` | An Intel Mac running Mac OS X 10.4.11 under KVM, on Linux on x86-64. | [Mac OS X Intel](https://exe.v2core.com/docs/using/mac-os-x-intel) |
 | **Hub** | `hub` | A small public feed shared between exe nodes. | [The Hub](https://exe.v2core.com/docs/using/the-hub) |
 | **Blue Pencil** | `bluepencil` | A proofreader that runs on your own model. | [Blue Pencil](https://exe.v2core.com/docs/using/blue-pencil) |
 | **Dict** | `dict` | A dictionary from English and five other languages into Chinese, Japanese or Korean. | [Dict](https://exe.v2core.com/docs/using/dict) |
@@ -3789,7 +3898,7 @@ Joined nodes sync continuously, both ways:
 - **The Newsfeed.** One timeline of what happened on every node.
 
 VMs, the configuration and the disks of the Mac OS 9 and Mac OS X apps
-are not synced: each stays on its own node. Joining gives the other node the sync and nothing more: not
+(Intel included) are not synced: each stays on its own node. Joining gives the other node the sync and nothing more: not
 your VMs, your configuration or a shell.
 
 ### Join two nodes

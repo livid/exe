@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"exe/internal/macos9"
 	"exe/internal/peer"
 )
 
@@ -69,9 +70,16 @@ func appDataName(name string) string {
 	return name
 }
 
+// sysAppHere: a built-in app this computer can run. The Mac OS X Intel
+// app's Mac needs Linux on x86-64 (macos9.IntelMacHere); elsewhere the app
+// is not there at all.
+func sysAppHere(name string) bool {
+	return name != "macosxintel" || macos9.IntelMacHere()
+}
+
 func sysAppExists(name string) bool {
 	name = canonicalAppName(name)
-	if !validAppName(name) {
+	if !validAppName(name) || !sysAppHere(name) {
 		return false
 	}
 	_, err := fs.Stat(sysAppsFS, "sysapps/"+name+"/index.html")
@@ -341,7 +349,7 @@ func (s *Server) listApps(logSkips ...bool) []*appMeta {
 	}
 	if entries, err := fs.ReadDir(sysAppsFS, "sysapps"); err == nil {
 		for _, e := range entries {
-			if e.IsDir() {
+			if e.IsDir() && sysAppHere(e.Name()) {
 				names[e.Name()] = true
 			}
 		}

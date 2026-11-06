@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -275,5 +276,138 @@ func TestTailscaleParseServeEmpty(t *testing.T) {
 	rows := tsParseServe([]byte(`{"TCP":{"80":{"HTTP":true}},"Web":{"x.ts.net:80":{"Handlers":{"/docs":{"Path":"/srv/docs"},"/":{"Text":"hello"}}}}}`), "x.ts.net")
 	if len(rows) != 2 || rows[0]["url"] != "http://x.ts.net" || rows[0]["target"] != "text: hello" || rows[1]["url"] != "http://x.ts.net/docs" || rows[1]["target"] != "/srv/docs" {
 		t.Errorf("http rows: %v", rows)
+	}
+}
+
+// Desktop over HTTPS: the menu learns whether Serve's root on 443 is this
+// daemon, what to copy, and serve_desk turns that one rule on and off —
+// never another, and never without the tailnet's HTTPS certificates.
+func TestTailscaleServeDesk(t *testing.T) {
+	const dns = "spark-7c78.tailnet-ac29.ts.net"
+	withCerts := strings.Replace(tsFixStatus, `"Health": [],`, `"Health": [], "CertDomains": ["`+dns+`"],`, 1)
+	const noRoot = `{"TCP": {"8788": {"HTTPS": true}}, "Web": {"` + dns + `:8788": {"Handlers": {"/": {"Proxy": "http://100.116.32.57:7788"}}}}}`
+	var ran [][]string
+	var warmed []string
+	status, serve, refuse := withCerts, tsFixServe, ""
+	oldBin, oldRun, oldWarm := tsBinary, tsRun, tsWarm
+	tsBinary = func() string { return "/usr/bin/tailscale" }
+	tsRun = func(ctx context.Context, args ...string) ([]byte, error) {
+		switch strings.Join(args, " ") {
+		case "status --json":
+			return []byte(status), nil
+		case "debug prefs":
+			return []byte(tsFixPrefs), nil
+		case "serve status --json":
+			return []byte(serve), nil
+		}
+		ran = append(ran, args)
+		if refuse != "" {
+			return nil, errors.New(refuse)
+		}
+		return nil, nil
+	}
+	tsWarm = func(addr string) { warmed = append(warmed, addr) }
+	t.Cleanup(func() { tsBinary, tsRun, tsWarm = oldBin, oldRun, oldWarm })
+
+	serverAt := func(listen string) *Server {
+		return New(&config.Config{Listen: listen}, nil, nil, "", t.TempDir())
+	}
+	desk := func(s *Server) map[string]any {
+		d, _ := tsGet(t, s, "/v1/tailscale?force=1", "", "", "")["desk"].(map[string]any)
+		return d
+	}
+	post := func(s *Server, body string) (int, string) {
+		ran, warmed = nil, nil
+		rec := httptest.NewRecorder()
+		s.handleTailscaleSet(rec, httptest.NewRequest("POST", "/v1/tailscale/set", strings.NewReader(body)))
+		var b map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &b)
+		msg, _ := b["error"].(string)
+		return rec.Code, msg
+	}
+	cmd := func() string {
+		if len(ran) != 1 {
+			return fmt.Sprint(ran)
+		}
+		return strings.Join(ran[0], " ")
+	}
+
+	// the dev host: the daemon on its Tailscale IP, Serve's root on 443 its
+	d := desk(serverAt("100.116.32.57:7777"))
+	if d["https"] != true || d["url"] != "https://"+dns || d["taken"] != "" || d["certs"] != true || d["https_url"] != "https://"+dns {
+		t.Errorf("served desk: %v", d)
+	}
+	// a second daemon on 7797: the root is somebody else's, and it is
+	// reached over the tailnet at its own port
+	d = desk(serverAt("100.116.32.57:7797"))
+	if d["https"] != false || d["taken"] != "http://127.0.0.1:7777" || d["url"] != "http://"+dns+":7797" {
+		t.Errorf("taken root: %v", d)
+	}
+	// on loopback alone it is not on the tailnet at all
+	if d = desk(serverAt("127.0.0.1:7797")); d["url"] != "" {
+		t.Errorf("loopback-only daemon: %v", d)
+	}
+
+	s := serverAt("100.116.32.57:7777")
+	if code, _ := post(s, `{"action":"serve_desk","value":false}`); code != http.StatusOK || cmd() != "serve --https=443 --set-path=/ off" {
+		t.Errorf("off: %d ran %s", code, cmd())
+	}
+	if code, _ := post(s, `{"action":"serve_desk","value":true}`); code != http.StatusOK || len(ran) != 0 || len(warmed) != 0 {
+		t.Errorf("on while on: %d ran %v warmed %v", code, ran, warmed)
+	}
+	serve = noRoot
+	if code, _ := post(s, `{"action":"serve_desk","value":true}`); code != http.StatusOK ||
+		cmd() != "serve --bg --https=443 http://127.0.0.1:7777" || len(warmed) != 1 || warmed[0] != "https://"+dns {
+		t.Errorf("on: %d ran %s warmed %v", code, cmd(), warmed)
+	}
+	if code, _ := post(s, `{"action":"serve_desk","value":false}`); code != http.StatusOK || len(ran) != 0 {
+		t.Errorf("off while off: %d ran %v", code, ran)
+	}
+	// the CLI refusing an operator-less daemon comes back with the way out
+	refuse = "tailscale serve: Access denied: serve config denied"
+	if code, msg := post(s, `{"action":"serve_desk","value":true}`); code != http.StatusBadGateway || !strings.Contains(msg, "--operator=") {
+		t.Errorf("access denied: %d %q", code, msg)
+	}
+	refuse = ""
+	// no certificates in the tailnet: refused before the CLI is asked
+	status = tsFixStatus
+	if code, msg := post(s, `{"action":"serve_desk","value":true}`); code != http.StatusConflict || len(ran) != 0 || !strings.Contains(msg, "certificates") {
+		t.Errorf("no certs: %d %q ran %v", code, msg, ran)
+	}
+	// another server's root is left alone, either way
+	status, serve = withCerts, tsFixServe
+	other := serverAt("100.116.32.57:7797")
+	for _, v := range []string{"true", "false"} {
+		if code, msg := post(other, `{"action":"serve_desk","value":`+v+`}`); code != http.StatusConflict || len(ran) != 0 || !strings.Contains(msg, "127.0.0.1:7777") {
+			t.Errorf("taken, %s: %d %q ran %v", v, code, msg, ran)
+		}
+	}
+	if code, _ := post(s, `{"action":"serve_desk","value":"yes"}`); code != http.StatusBadRequest || len(ran) != 0 {
+		t.Errorf("bad value: %d ran %v", code, ran)
+	}
+}
+
+func TestTailscaleServesDesk(t *testing.T) {
+	ips := []string{"100.116.32.57", "fd7a:115c:a1e0::7337:2039"}
+	for target, want := range map[string]bool{
+		"http://127.0.0.1:7777":     true,
+		"http://localhost:7777":     true,
+		"http://[::1]:7777":         true,
+		"http://100.116.32.57:7777": true,
+		"http://127.0.0.1:7778":     false,
+		"https://127.0.0.1:7777":    false,
+		"http://10.0.0.5:7777":      false,
+		"/srv/www":                  false,
+		"text: hello":               false,
+	} {
+		if got := tsServesDesk(target, "100.116.32.57", "7777", ips); got != want {
+			t.Errorf("%s: %v, want %v", target, got, want)
+		}
+	}
+	if got := tsDeskTarget("::1", "7777"); got != "http://[::1]:7777" {
+		t.Errorf("ipv6 loopback target: %s", got)
+	}
+	if got := tsDeskTarget("100.116.32.57", "7777"); got != "http://127.0.0.1:7777" {
+		t.Errorf("named listen target: %s", got)
 	}
 }

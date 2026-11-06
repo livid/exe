@@ -37,7 +37,8 @@ type system struct {
 	// allow for to put the arrow where the browser's pointer is. Tiger as
 	// installed (10.4.0) uses the whole range; from its updates on (seen in
 	// 10.4.11) the HID driver drops 15%, 7.5% at each edge, and has no
-	// setting for it. The viewer finds out which and tells the daemon.
+	// setting for it. The viewer finds out which and tells the daemon; until
+	// one has, the first is the Mac's.
 	trims []float64
 	// gpu: the Mac gets the qegl device when the emulator has it, OpenGL
 	// passed through to this machine's GPU. With the guest's drivers Tiger
@@ -45,7 +46,31 @@ type system struct {
 	// OpenGL gets a renderer on the GPU from the QEGL Engine extension;
 	// without them the device sits unused.
 	gpu bool
+
+	// x86: an Intel Mac, QEMU's x86 machine on this computer's own processor
+	// under KVM and booted by OpenCore (intel.go), where the others are
+	// PowerPC Macs emulated in software. Its machine is intelLaunchArgs, not
+	// machine, and its runtime and firmware are its own.
+	x86      bool
+	emulator string // QEMU's program for this Mac
+	// What step 1 and step 5 of setup say while they run.
+	checking, ready, starting string
+	cdDrive                   string // the CD drive's name in QEMU's block list
+	// agent: the Mac the Chat's agent works in (agent.go), over its "ssh"
+	// forward. One Mac has the Chat; another with Remote Login has the
+	// forward and no agent.
+	agent bool
 }
+
+// The PowerPC Macs' common parts: exe's own emulator, a Power Mac G4, and
+// the IDE CD drive QEMU's -cdrom makes.
+const (
+	ppcEmulator = "qemu-system-ppc"
+	ppcChecking = "Checking for a PowerPC emulator…"
+	ppcReady    = "PowerPC emulator ready."
+	ppcStarting = "Starting your Power Mac G4…"
+	ppcCD       = "ide1-cd0"
+)
 
 // A forward is a service inside the Mac that this machine, and nothing
 // beyond it, can reach: QEMU listens on a loopback port of the host and
@@ -75,6 +100,7 @@ var macOS9 = &system{
 	network:   "user,id=net0",
 	ethernet:  "52:54:00:09:02:22",
 	gpu:       true,
+	emulator:  ppcEmulator, checking: ppcChecking, ready: ppcReady, starting: ppcStarting, cdDrive: ppcCD,
 }
 
 func macOS9Machine(installer bool) []string {
@@ -118,6 +144,8 @@ var macOSX = &system{
 	ethernet: "52:54:00:10:04:00",
 	trims:    []float64{0, 0.15},
 	gpu:      true,
+	emulator: ppcEmulator, checking: ppcChecking, ready: ppcReady, starting: ppcStarting, cdDrive: ppcCD,
+	agent: true,
 }
 
 func macOSXMachine(installer bool) []string {

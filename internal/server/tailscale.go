@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,6 +78,7 @@ type tsStatus struct {
 	Self           *tsPeer
 	Health         []string
 	MagicDNSSuffix string
+	CertDomains    []string // empty while the tailnet issues no HTTPS certificates
 	CurrentTailnet *struct {
 		Name           string
 		MagicDNSSuffix string
@@ -128,11 +131,7 @@ type tsServeConfig struct {
 		TCPForward string
 	}
 	Web map[string]struct {
-		Handlers map[string]struct {
-			Proxy string
-			Path  string
-			Text  string
-		}
+		Handlers map[string]tsHandler
 	}
 	AllowFunnel map[string]bool
 }
@@ -226,14 +225,7 @@ func tsParseServe(raw []byte, dnsName string) []map[string]any {
 		}
 		sort.Strings(paths)
 		for _, p := range paths {
-			h := sc.Web[hp].Handlers[p]
-			target := h.Proxy
-			if target == "" && h.Path != "" {
-				target = h.Path
-			}
-			if target == "" && h.Text != "" {
-				target = "text: " + firstLine(h.Text, 40)
-			}
+			target := tsHandlerTarget(sc.Web[hp].Handlers[p])
 			url := base
 			if p != "/" {
 				url += p
@@ -255,6 +247,40 @@ func tsParseServe(raw []byte, dnsName string) []map[string]any {
 		rows = append(rows, map[string]any{"url": "tcp://" + hp, "target": t.TCPForward, "public": sc.AllowFunnel[hp]})
 	}
 	return rows
+}
+
+type tsHandler = struct {
+	Proxy string
+	Path  string
+	Text  string
+}
+
+// tsHandlerTarget is what a Serve handler serves, as the menu shows it: a
+// proxy's URL, a folder or file, or the start of a text.
+func tsHandlerTarget(h tsHandler) string {
+	switch {
+	case h.Proxy != "":
+		return h.Proxy
+	case h.Path != "":
+		return h.Path
+	case h.Text != "":
+		return "text: " + firstLine(h.Text, 40)
+	}
+	return ""
+}
+
+// tsHTTPSRoot is what https://<this machine's name>/ serves — the root
+// handler on port 443 — or "" when Serve has none there.
+func tsHTTPSRoot(raw []byte, dnsName string) string {
+	var sc tsServeConfig
+	if dnsName == "" || json.Unmarshal(raw, &sc) != nil || !sc.TCP["443"].HTTPS {
+		return ""
+	}
+	h, ok := sc.Web[dnsName+":443"].Handlers["/"]
+	if !ok {
+		return ""
+	}
+	return tsHandlerTarget(h)
 }
 
 // tsCollect asks the CLI and shapes the module's answer. installed:false
@@ -282,6 +308,7 @@ func tsCollect(ctx context.Context) map[string]any {
 	}
 	res["state"] = st.BackendState
 	res["version"] = strings.SplitN(st.Version, "-", 2)[0]
+	res["certs"] = len(st.CertDomains) > 0
 	if st.AuthURL != "" {
 		res["auth_url"] = st.AuthURL
 	}
@@ -354,11 +381,11 @@ func tsCollect(ctx context.Context) map[string]any {
 			}
 		}
 	}
-	serve := []map[string]any{}
+	serve, root := []map[string]any{}, ""
 	if out, err := tsRun(ctx, "serve", "status", "--json"); err == nil {
-		serve = tsParseServe(out, selfDNS)
+		serve, root = tsParseServe(out, selfDNS), tsHTTPSRoot(out, selfDNS)
 	}
-	res["serve"] = serve
+	res["serve"], res["https_root"] = serve, root
 	return res
 }
 
@@ -433,7 +460,98 @@ func (s *Server) tsDecorate(res map[string]any, r *http.Request) map[string]any 
 		}
 	}
 	out["listen_on_tailscale"] = listenTS
+	out["desk"] = s.tsDesk(res)
 	return out
+}
+
+// tsDesk says where this desktop is on the tailnet, for the menu's
+// Desktop over HTTPS and Copy Desktop Address: https, whether Serve's
+// root on port 443 proxies to this daemon; https_url, that address;
+// taken, what the root serves when it is something else; certs, whether
+// the tailnet issues HTTPS certificates, which Serve needs; and url, the
+// address to copy — the HTTPS one while it is served, else
+// http://<name>:<port> where the daemon listens on the tailnet, else "".
+func (s *Server) tsDesk(res map[string]any) map[string]any {
+	host, port := s.tsListen()
+	dns, ips := "", []string{}
+	if self, ok := res["self"].(map[string]any); ok {
+		dns, _ = self["dns_name"].(string)
+		ips, _ = self["ips"].([]string)
+	}
+	root, _ := res["https_root"].(string)
+	certs, _ := res["certs"].(bool)
+	mine := root != "" && tsServesDesk(root, host, port, ips)
+	d := map[string]any{"https": mine, "https_url": "", "taken": "", "certs": certs, "url": ""}
+	if dns == "" {
+		return d
+	}
+	d["https_url"] = "https://" + dns
+	if root != "" && !mine {
+		d["taken"] = root
+	}
+	ip := net.ParseIP(host)
+	switch {
+	case mine:
+		d["url"] = "https://" + dns
+	case port != "" && (host == "" || isTailscaleIP(ip) || (ip != nil && ip.IsUnspecified())):
+		d["url"] = "http://" + dns + ":" + port
+	}
+	return d
+}
+
+// tsListen is the daemon's own listen host and port.
+func (s *Server) tsListen() (string, string) {
+	if c := s.cfg.Load(); c != nil {
+		if h, p, err := net.SplitHostPort(c.Listen); err == nil {
+			return h, p
+		}
+	}
+	return "", ""
+}
+
+// tsServesDesk says whether a Serve proxy target is this daemon: plain HTTP
+// to its port on loopback, its listen address or one of the machine's
+// tailnet addresses.
+func tsServesDesk(target, host, port string, ips []string) bool {
+	u, err := url.Parse(target)
+	if err != nil || u.Scheme != "http" || port == "" || u.Port() != port {
+		return false
+	}
+	h := u.Hostname()
+	if h == "localhost" || h == host {
+		return true
+	}
+	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
+		return true
+	}
+	for _, ip := range ips {
+		if h == ip {
+			return true
+		}
+	}
+	return false
+}
+
+// tsDeskTarget is what Serve proxies to for this desktop: the daemon on
+// loopback, which it always answers on (a named listen address gets a
+// 127.0.0.1 companion).
+func tsDeskTarget(host, port string) string {
+	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil && ip.IsLoopback() {
+		return "http://[::1]:" + port
+	}
+	return "http://127.0.0.1:" + port
+}
+
+// tsWarm asks the new HTTPS address once, in the background, so that the
+// certificate Tailscale fetches for its first visit (several seconds) is
+// fetched now rather than while someone waits on it.
+var tsWarm = func(addr string) {
+	go func() {
+		c := &http.Client{Timeout: 60 * time.Second}
+		if resp, err := c.Get(addr + "/"); err == nil {
+			resp.Body.Close()
+		}
+	}()
 }
 
 // GET /v1/tailscale[?force=1] — the module's status. The "detected" and
@@ -444,12 +562,17 @@ func (s *Server) handleTailscale(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.tsDecorate(res, r))
 }
 
-// POST /v1/tailscale/set {action: up|down|login|set, key, value} — one
-// change through the CLI, then the fresh status. up waits at most 15 s for
-// Running; login only asks tailscaled to start a login and lets the status
-// carry the link; set takes a bool for a tsBoolFlags key or a device (IP
-// or name) offering an exit node — or "" — for exit_node. --accept-risk
-// stands in for the CLI's terminal prompt: the desktop has already asked.
+// POST /v1/tailscale/set {action: up|down|login|set|serve_desk, key, value}
+// — one change through the CLI, then the fresh status. up waits at most
+// 15 s for Running; login only asks tailscaled to start a login and lets
+// the status carry the link; set takes a bool for a tsBoolFlags key or a
+// device (IP or name) offering an exit node — or "" — for exit_node.
+// --accept-risk stands in for the CLI's terminal prompt: the desktop has
+// already asked. serve_desk takes a bool: true serves this desktop at
+// https://<this machine's name>/ (Serve's root on 443, proxying to the
+// daemon), false removes that one rule. It never touches a rule that is
+// not this desktop's: a root on 443 serving something else is refused
+// (409), and so is a tailnet without HTTPS certificates.
 func (s *Server) handleTailscaleSet(w http.ResponseWriter, r *http.Request) {
 	if tsBinary() == "" {
 		writeErr(w, http.StatusNotFound, errors.New("tailscale is not installed on this machine"))
@@ -474,6 +597,49 @@ func (s *Server) handleTailscaleSet(w http.ResponseWriter, r *http.Request) {
 		args = []string{"down", "--accept-risk=all"}
 	case "login":
 		args = []string{"up", "--timeout=3s"}
+	case "serve_desk":
+		var on bool
+		if json.Unmarshal(req.Value, &on) != nil {
+			writeErr(w, http.StatusBadRequest, errors.New("serve_desk wants true or false"))
+			return
+		}
+		d := s.tsDesk(s.tailscaleStatus(ctx, true))
+		taken, _ := d["taken"].(string)
+		served, _ := d["https"].(bool)
+		at, _ := d["https_url"].(string)
+		switch {
+		case at == "":
+			writeErr(w, http.StatusConflict, errors.New("this machine has no name on the tailnet yet"))
+			return
+		case on && served, !on && !served && taken == "":
+			// already as asked: nothing to run
+		case taken != "":
+			writeErr(w, http.StatusConflict, fmt.Errorf("%s already serves %s, which is not this desktop: Serve lists it", at, taken))
+			return
+		case on && d["certs"] != true:
+			writeErr(w, http.StatusConflict, errors.New("this tailnet issues no HTTPS certificates: turn them on in the admin console, under DNS"))
+			return
+		case on:
+			host, port := s.tsListen()
+			if port == "" {
+				writeErr(w, http.StatusInternalServerError, errors.New("the daemon's listen address has no port"))
+				return
+			}
+			args = []string{"serve", "--bg", "--https=443", tsDeskTarget(host, port)}
+		default:
+			args = []string{"serve", "--https=443", "--set-path=/", "off"}
+		}
+		if args == nil {
+			break
+		}
+		if _, err := tsRun(ctx, args...); err != nil {
+			writeErr(w, http.StatusBadGateway, tsOperatorHint(err))
+			return
+		}
+		if on {
+			tsWarm(at)
+		}
+		args = nil
 	case "set":
 		if flag, ok := tsBoolFlags[req.Key]; ok {
 			var v bool
@@ -503,12 +669,28 @@ func (s *Server) handleTailscaleSet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("unknown action %q", req.Action))
 		return
 	}
-	if _, err := tsRun(ctx, args...); err != nil && req.Action != "login" {
-		writeErr(w, http.StatusBadGateway, err)
-		return
+	// serve_desk has run its own command, or had none to run
+	if args != nil {
+		if _, err := tsRun(ctx, args...); err != nil && req.Action != "login" {
+			writeErr(w, http.StatusBadGateway, tsOperatorHint(err))
+			return
+		}
 	}
 	res := s.tailscaleStatus(ctx, true)
 	writeJSON(w, http.StatusOK, s.tsDecorate(res, r))
+}
+
+// tsOperatorHint adds the way out to the CLI's refusal when the daemon's
+// user may not change Tailscale's settings: making it the operator, once.
+func tsOperatorHint(err error) error {
+	if !strings.Contains(strings.ToLower(err.Error()), "access denied") {
+		return err
+	}
+	name := "$USER"
+	if u, e := user.Current(); e == nil && u.Username != "" {
+		name = u.Username
+	}
+	return fmt.Errorf("%w — let exe change Tailscale's settings: run sudo tailscale set --operator=%s at the machine, once", err, name)
 }
 
 // tsOffersExit says whether v names (by IP or tailnet name) a device that

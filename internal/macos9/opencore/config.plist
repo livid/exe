@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  OpenCore 1.0.8 (IA32 build) for exe's Intel Mac: Mac OS X 10.4.11 on
+  QEMU's q35 board under KVM with OVMF's 32-bit firmware (intel.go). Every
+  key not here keeps OpenCore's failsafe value (Docs/Configuration.pdf).
+-->
+<plist version="1.0">
+<dict>
+	<!-- Tiger's 32-bit boot.efi: its kernel loads low in memory, and its
+	     image has overlapping sections a strict loader refuses. -->
+	<key>Booter</key>
+	<dict>
+		<key>Quirks</key>
+		<dict>
+			<key>AllowRelocationBlock</key><true/>
+			<key>AvoidRuntimeDefrag</key><true/>
+			<key>EnableSafeModeSlide</key><true/>
+			<key>EnableWriteUnprotector</key><true/>
+			<key>FixupAppleEfiImages</key><true/>
+			<key>ProvideCustomSlide</key><true/>
+		</dict>
+	</dict>
+	<!-- An i386 kernel with its kexts from the mkext; no CPU power
+	     management (the virtual CPU has none); the TSC frequency and the
+	     Penryn cache sizes 10.4 cannot read from CPUID. -->
+	<key>Kernel</key>
+	<dict>
+		<key>Emulate</key>
+		<dict>
+			<key>DummyPowerManagement</key><true/>
+		</dict>
+		<key>Quirks</key>
+		<dict>
+			<key>ProvideCurrentCpuInfo</key><true/>
+		</dict>
+		<key>Scheme</key>
+		<dict>
+			<key>FuzzyMatch</key><true/>
+			<key>KernelArch</key><string>i386</string>
+			<key>KernelCache</key><string>Auto</string>
+		</dict>
+	</dict>
+	<!-- No picker: the Mac starts from its one system, the install DVD or
+	     the hard disk. Scanning SATA and ATAPI devices only (1114114: the
+	     device lock, SATA and ATAPI) leaves out the virtio disk OpenCore
+	     itself is on. A file system lock would leave out the DVD too: its
+	     HFS+ volume is in an Apple partition map, not a GUID one. -->
+	<key>Misc</key>
+	<dict>
+		<key>Boot</key>
+		<dict>
+			<key>HideAuxiliary</key><true/>
+			<key>PickerMode</key><string>Builtin</string>
+			<key>ShowPicker</key><false/>
+			<key>Timeout</key><integer>0</integer>
+		</dict>
+		<key>Security</key>
+		<dict>
+			<key>AllowSetDefault</key><true/>
+			<key>DmgLoading</key><string>Any</string>
+			<key>ExposeSensitiveData</key><integer>6</integer>
+			<key>ScanPolicy</key><integer>1114114</integer>
+			<key>SecureBootModel</key><string>Disabled</string>
+			<key>Vault</key><string>Optional</string>
+		</dict>
+	</dict>
+	<!-- A Mac Pro (2006), a model Tiger 10.4.11 knows; the serial numbers
+	     are made up. boot.efi reads these from the Data Hub. -->
+	<key>PlatformInfo</key>
+	<dict>
+		<key>Automatic</key><true/>
+		<key>Generic</key>
+		<dict>
+			<key>MLB</key><string>G80000000000000Z1</string>
+			<key>ROM</key><data>UlQAEAQR</data>
+			<key>SpoofVendor</key><true/>
+			<key>SystemProductName</key><string>MacPro1,1</string>
+			<key>SystemSerialNumber</key><string>G8000000000Z</string>
+			<key>SystemUUID</key><string>4C6F6E67-5469-6765-7254-696765720001</string>
+		</dict>
+		<key>UpdateDataHub</key><true/>
+		<key>UpdateNVRAM</key><true/>
+		<key>UpdateSMBIOS</key><true/>
+		<key>UpdateSMBIOSMode</key><string>Create</string>
+	</dict>
+	<!-- HFS+ and the install DVD's Apple partition map, which OVMF does not
+	     read. ConnectDrivers, or the screen stays at OVMF's mode while
+	     Tiger draws for 1024x768. 10.4's boot.efi draws through UGA. -->
+	<key>UEFI</key>
+	<dict>
+		<key>ConnectDrivers</key><true/>
+		<key>Drivers</key>
+		<array>
+			<dict><key>Enabled</key><true/><key>Path</key><string>OpenHfsPlus.efi</string></dict>
+			<dict><key>Enabled</key><true/><key>Path</key><string>OpenPartitionDxe.efi</string></dict>
+			<dict><key>Enabled</key><true/><key>Path</key><string>OpenRuntime.efi</string></dict>
+		</array>
+		<key>Output</key>
+		<dict>
+			<key>ProvideConsoleGop</key><true/>
+			<key>Resolution</key><string>1024x768</string>
+			<key>TextRenderer</key><string>BuiltinGraphics</string>
+			<key>UgaPassThrough</key><true/>
+		</dict>
+		<key>ProtocolOverrides</key>
+		<dict>
+			<key>AppleFramebufferInfo</key><true/>
+			<key>DataHub</key><true/>
+		</dict>
+		<key>Quirks</key>
+		<dict>
+			<key>RequestBootVarRouting</key><true/>
+		</dict>
+	</dict>
+</dict>
+</plist>

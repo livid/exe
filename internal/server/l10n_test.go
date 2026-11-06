@@ -19,7 +19,7 @@ import (
 // uiUntranslated is desk text that stays as it is in every language: names
 // of products, systems and commands, and lines made of them.
 var uiUntranslated = map[string]bool{
-	"Mac OS 9": true, "Mac OS X": true, "Debian 13": true, "Alpine 3.24": true, "exe": true,
+	"Mac OS 9": true, "Mac OS X": true, "Mac OS X Intel": true, "Debian 13": true, "Alpine 3.24": true, "exe": true,
 	"github.com/livid/exe": true, "ollama": true, "openai (ChatGPT)": true, "exe token": true,
 	"Cloudflare": true, "my-vm": true, "Workspace": true, "Claude Code": true, "Codex": true,
 	"Tailscale": true, "System :menu.txt": true, "Shift+Insert": true, "chatgpt — {0}{1}{2}": true,
