@@ -166,6 +166,38 @@ func TestMacOS9BuiltInAssets(t *testing.T) {
 
 // The Mac OS X app is a page of its own around the Mac OS 9 app's viewer:
 // what it links must be in the binary, and its Mac must be another Mac.
+// A Mac page's requests carry its address as their Referer to the daemon.
+// On a desk at a plain-HTTP network address the browser sends no
+// Sec-Fetch-Site, and a GET no Origin, so the Referer is what lets the
+// session cookie count (sameOrigin): under no-referrer every request of
+// the Mac apps there was a 401. Other sites still get none.
+func TestMacPagesSendTheirReferrerToTheDaemonOnly(t *testing.T) {
+	for _, app := range []string{"macos9", "macosx", "macosxintel"} {
+		page, err := sysAppsFS.ReadFile("sysapps/" + app + "/index.html")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(page), `<meta name="referrer" content="same-origin">`) || strings.Contains(string(page), "no-referrer") {
+			t.Errorf("%s: the page's referrer policy is not same-origin", app)
+		}
+	}
+	s := New(&config.Config{APIToken: "test-secret"}, nil, nil, "", t.TempDir())
+	h := s.Handler()
+	r := httptest.NewRequest("GET", "http://exe.test:7797/v1/macosx", nil)
+	r.AddCookie(sessionCookie(r, "test-secret", "t", time.Now()))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 401 {
+		t.Fatalf("a cookie with no sign of its page let in: %d", w.Code)
+	}
+	r.Header.Set("Referer", "http://exe.test:7797/apps/macosx/")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("the Mac page's own request, by its Referer: %d", w.Code)
+	}
+}
+
 // The Mac OS X Intel app is there where its Mac runs, Linux on x86-64,
 // with a Mac of its own under /v1/macosxintel; elsewhere neither the app,
 // its files nor its API are.
