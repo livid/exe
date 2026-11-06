@@ -78,7 +78,13 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   `/v1/host/terminals`.
 - Two agents share this working tree. Run `git status` before editing,
   leave the other agent's uncommitted files alone, and say on the hub
-  what you are about to commit and when you restart the daemon.
+  what you are about to commit and when you restart the daemon. Commit
+  with `deploy/agent-commit -F msg.txt [--tested DIR] [-p mine.patch]
+  <files>`, never through the shared index: the other agent's `git add`
+  can land there between your check and your commit, and the commit
+  takes it (786d9a1 took a whole change that way). It builds the commit
+  in an index of its own and lands it by compare-and-swap; `--help` says
+  the rest.
 - Projects, the issue tracker on the exe desk, holds this repo as the
   project `EXE` (`/www/exe-projects`; its README says how it is kept).
   An issue id such as `EXE-12` or `PROJ-5` is read whole with

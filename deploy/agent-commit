@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# Commit from this checkout without going through its shared index. Two
+# agents share the working tree and its .git index, so a `git add` by one
+# can land between the other's last check and its `git commit`, and the
+# commit takes both (786d9a1 carried a whole Mac OS X Intel change that
+# way). This builds the commit in an index of its own, from HEAD, holding
+# only what it is told; checks it; and lands it by compare-and-swap,
+# refused with nothing changed if the branch moved meanwhile.
+#
+#   deploy/agent-commit -F msg.txt [options] [--] <path>...
+#   deploy/agent-commit -m "Area: what changed" -p mine.patch [<path>...]
+#
+#   <path>            a file as it is on disk: added, changed, or removed
+#                     when it is gone. Files only: a folder could hold the
+#                     other agent's files too
+#   -p, --patch FILE  the hunks of a patch, for a file the other agent has
+#                     edited as well: `git diff -- f > mine.patch`, trimmed
+#                     to your hunks. Repeatable
+#   -F FILE           the commit message, from a file
+#   -m TEXT           the commit message itself. Git's comment lines are
+#                     stripped from either, as `git commit` does
+#   --tested DIR      a copy of the tree you built and tested: each file the
+#                     commit changes must equal DIR/<path> byte for byte,
+#                     and each one it removes must be absent from DIR
+#   -n, --dry-run     build and check, show what would be committed, stop
+#   --push            then push it: fast-forward only, and only when the
+#                     one commit it sends is this one
+#   --push-all        the same, sending the unpushed commits under it too
+#
+# The checkout's hooks (core.hooksPath: pre-commit, then commit-msg) run
+# as `git commit` would run them, against the private index. Once the
+# commit has landed, the shared index takes its version of each file it
+# changed, except where someone has staged another version there: that is
+# left alone, and named.
+set -euo pipefail
+
+die() { printf 'agent-commit: %s\n' "$*" >&2; exit 1; }
+say() { printf 'agent-commit: %s\n' "$*" >&2; }
+
+orig=$(pwd -P)
+abs() { case $1 in /*) printf '%s' "$1" ;; *) printf '%s' "$orig/$1" ;; esac; }
+
+top=$(git rev-parse --show-toplevel 2>/dev/null) || die "not in a git checkout"
+prefix=$(git rev-parse --show-prefix)
+
+paths=() patches=()
+msgfile="" msgtext="" msgs=0 tested="" dry=0 push=0 pushall=0
+while [ $# -gt 0 ]; do
+	case $1 in
+	-F | --file)
+		[ $# -ge 2 ] || die "$1 wants a file"
+		msgfile=$(abs "$2"); msgs=$((msgs + 1)); shift 2 ;;
+	-m | --message)
+		[ $# -ge 2 ] || die "$1 wants the message"
+		msgtext=$2; msgs=$((msgs + 1)); shift 2 ;;
+	-p | --patch)
+		[ $# -ge 2 ] || die "$1 wants a patch file"
+		patches+=("$(abs "$2")"); shift 2 ;;
+	--tested)
+		[ $# -ge 2 ] || die "$1 wants a folder"
+		tested=$(abs "$2"); shift 2 ;;
+	-n | --dry-run) dry=1; shift ;;
+	--push) push=1; shift ;;
+	--push-all) push=1; pushall=1; shift ;;
+	-h | --help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+	--) shift; paths+=("$@"); break ;;
+	-*) die "unknown option $1 (--help says what it takes)" ;;
+	*) paths+=("$1"); shift ;;
+	esac
+done
+
+[ "$msgs" -eq 1 ] || die "give the message once: -F file or -m text"
+[ ${#paths[@]} -gt 0 ] || [ ${#patches[@]} -gt 0 ] || die "name the files to commit, or a patch (-p)"
+[ -z "$tested" ] || [ -d "$tested" ] || die "--tested $tested: no such folder"
+for p in ${patches[@]+"${patches[@]}"}; do [ -f "$p" ] || die "$p: no such patch"; done
+
+cd "$top"
+# the named files as repository paths, whichever folder this ran from
+rel=()
+for p in ${paths[@]+"${paths[@]}"}; do
+	case $p in
+	"$top"/*) p=${p#"$top"/} ;;
+	/*) die "$p is outside this checkout" ;;
+	*) p=$prefix$p ;;
+	esac
+	# as git names it: no ./ or doubled slashes; .. is refused rather than
+	# guessed at
+	p=$(printf '%s' "$p" | sed -e 's#^\(\./\)*##' -e 's#/\./#/#g' -e 's#//*#/#g' -e 's#/$##')
+	case /$p/ in */../*) die "$p: name it without .." ;; esac
+	if [ -d "$p" ] && [ ! -L "$p" ]; then die "$p is a folder: name its files"; fi
+	rel+=("$p")
+done
+
+ref=$(git symbolic-ref -q HEAD) || die "HEAD is detached: check out the branch to commit on"
+branch=${ref#refs/heads/}
+old=$(git rev-parse --verify HEAD)
+
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/agent-commit.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+if [ -n "$msgfile" ]; then
+	[ -f "$msgfile" ] || die "$msgfile: no such message file"
+	git stripspace --strip-comments <"$msgfile" >"$tmp/msg"
+else
+	printf '%s\n' "$msgtext" | git stripspace --strip-comments >"$tmp/msg"
+fi
+[ -s "$tmp/msg" ] || die "the message is empty"
+
+# ---- the commit's tree, in an index of its own ----
+idx="$tmp/index"
+GIT_INDEX_FILE=$idx git read-tree "$old"
+for p in ${rel[@]+"${rel[@]}"}; do
+	if [ -e "$p" ] || [ -L "$p" ]; then
+		GIT_INDEX_FILE=$idx git add -- "$p" || die "$p: git would not add it"
+	elif git cat-file -e "$old:$p" 2>/dev/null; then
+		GIT_INDEX_FILE=$idx git rm -q --cached -- "$p"
+	else
+		die "$p: not on disk, and not in HEAD to remove"
+	fi
+done
+for f in ${patches[@]+"${patches[@]}"}; do
+	GIT_INDEX_FILE=$idx git apply --cached --check "$f" 2>"$tmp/err" ||
+		die "$f does not apply to HEAD: $(head -1 "$tmp/err")"
+	GIT_INDEX_FILE=$idx git apply --cached "$f"
+done
+tree=$(GIT_INDEX_FILE=$idx git write-tree)
+git diff --quiet "$old" "$tree" && die "nothing to commit: the files are as HEAD has them"
+
+# every change is one this was told to make
+{
+	[ ${#rel[@]} -eq 0 ] || printf '%s\n' "${rel[@]}"
+	for f in ${patches[@]+"${patches[@]}"}; do git apply --numstat "$f" | cut -f3-; done
+} | sort -u >"$tmp/named"
+git diff --name-only --no-renames "$old" "$tree" >"$tmp/changed"
+stray=$(grep -vxF -f "$tmp/named" "$tmp/changed" || true)
+[ -z "$stray" ] || die "the tree changes files it was not given: $stray"
+
+# ---- it is what was tested ----
+if [ -n "$tested" ]; then
+	bad=""
+	while IFS= read -r p; do
+		if git cat-file -e "$tree:$p" 2>/dev/null; then
+			if [ -L "$tested/$p" ]; then
+				[ "$(readlink "$tested/$p")" = "$(git cat-file -p "$tree:$p")" ] || bad="$bad $p"
+			elif [ -f "$tested/$p" ]; then
+				git cat-file -p "$tree:$p" | cmp -s - "$tested/$p" || bad="$bad $p"
+			else
+				bad="$bad $p"
+			fi
+		elif [ -e "$tested/$p" ] || [ -L "$tested/$p" ]; then
+			bad="$bad $p"
+		fi
+	done <"$tmp/changed"
+	[ -z "$bad" ] || die "not what was tested in $tested:$bad"
+fi
+
+printf 'agent-commit: on %s, over %s:\n' "$branch" "$(git rev-parse --short "$old")" >&2
+git --no-pager diff --stat "$old" "$tree" >&2
+
+# ---- the checkout's hooks, as git commit runs them ----
+hooks=$(git config core.hooksPath || true)
+[ -n "$hooks" ] || hooks=$(git rev-parse --git-path hooks)
+case $hooks in /*) ;; *) hooks="$top/$hooks" ;; esac
+if [ -x "$hooks/pre-commit" ]; then
+	GIT_INDEX_FILE=$idx "$hooks/pre-commit" || die "the pre-commit hook refused it: nothing committed"
+fi
+if [ -x "$hooks/commit-msg" ]; then
+	GIT_INDEX_FILE=$idx "$hooks/commit-msg" "$tmp/msg" || die "the commit-msg hook refused it: nothing committed"
+fi
+
+if [ "$dry" -eq 1 ]; then
+	say "dry run: nothing committed"
+	exit 0
+fi
+
+# ---- land it: refused if the branch moved since $old was read ----
+commit=$(git commit-tree "$tree" -p "$old" -F "$tmp/msg")
+git update-ref -m "agent-commit: $(head -1 "$tmp/msg")" "$ref" "$commit" "$old" 2>/dev/null ||
+	die "$branch moved while this ran (another commit landed): nothing committed, and the files are as they were; run it again"
+
+# ---- the shared index takes the new versions, where nobody staged their own ----
+while IFS= read -r p; do
+	shared=$(git ls-files -s -- "$p" | awk 'NR == 1 { print $2 }')
+	was=$(git rev-parse -q --verify "$old:$p" 2>/dev/null || true)
+	now=$(git rev-parse -q --verify "$commit:$p" 2>/dev/null || true)
+	if [ "$shared" = "$was" ] || [ "$shared" = "$now" ]; then
+		git reset -q "$commit" -- "$p" 2>/dev/null || true
+	else
+		say "$p has another version staged in the shared index: left as it is"
+	fi
+done <"$tmp/changed"
+
+git --no-pager log -1 --format='agent-commit: committed %h %s' "$commit" >&2
+
+[ "$push" -eq 1 ] || exit 0
+remote=origin
+git fetch -q "$remote" || die "committed $(git rev-parse --short "$commit"); not pushed: $remote did not answer"
+up=$(git rev-parse -q --verify "refs/remotes/$remote/$branch") || die "committed; not pushed: $remote has no $branch"
+git merge-base --is-ancestor "$up" "$commit" ||
+	die "committed $(git rev-parse --short "$commit"); not pushed: $remote/$branch has commits this one is not on"
+n=$(git rev-list --count "$up..$commit")
+if [ "$n" -gt 1 ] && [ "$pushall" -eq 0 ]; then
+	say "committed $(git rev-parse --short "$commit"); not pushed: it would also send these, not pushed yet:"
+	git --no-pager log --format='  %h %an %s' "$up..$commit^" >&2
+	die "push with --push-all to send them too, or leave them to whoever made them"
+fi
+git push -q "$remote" "$commit:refs/heads/$branch" || die "committed; the push was refused"
+say "pushed $n commit$([ "$n" -eq 1 ] || echo s) to $remote/$branch"
