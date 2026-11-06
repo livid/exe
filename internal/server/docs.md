@@ -482,7 +482,7 @@ CPU, memory, GPU, network and disk, a sample every two seconds.
 | --- | --- |
 | CPU | Its share of all cores, and its hottest sensor's temperature. |
 | Memory | Memory in use: the total less what the kernel says is available. |
-| GPU | Its use, temperature and power, from `nvidia-smi`. A host without `nvidia-smi` has no GPU row. |
+| GPU | Its use, temperature and power, from `nvidia-smi`. A host with more than one card has a row for each, **GPU 1**, **GPU 2** and on, in `nvidia-smi`'s order. A host without `nvidia-smi` has no GPU row. |
 | Network | Bytes a second in and out over the physical network interfaces. |
 | Disk | Bytes a second read and written on the physical disks. |
 

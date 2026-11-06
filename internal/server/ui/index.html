@@ -13545,7 +13545,10 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) auRe
 // has its final width from the first paint. Each chart column is one
 // sample, drawn on a canvas in whole device pixels so it stays crisp at
 // any scale; percentages fill to 100, rates to their busiest moment in
-// view, two-way rates stacked (in under out, read under write).
+// view, two-way rates stacked (in under out, read under write). A host
+// with more than one graphics card has a row a card, GPU 1, GPU 2…, in
+// nvidia-smi's order: the first keeps the one card's key, "gpu", so a pick
+// remembered on it stays put, and the rest are gpu2, gpu3….
 const csMon = $("#cs-mon");
 const MON = {
   cpu: { name: "CPU", icon: "mon-cpu", colors: ["#6666be"], pct: true, vals: s => [s.cpu] },
@@ -13558,10 +13561,24 @@ const MON_FLOOR = 10000; // a rate chart's top is never under 10 KB/s, so an idl
 let monShown = "cpu", monSeen = "1", monInfo = null, monSamples = [], monT = 0, monInterval = 2000;
 let monFreshAt = 0, monPending = false, monLive = null;
 try {
-  const k = localStorage.getItem("exe_cstrip_mon_kind"); if (MON[k]) monShown = k;
+  const k = localStorage.getItem("exe_cstrip_mon_kind"); if (MON[k] || monCard(k)) monShown = k;
   monSeen = localStorage.getItem("exe_cstrip_mon") || "1";
 } catch (e) {}
-const monKinds = () => Object.keys(MON).filter(k => k !== "gpu" || (monInfo && monInfo.gpu));
+// the card a kind names, counted from 1; 0 for a kind that is not a GPU
+function monCard(kind) {
+  const m = /^gpu(\d*)$/.exec(kind || "");
+  return !m ? 0 : m[1] ? +m[1] : 1;
+}
+const monCards = () => (monInfo && monInfo.gpus || []).length;
+// one card's figures: the host's own with a single card
+const monGPU = (kind, s) => monCards() > 1 ? (s.gpus || [])[monCard(kind) - 1] || {} : { util: s.gpu, temp: s.gpu_temp, power: s.gpu_power };
+function monSpec(kind) {
+  const n = monCard(kind);
+  if (!n) return MON[kind];
+  return { ...MON.gpu, name: n > 1 || monCards() > 1 ? L`GPU ${n}` : MON.gpu.name, vals: s => [monGPU(kind, s).util] };
+}
+const monKinds = () => Object.keys(MON).flatMap(k => k !== "gpu" ? [k] : !monInfo || !monInfo.gpu ? []
+  : monCards() > 1 ? monInfo.gpus.map((_, i) => i ? "gpu" + (i + 1) : "gpu") : ["gpu"]);
 // before the first answer the remembered pick holds: a GPU tile is not
 // drawn as the CPU's and then swapped
 const monKind = () => !monInfo || monKinds().includes(monShown) ? monShown : "cpu";
@@ -13571,8 +13588,8 @@ const monSum = vs => vs.some(v => v != null) ? vs.reduce((a, v) => a + (v || 0),
 // the tile's figure: a percentage, or the two directions added up
 function monFigure(kind, s) {
   if (!s) return "—";
-  const vs = MON[kind].vals(s);
-  return MON[kind].pct ? monPct(vs[0]) : (monSum(vs) == null ? "—" : cfBps(monSum(vs)));
+  const k = monSpec(kind), vs = k.vals(s);
+  return k.pct ? monPct(vs[0]) : (monSum(vs) == null ? "—" : cfBps(monSum(vs)));
 }
 // a menu row's words
 function monWords(kind, s) {
@@ -13580,7 +13597,10 @@ function monWords(kind, s) {
   const i = monInfo || {};
   if (kind === "cpu") return L`${monPct(s.cpu)} of ${i.cores} cores${s.cpu_temp != null ? " · " + Math.round(s.cpu_temp) + "°C" : ""}`;
   if (kind === "mem") return s.mem == null ? "—" : L`${monPct(s.mem)} · ${fmtBytes(s.mem_used)} of ${fmtBytes(i.memory_total)}`;
-  if (kind === "gpu") return [monPct(s.gpu), s.gpu_temp != null ? Math.round(s.gpu_temp) + "°C" : "", s.gpu_power != null ? Math.round(s.gpu_power) + " W" : ""].filter(Boolean).join(" · ");
+  if (monCard(kind)) {
+    const g = monGPU(kind, s);
+    return [monPct(g.util), g.temp != null ? Math.round(g.temp) + "°C" : "", g.power != null ? Math.round(g.power) + " W" : ""].filter(Boolean).join(" · ");
+  }
   const [a, b] = kind === "net" ? ["in", "out"] : ["read", "write"], vs = MON[kind].vals(s);
   return vs[0] == null ? "—" : cfBps(vs[0]) + " " + a + " · " + cfBps(vs[1]) + " " + b;
 }
@@ -13597,7 +13617,7 @@ function monDraw(cv, kind) {
   if (!w || !h) return;
   const dpr = window.devicePixelRatio || 1, W = Math.round(w * dpr), H = Math.round(h * dpr);
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
-  const g = cv.getContext("2d"), k = MON[kind];
+  const g = cv.getContext("2d"), k = monSpec(kind);
   g.clearRect(0, 0, W, H);
   if (!monSamples.length) return;
   const last = monSamples[monSamples.length - 1].t, cols = [];
@@ -13626,7 +13646,7 @@ function monDraw(cv, kind) {
 // the chart: 34px of frame, icon and triangle, 38px of chart and its gap
 function monFit() {
   const probe = el("span", { style: "position:absolute;visibility:hidden;white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums" },
-    MON[monKind()].pct ? "100%" : "999 KB/s");
+    monSpec(monKind()).pct ? "100%" : "999 KB/s");
   document.body.append(probe);
   const w = Math.ceil(probe.getBoundingClientRect().width);
   probe.remove();
@@ -13634,7 +13654,7 @@ function monFit() {
 }
 function monStripPaint() {
   csMon.hidden = !(monInfo ? true : monSeen === "1");
-  $("#cs-mon .cs-ico").innerHTML = iconCurrent(MON[monKind()].icon);
+  $("#cs-mon .cs-ico").innerHTML = iconCurrent(monSpec(monKind()).icon);
   $("#cs-mon .cs-txt").textContent = monFigure(monKind(), monNow());
   monDraw($("#cs-mon .cs-chart canvas"), monKind());
   if (monLive) {
@@ -13680,8 +13700,9 @@ function monStripMenu() {
   const rows = monKinds().map(kind => {
     const cv = el("canvas"), val = el("span", { class: "v", "data-w": widest });
     monLive[kind] = { cv, val };
-    return { label: el("span", { class: "mon-row" }, el("span", { class: "n" }, MON[kind].name), el("span", { class: "c" }, cv), val),
-      icon: iconCurrent(MON[kind].icon), mark: kind === monKind(), act: () => monPick(kind) };
+    const k = monSpec(kind);
+    return { label: el("span", { class: "mon-row" }, el("span", { class: "n" }, k.name), el("span", { class: "c" }, cv), val),
+      icon: iconCurrent(k.icon), mark: kind === monKind(), act: () => monPick(kind) };
   });
   const head = !i ? L("Activity: checking…") : L`${i.host || L("This machine")}: ${i.cores} cores · ${fmtBytes(i.memory_total)}${i.gpu ? " · " + i.gpu : ""}`;
   showCtxMenu(0, 0, [

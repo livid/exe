@@ -17,13 +17,21 @@ type Sample struct {
 	CPUTemp   *float64 `json:"cpu_temp"`  // °C, the hottest CPU sensor
 	Mem       *float64 `json:"mem"`       // percent of memory in use (total − available)
 	MemUsed   uint64   `json:"mem_used"`  // bytes
-	GPU       *float64 `json:"gpu"`       // percent utilisation
-	GPUTemp   *float64 `json:"gpu_temp"`  // °C, the hottest GPU
-	GPUPower  *float64 `json:"gpu_power"` // watts, all GPUs
+	GPU       *float64 `json:"gpu"`            // percent utilisation, all GPUs averaged
+	GPUTemp   *float64 `json:"gpu_temp"`       // °C, the hottest GPU
+	GPUPower  *float64 `json:"gpu_power"`      // watts, all GPUs
+	GPUs      []GPU    `json:"gpus,omitempty"` // each card, on a host with more than one
 	NetIn     *float64 `json:"net_in"`    // over physical interfaces
 	NetOut    *float64 `json:"net_out"`
 	DiskRead  *float64 `json:"disk_read"` // over physical disks
 	DiskWrite *float64 `json:"disk_write"`
+}
+
+// GPU is one card's figures, in nvidia-smi's order (its index).
+type GPU struct {
+	Util  *float64 `json:"util"`  // percent
+	Temp  *float64 `json:"temp"`  // °C
+	Power *float64 `json:"power"` // watts
 }
 
 // Info names what the samples cover.
@@ -31,7 +39,8 @@ type Info struct {
 	Host        string   `json:"host"` // the machine's hostname
 	Cores       int      `json:"cores"`
 	MemoryTotal uint64   `json:"memory_total"`
-	GPU         string   `json:"gpu"` // "" without one
+	GPU         string   `json:"gpu"`            // "" without one; "2 × …" for two of a kind
+	GPUs        []string `json:"gpus,omitempty"` // each card's name, on a host with more than one
 	Net         []string `json:"net"`
 	Disks       []string `json:"disks"`
 }
@@ -50,8 +59,10 @@ type counters struct {
 }
 
 type gpuReading struct {
-	name              string
-	util, temp, power *float64
+	name              string   // the cards' model, "2 × …" for two of a kind
+	names             []string // each card's, with more than one
+	util, temp, power *float64 // averaged, hottest, summed
+	cards             []GPU    // each card's, with more than one
 }
 
 const (
@@ -145,7 +156,7 @@ func between(a, b *counters, interval time.Duration) (Sample, bool) {
 		s.Mem = num(float64(s.MemUsed) / float64(b.memTotal) * 100)
 	}
 	s.CPUTemp = b.cpuTemp
-	s.GPU, s.GPUTemp, s.GPUPower = b.gpu.util, b.gpu.temp, b.gpu.power
+	s.GPU, s.GPUTemp, s.GPUPower, s.GPUs = b.gpu.util, b.gpu.temp, b.gpu.power, b.gpu.cards
 	s.NetIn, s.NetOut = rates(a.net, b.net, dt)
 	s.DiskRead, s.DiskWrite = rates(a.disk, b.disk, dt)
 	return s, true

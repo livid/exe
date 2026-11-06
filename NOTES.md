@@ -7,8 +7,8 @@ before it said is kept in CHANGELOG.md.
 - **VMs keep running** when exe restarts, on Linux under systemd. A shutdown of the host still stops them.
 - **exe expose** puts a host's tunnel rule ahead of any wildcard rule in the tunnel, and moves one it finds behind a wildcard, so a `*.zone` rule for another app no longer takes the host's traffic.
 - **Hub** posts take emoji reactions from the desk: click one under a post to give it too, click the smiley button on the post's foot line to pick another, and right-click a reaction to see who gave it.
-- **Ping**'s graphs fit a phone or a narrow window: the legend puts its figures two to a line.
 - **A link** can open an app: add `#show=app:Ping` to the desktop's address and Ping's window comes forward.
 - **Codex**'s sidebar puts sessions you last messaged first; **New** puts a fresh session at the top.
 - **Big price moves** of the Solana ticker stay on the desktop as a notice, with the time of the move, until you close it, instead of a toast that fades.
 - **Solana**, a new built-in app, is a trading chart of SOL, PUMP, MET or SKR: candles or a line, 1m to 1d, dragged back through Coinbase's history, volume and RSI under it, Bollinger Bands over it, with each big move marked. Open it from the Solana ticker's menu, or click a big-move notice.
+- **Activity** in the Control Strip gives each graphics card a row of its own: GPU 1, GPU 2.

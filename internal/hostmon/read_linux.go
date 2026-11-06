@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,7 +43,7 @@ func readHost() counters {
 	}
 	c.gpu = readGPU()
 	host, _ := os.Hostname()
-	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, Net: names(c.net), Disks: names(c.disk)}
+	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, GPUs: c.gpu.names, Net: names(c.net), Disks: names(c.disk)}
 	return c
 }
 
@@ -225,8 +226,9 @@ func readGPU() gpuReading {
 }
 
 // parseSMI reads one "name, util, temp, power" line per GPU: utilisation
-// averaged, the hottest temperature, power summed. "[N/A]" is no figure —
-// the GB10 has no memory of its own to report, and some boards no power.
+// averaged, the hottest temperature, power summed, and with more than one
+// card each card's own. "[N/A]" is no figure — the GB10 has no memory of
+// its own to report, and some boards no power.
 func parseSMI(s string) gpuReading {
 	var g gpuReading
 	var util, power float64
@@ -239,26 +241,39 @@ func parseSMI(s string) gpuReading {
 		for i := range f {
 			f[i] = strings.TrimSpace(f[i])
 		}
-		if g.name == "" {
-			g.name = f[0]
-		}
+		var card GPU
 		if v, ok := smiNum(f[1]); ok {
+			card.Util = num(v)
 			util += v
 			nUtil++
 		}
-		if v, ok := smiNum(f[2]); ok && (g.temp == nil || v > *g.temp) {
-			g.temp = num(v)
+		if v, ok := smiNum(f[2]); ok {
+			card.Temp = num(v)
+			if g.temp == nil || v > *g.temp {
+				g.temp = num(v)
+			}
 		}
 		if v, ok := smiNum(f[3]); ok {
+			card.Power = num(v)
 			power += v
 			nPower++
 		}
+		g.names = append(g.names, f[0])
+		g.cards = append(g.cards, card)
 	}
 	if nUtil > 0 {
 		g.util = num(util / float64(nUtil))
 	}
 	if nPower > 0 {
 		g.power = num(power)
+	}
+	switch {
+	case len(g.names) == 1:
+		g.name, g.names, g.cards = g.names[0], nil, nil
+	case len(g.names) > 1 && slices.Equal(g.names, slices.Repeat(g.names[:1], len(g.names))):
+		g.name = strconv.Itoa(len(g.names)) + " × " + g.names[0]
+	case len(g.names) > 1:
+		g.name = strings.Join(g.names, " + ")
 	}
 	return g
 }

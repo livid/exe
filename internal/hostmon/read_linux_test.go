@@ -51,9 +51,21 @@ func TestParseSMI(t *testing.T) {
 	if g.name != "NVIDIA GB10" || *g.util != 37 || *g.temp != 46 || *g.power != 10.9 {
 		t.Fatalf("%+v", g)
 	}
+	if g.names != nil || g.cards != nil {
+		t.Fatalf("one GPU has no cards of its own: %+v", g)
+	}
 	g = parseSMI("A, 10, 50, [N/A]\nB, 30, 61, [N/A]\n")
-	if g.name != "A" || *g.util != 20 || *g.temp != 61 || g.power != nil {
+	if g.name != "A + B" || *g.util != 20 || *g.temp != 61 || g.power != nil {
 		t.Fatalf("two GPUs: %+v", g)
+	}
+	if len(g.cards) != 2 || *g.cards[0].Util != 10 || *g.cards[1].Temp != 61 || g.cards[1].Power != nil ||
+		len(g.names) != 2 || g.names[1] != "B" {
+		t.Fatalf("two GPUs, each: %+v", g)
+	}
+	g = parseSMI("NVIDIA RTX 6000 Ada Generation, 0, 34, 21.5\nNVIDIA RTX 6000 Ada Generation, 80, 52, 180.25\n")
+	if g.name != "2 × NVIDIA RTX 6000 Ada Generation" || *g.util != 40 || *g.power != 201.75 ||
+		*g.cards[0].Util != 0 || *g.cards[1].Power != 180.25 {
+		t.Fatalf("two of a kind: %+v", g)
 	}
 	if g := parseSMI(""); g.util != nil || g.name != "" {
 		t.Fatalf("no output: %+v", g)
