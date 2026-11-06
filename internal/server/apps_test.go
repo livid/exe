@@ -87,10 +87,17 @@ func TestSystemAppAliases(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &apps); err != nil {
 		t.Fatal(err)
 	}
-	// one entry a bundle: no alias lists a system app twice
-	bundles, _ := fs.ReadDir(sysAppsFS, "sysapps")
-	if len(apps) != len(bundles) || len(apps) < 4 {
-		t.Fatalf("unexpected app list (%d bundles): %+v", len(bundles), apps)
+	// one entry a bundle this computer runs: no alias lists a system app
+	// twice (Mac OS X Intel is listed on Linux x86-64 only)
+	entries, _ := fs.ReadDir(sysAppsFS, "sysapps")
+	bundles := 0
+	for _, e := range entries {
+		if e.IsDir() && sysAppHere(e.Name()) {
+			bundles++
+		}
+	}
+	if len(apps) != bundles || len(apps) < 4 {
+		t.Fatalf("unexpected app list (%d bundles): %+v", bundles, apps)
 	}
 	for _, app := range apps {
 		if app.Name != canonicalAppName(app.Name) || app.SystemIcon == "" {
