@@ -6013,6 +6013,19 @@ function takeHostAgents(h) {
   return changed;
 }
 const loadHostAgents = () => j("/v1/hostinfo").then(h => { if (takeHostAgents(h)) renderIcons(lastVMs); });
+// An agent's window opened by a hand (its icon, the menu, Welcome's Open
+// button) asks hostinfo first: whether tmux is here decides the session
+// column when the window is built, and a tmux installed while the desk
+// was up (Welcome's Install tmux…) would otherwise go unseen until a
+// reload. A window already open just comes forward; should hostinfo not
+// answer, the last answer stands.
+async function openAgentWin(app) {
+  if (!document.getElementById("win-" + app)) { try { await loadHostAgents(); } catch (e) {} }
+  return openHostTermWin(app);
+}
+// the agents whose window this page has built again with its column
+// (openHostTermWin's growColumn): once a page each, so no loop
+const agentRegrown = new Set();
 function renderIcons(vms) {
   const box = $("#icons");
   // An app's picture already on the desk moves to its new icon rather than
@@ -6060,7 +6073,7 @@ function renderIcons(vms) {
       box.querySelectorAll(".dicon").forEach(d => d.classList.remove("sel"));
       ic.classList.add("sel");
     });
-    tapOpen(ic, () => openHostTermWin(app));
+    tapOpen(ic, () => openAgentWin(app));
     box.append(ic);
   }
   for (const vm of vms) {
@@ -8026,8 +8039,8 @@ async function loadEditor(w) {
 let deskMenu = [], deskMenuErr = "";
 const DESK_ACTS = {
   terminal: { run: (cmd, name) => openHostTermWin(undefined, cmd, undefined, undefined, name) },
-  claude: { run: () => openHostTermWin("claude"), dis: () => !hostAgents.claude },
-  codex: { run: () => openHostTermWin("codex"), dis: () => !hostAgents.codex },
+  claude: { run: () => openAgentWin("claude"), dis: () => !hostAgents.claude },
+  codex: { run: () => openAgentWin("codex"), dis: () => !hostAgents.codex },
   search: { run: () => openSearchWin() },
   trash: { run: () => openWin("#win-trash") },
   customize: { run: () => openMenuEditor() },
@@ -10624,6 +10637,25 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       requestAnimationFrame(() => termSpacerFix(box, term));
     }
   };
+  // A window built without the session column whose CLI runs on tmux
+  // all the same: the desk read hostinfo before tmux was installed, or a
+  // reload restored the window by this browser's note before hostinfo
+  // answered. The daemon's session frames say whether the window is a
+  // tmux client ({"tmux": true}; a window without tmux gets them too, with
+  // an empty list): on that word the desk takes tmux as there and builds
+  // the window again, with its column. Closing an agent window on
+  // tmux only detaches, so the conversation runs on, and the new window
+  // attaches to the same session, with the keys if this one had them.
+  function growColumn() {
+    if (agentRegrown.has(app)) return false;
+    agentRegrown.add(app);
+    if (hostAgents[app]) hostAgents[app].sessions = true;
+    const keys = w.contains(document.activeElement);
+    closeWin(w);
+    agentNote(app, "col");
+    openHostTermWin(app, null, null, keys ? undefined : { restore: true });
+    return true;
+  }
   function connect(initial) {
     status.textContent = initial ? L("connecting…") : L`reconnecting… (${retry})`;
     ws = new WebSocket(url());
@@ -10645,7 +10677,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     // for the status line — {"status":…} with the Claude Code session's
     // (null: the session the column moved to has none yet), {"usage":…}
     // with the ChatGPT subscription's for Codex — or the session column's
-    // list, {"sessions":[…],"current":…}, or an {"error":…} for a switch
+    // list, {"sessions":[…],"current":…,"tmux":…}, or an {"error":…} for a switch
     // or New that failed, {"archived":…} with what an archived session
     // gave back, or the {"pong":…} to a beat above
     ws.onmessage = e => {
@@ -10657,6 +10689,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       if ("status" in msg) { if (msg.status) showAgentUsage(usage, msg.status); else usage.hidden = true; }
       if ("usage" in msg) showOpenAIUsage(usage, msg.usage);
       if (lastBar && msg.prompt) showLastPrompt(msg.prompt);
+      if (msg.tmux === true && agent && !column && growColumn()) return;
       if (Array.isArray(msg.sessions)) {
         if (msg.sessions.length) sessions = msg.sessions;
         current = msg.current || current;

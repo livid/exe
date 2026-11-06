@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"exe/internal/config"
 )
 
 func TestAgentSessionNames(t *testing.T) {
@@ -705,4 +708,55 @@ func (r *frameRecorder) all() [][]byte {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([][]byte(nil), r.frames...)
+}
+
+// fakeAgentShell is a window's pty that names the tmux session its client
+// shows, or "" for a window that is no tmux client.
+type fakeAgentShell struct{ cur string }
+
+func (f *fakeAgentShell) Read(p []byte) (int, error)  { return 0, nil }
+func (f *fakeAgentShell) Write(p []byte) (int, error) { return len(p), nil }
+func (f *fakeAgentShell) Close() error                { return nil }
+func (f *fakeAgentShell) Resize(cols, rows int)       {}
+func (f *fakeAgentShell) Current() string             { return f.cur }
+func (f *fakeAgentShell) Switch(string) error         { return nil }
+func (f *fakeAgentShell) Scroll(int) error            { return nil }
+
+// The column's frames say whether the window is a tmux client. A window
+// without tmux gets frames too, with an empty list, so the desk builds a
+// window it took for one without tmux again, with its column, only on
+// that word: rebuilding a bare run of the CLI would end its conversation.
+func TestAgentColumnFrameSaysTmux(t *testing.T) {
+	old := tmuxSocket
+	tmuxSocket = fmt.Sprintf("exe-test-none-%d", os.Getpid()) // no server there: never the user's sessions
+	t.Cleanup(func() { tmuxSocket = old })
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir()) // no transcripts of the user's either
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	a := hostAgent{app: "exe-test", bin: "exe-test", title: "Test", session: "exe-test-frame"}
+	for _, c := range []struct {
+		cur  string
+		want bool
+	}{{"exe-test-frame", true}, {"", false}} {
+		frames := &frameRecorder{}
+		col := newAgentColumn(s, a, &fakeAgentShell{cur: c.cur}, a.session, frames)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { col.follow(ctx); close(done) }()
+		for deadline := time.Now().Add(5 * time.Second); len(frames.all()) == 0 && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
+		cancel()
+		<-done
+		got := frames.all()
+		if len(got) == 0 {
+			t.Fatalf("client %q: no frame", c.cur)
+		}
+		var f struct {
+			Sessions []json.RawMessage `json:"sessions"`
+			Tmux     *bool             `json:"tmux"`
+		}
+		if err := json.Unmarshal(got[0], &f); err != nil || f.Sessions == nil || f.Tmux == nil || *f.Tmux != c.want {
+			t.Errorf("client %q: frame %s, want tmux %v", c.cur, got[0], c.want)
+		}
+	}
 }

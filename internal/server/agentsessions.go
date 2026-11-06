@@ -280,10 +280,13 @@ func (s *Server) markAgentStates(a hostAgent, list []agentSession) {
 }
 
 // agentColumn is the daemon's side of one window's column. It keeps the
-// window's list current — {"sessions":[…],"current":"…"} text frames on
-// connect, after a switch, and whenever tmux reports a change, polled
-// every two seconds as the titles follow the CLI's task — moves the
-// window's tmux client between sessions, and starts new ones.
+// window's list current — {"sessions":[…],"current":"…","tmux":…} text
+// frames on connect, after a switch, and whenever tmux reports a change,
+// polled every two seconds as the titles follow the CLI's task — moves
+// the window's tmux client between sessions, and starts new ones. tmux
+// says whether the window is a tmux client at all: a window without tmux
+// gets the frames too, with an empty list, and the desk builds a window
+// it took for one without tmux again, with its column, only on true.
 type agentColumn struct {
 	s        *Server
 	a        hostAgent
@@ -363,14 +366,15 @@ func (c *agentColumn) follow(ctx context.Context) {
 	defer t.Stop()
 	var last string
 	for {
-		if cur := c.sh.Current(); cur != "" {
+		cur := c.sh.Current()
+		if cur != "" {
 			c.setCurrent(cur)
 		}
 		list := c.s.agentSessions(c.a)
 		c.s.markAgentStates(c.a, list)
 		list = c.s.withStopped(c.a, list) // and those a host restart ended (agentrestart.go)
 		c.s.orderSessionColumn(c.a, list)
-		frame := map[string]any{"sessions": list, "current": c.current()}
+		frame := map[string]any{"sessions": list, "current": c.current(), "tmux": cur != ""}
 		if !c.a.notify {
 			frame["prompt"] = c.s.agentLastPrompt(c.a, c.current()) // the line over the terminal (claudeprompts.go)
 		}

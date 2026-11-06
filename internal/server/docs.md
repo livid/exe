@@ -844,7 +844,10 @@ the command and runs it: the system's package manager through `sudo` on
 Linux, which asks for your password in that window, or Homebrew on a Mac.
 It says how it went and stays open until you close it. A Claude Code or
 Codex window opened after that keeps its sessions and lists them down its
-left; close one that was already open and open it again. Where exe knows
+left, without a reload: the desktop asks again whether tmux is here each
+time it opens one. A window already on tmux that came up without the list
+gets it by itself. One that was open before tmux arrived is still a bare
+run of the CLI: close it and open it again. Where exe knows
 no way to install tmux, the card says to install it with the machine's
 package manager. Windows has no tmux, and the card does not ask.
 
