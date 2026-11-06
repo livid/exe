@@ -21,6 +21,7 @@ import (
 //
 //	GET /v1/agents/cli
 //	{"os": "linux", "arch": "arm64", "tmux": true,
+//	 "tmux_install": "sudo apt-get install -y tmux",
 //	 "tools": {"curl": true, "node": true, "npm": true, "brew": false},
 //	 "agents": {"claude": {"title": "Claude Code", "installed": true,
 //	                       "path": "~/.local/bin/claude", "version": "2.1.300"},
@@ -148,8 +149,52 @@ func (s *Server) handleAgentCLI(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"os": runtime.GOOS, "arch": runtime.GOARCH,
-		"tmux":   tmuxCmd("-V") != nil,
-		"tools":  tools,
-		"agents": agents,
+		"tmux":         tmuxCmd("-V") != nil,
+		"tmux_install": tmuxInstall(runtime.GOOS, os.Geteuid(), cliPath),
+		"tools":        tools,
+		"agents":       agents,
 	})
+}
+
+// tmuxInstall is the command line that installs tmux on this machine, for
+// Welcome's Install tmux…, which runs it in a Terminal so that sudo asks
+// for the password where it is typed: Homebrew's on a Mac; on Linux the
+// system's package manager, through sudo unless the daemon runs as root.
+// It is "" where exe knows no way — Windows, which has no tmux, a Mac
+// without Homebrew, a Linux without sudo or a package manager it knows —
+// and the card then says to install tmux by hand. find is cliPath: a
+// program's path, or "".
+func tmuxInstall(goos string, euid int, find func(name string, homeDirs ...string) string) string {
+	switch goos {
+	case "darwin":
+		brew := find("brew")
+		if brew == "" {
+			return ""
+		}
+		if p, err := exec.LookPath("brew"); err != nil || p != brew {
+			return brew + " install tmux" // Homebrew is not on the login shell's PATH
+		}
+		return "brew install tmux"
+	case "linux":
+		for _, m := range [][2]string{
+			{"apt-get", "apt-get install -y tmux"},
+			{"dnf", "dnf install -y tmux"},
+			{"yum", "yum install -y tmux"},
+			{"zypper", "zypper --non-interactive install tmux"},
+			{"pacman", "pacman -S --noconfirm tmux"},
+			{"apk", "apk add tmux"},
+		} {
+			if find(m[0]) == "" {
+				continue
+			}
+			if euid == 0 {
+				return m[1]
+			}
+			if find("sudo") == "" {
+				return ""
+			}
+			return "sudo " + m[1]
+		}
+	}
+	return ""
 }

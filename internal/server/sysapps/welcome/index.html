@@ -137,8 +137,12 @@ input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
    bold the type stack lands on (Verdana, on Windows). Should a face be
    wider still, the row wraps onto a second line, 10px under, rather than
    run past the edge: the buttons are known when the card opens, so the
-   wrap is there before the card is seen, not a jump after. */
+   wrap is there before the card is seen, not a jump after. The agents
+   card on a machine with both CLIs and no tmux has one button more than
+   fits, and Install tmux…, the one Return presses, takes the second line.
+   Back keeps to the bottom line, beside it. */
 #c-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 12px; margin-left: auto; }
+#card .foot { align-items: flex-end; }
 
 /* a phone: one column, the check box on a line of its own above the
    buttons, and no words cut where they would not fit */
@@ -366,25 +370,39 @@ const FEATS = [
       "The window lists its sessions down the left, the Control Strip counts what they use, and a phone that keeps the desktop on its Home Screen hears when a turn ends. Set Up… says how to install each CLI, and what exe adds to one that is here."],
     more: "Claude Code, Codex and Terminal",
     // hostinfo says which are installed, at once; the versions follow
-    // from /v1/agents/cli, which has to ask each CLI
+    // from /v1/agents/cli, which has to ask each CLI. Without tmux a
+    // session ends with its window, and the card says so; it waits for
+    // /v1/agents/cli then, which says how to install tmux here
     state() {
       if (S.host === undefined) return WAIT;
       if (!S.host) return UNKNOWN;
       const a = S.host.agents || {}, v = (S.cli && S.cli.agents) || {};
       const name = (id, title) => title + (v[id] && v[id].version ? " " + v[id].version : "");
-      if (a.claude && a.codex) return { kind: "ok", text: name("claude", "Claude Code") + " and " + name("codex", "Codex") + " are both installed." };
-      if (a.claude) return { kind: "ok", text: name("claude", "Claude Code") + " is installed. Codex is not." };
-      if (a.codex) return { kind: "ok", text: name("codex", "Codex") + " is installed. Claude Code is not." };
-      return { kind: "todo", text: "Neither CLI is installed on this machine. Set Up… says how to install each; its icon then appears on the desktop." };
+      const has = a.claude && a.codex ? name("claude", "Claude Code") + " and " + name("codex", "Codex") + " are both installed."
+        : a.claude ? name("claude", "Claude Code") + " is installed. Codex is not."
+        : a.codex ? name("codex", "Codex") + " is installed. Claude Code is not."
+        : "Neither CLI is installed on this machine. Set Up… says how to install each; its icon then appears on the desktop.";
+      const bare = noTmux();
+      if (bare === undefined || (bare && S.cli === undefined)) return WAIT;
+      if (bare) return { kind: "todo", text: has + " Without tmux, a session ends when its window closes; " +
+        (tmuxCommand() ? "Install tmux… adds it." : "install tmux with this machine’s package manager.") };
+      return { kind: a.claude || a.codex ? "ok" : "todo", text: has };
     },
     // the wizard (Agent Setup) first, then the window of each CLI that is
     // here: with neither installed the wizard is the one Return presses.
     // Its name is short so that, with both here, the five buttons fit the
-    // row in one line.
+    // row in one line. Install tmux… comes last where a CLI is here, as
+    // the next thing to do, and first where none is; it stands greyed
+    // while the daemon is asked how, and goes where it knows no way
     acts() {
       const a = (S.host && S.host.agents) || {}, out = [{ label: "Set Up…", act: "app", args: ["agents"] }];
       if (a.codex) out.push({ label: "Open Codex", act: "codex" });
       if (a.claude) out.push({ label: "Open Claude Code", act: "claude" });
+      const cmd = tmuxCommand();
+      if (noTmux() && (S.cli === undefined || cmd)) {
+        const b = { label: "Install tmux…", act: "terminal", args: cmd ? [tmuxScript(cmd), "Install tmux"] : [], off: !cmd };
+        if (a.claude || a.codex) out.push(b); else out.unshift(b);
+      }
       return out;
     } },
   { key: "hub", icon: ICON.hub, name: "The Hub",
@@ -440,6 +458,38 @@ const FEATS = [
     } },
 ];
 const appNamed = id => (S.apps || []).find(a => a.name.toLowerCase() === id);
+
+// Whether this machine lacks tmux, which keeps an agent's session running
+// after its window closes: hostinfo says so with an installed CLI
+// (sessions), /v1/agents/cli in any case; undefined until one has. Windows
+// has no tmux to install, and is never asked to.
+function noTmux() {
+  if (!S.host || /^Windows/.test(S.host.os || "")) return false;
+  const a = Object.values(S.host.agents || {});
+  if (a.length) return !a.some(x => x.sessions);
+  return S.cli ? !S.cli.tmux : S.cli === null ? false : undefined;
+}
+// the daemon's command line that installs tmux here, "" where it knows none
+const tmuxCommand = () => S.cli && typeof S.cli.tmux_install === "string" && !S.cli.tmux_install.includes("'") ? S.cli.tmux_install : "";
+// Install tmux…: a Terminal says what it is about to do, shows the command
+// and runs it, so sudo asks for the password in the window it is typed
+// in, then says how it went and stays open on that. Each line goes to
+// printf as an argument of its own, single-quoted with no quote inside,
+// which sh, bash, zsh and fish (the login shell the daemon runs it in)
+// all read alike. The window is 80 columns at least: no line is longer.
+function tmuxScript(cmd) {
+  const say = lines => "printf '%s\\n' " + lines.map(l => "'" + l + "'").join(" ");
+  const pw = /^sudo /.test(cmd)
+    ? ["sudo asks for your password on this machine. Nothing shows as you type", "it; press Return when it is in.", ""] : [];
+  return say(["Claude Code and Codex keep each session in tmux, so it runs on after its",
+    "window closes. This machine has no tmux yet, and this window installs it:", "", "  $ " + cmd, "", ...pw]) +
+    "; " + cmd + " && " +
+    say(["", "tmux is installed, and this window can be closed. A Claude Code or Codex",
+      "window opened from now on keeps its sessions and lists them down its left;",
+      "close one that is open now and open it again."]) + " || " +
+    say(["", "tmux was not installed: what went wrong is above. Close this window, and",
+      "Install tmux… in Welcome runs it again."]);
+}
 
 let asking = false;
 function ask() {

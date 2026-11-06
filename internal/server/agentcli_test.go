@@ -96,3 +96,48 @@ func TestAgentCLI(t *testing.T) {
 		t.Errorf("no version: %v", c)
 	}
 }
+
+// Install tmux… runs what the machine's own package manager would: the
+// first one found, through sudo unless the daemon is root, and nothing
+// where there is no way to install it.
+func TestTmuxInstall(t *testing.T) {
+	has := func(names ...string) func(string, ...string) string {
+		return func(name string, _ ...string) string {
+			for _, n := range names {
+				if n == name {
+					return "/usr/bin/" + name
+				}
+			}
+			return ""
+		}
+	}
+	for _, c := range []struct {
+		goos string
+		euid int
+		find func(string, ...string) string
+		want string
+	}{
+		{"linux", 1000, has("apt-get", "sudo"), "sudo apt-get install -y tmux"},
+		{"linux", 0, has("apt-get"), "apt-get install -y tmux"},
+		{"linux", 1000, has("dnf", "yum", "sudo"), "sudo dnf install -y tmux"},
+		{"linux", 1000, has("pacman", "sudo"), "sudo pacman -S --noconfirm tmux"},
+		{"linux", 1000, has("apk", "sudo"), "sudo apk add tmux"},
+		{"linux", 1000, has("apt-get"), ""}, // no sudo, not root
+		{"linux", 1000, has("sudo"), ""},    // no package manager it knows
+		{"darwin", 501, has(), ""},          // no Homebrew
+		{"windows", -1, has("apt-get", "sudo"), ""},
+	} {
+		if got := tmuxInstall(c.goos, c.euid, c.find); got != c.want {
+			t.Errorf("%s euid %d: %q, want %q", c.goos, c.euid, got, c.want)
+		}
+	}
+	// a Homebrew the login shell would not find is run by its path
+	if got := tmuxInstall("darwin", 501, func(n string, _ ...string) string {
+		if n == "brew" {
+			return "/nonexistent/homebrew/bin/brew"
+		}
+		return ""
+	}); got != "/nonexistent/homebrew/bin/brew install tmux" {
+		t.Errorf("brew off PATH: %q", got)
+	}
+}

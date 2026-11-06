@@ -818,10 +818,22 @@ one for Codex, and a review.
   whether tmux is on the machine: with it a session outlives its window,
   without it each window is a fresh run of the CLI.
 
+On a machine without tmux the Welcome card says so, and its **Install
+tmux…** opens a Terminal window that says what it is about to do, shows
+the command and runs it: the system's package manager through `sudo` on
+Linux, which asks for your password in that window, or Homebrew on a Mac.
+It says how it went and stays open until you close it. A Claude Code or
+Codex window opened after that keeps its sessions and lists them down its
+left; close one that was already open and open it again. Where exe knows
+no way to install tmux, the card says to install it with the machine's
+package manager. Windows has no tmux, and the card does not ask.
+
 exe finds a CLI on PATH, in `~/.local/bin`, where npm, bun and Homebrew
 put programs, and in every nvm Node version's `bin`. A script can ask too:
-`GET /v1/agents/cli` names each with its path and version, and what an
-installer would lean on here (`curl`, `node`, `npm`, `brew`).
+`GET /v1/agents/cli` names each with its path and version, what an
+installer would lean on here (`curl`, `node`, `npm`, `brew`), whether
+tmux is here, and the command that installs it (`tmux_install`, empty
+where exe knows none).
 
 ### Open a window
 

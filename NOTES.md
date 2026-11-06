@@ -11,4 +11,4 @@ before it said is kept in CHANGELOG.md.
 - **Codex**'s sidebar puts sessions you last messaged first; **New** puts a fresh session at the top.
 - **Big price moves** of the Solana ticker stay on the desktop as a notice, with the time of the move, until you close it, instead of a toast that fades.
 - **Solana**, a new built-in app, is a trading chart of SOL, PUMP, MET or SKR: candles or a line, 1m to 1d, dragged back through Coinbase's history, volume and RSI under it, Bollinger Bands over it, with each big move marked. Open it from the Solana ticker's menu, or click a big-move notice.
-- **Activity** in the Control Strip gives each graphics card a row of its own: GPU 1, GPU 2.
+- **Install tmux…** on Welcome's Claude Code and Codex card: an agent's session outlives its window.

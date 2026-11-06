@@ -8020,7 +8020,7 @@ async function loadEditor(w) {
 // self-filling lists (@vms, @apps, @windows) at the moment the menu opens.
 let deskMenu = [], deskMenuErr = "";
 const DESK_ACTS = {
-  terminal: { run: cmd => openHostTermWin(undefined, cmd) },
+  terminal: { run: (cmd, name) => openHostTermWin(undefined, cmd, undefined, undefined, name) },
   claude: { run: () => openHostTermWin("claude"), dis: () => !hostAgents.claude },
   codex: { run: () => openHostTermWin("codex"), dis: () => !hostAgents.codex },
   search: { run: () => openSearchWin() },
@@ -9676,7 +9676,8 @@ $("#tp-text").addEventListener("keydown", e => { if (e.key === "Escape") tpClose
 // between them and New starting another in a session of its own
 // (agentsessions.go). cmd is a command line to run in place of a shell
 // (the desktop menu's "terminal btop" shortcut) — the window is titled
-// after the tool and ends when it exits. On the host such a tool window
+// after the tool, or name when one is given (Welcome's Install tmux…,
+// whose command is a script), and ends when it exits. On the host such a tool window
 // is one window per command line under a stable id ("win-tool-" + the
 // command), like an app's: choosing the item again brings it forward,
 // or, once the command has exited, replaces the dead window with a fresh
@@ -9695,7 +9696,7 @@ $("#tp-text").addEventListener("keydown", e => { if (e.key === "Escape") tpClose
 // agent's window that agentFollow opens), which never takes the keys by
 // itself. termSess 0 is a one-off shell, the host having no tmux.
 // Returns the window
-function openHostTermWin(app, cmd, vm, termSess) {
+function openHostTermWin(app, cmd, vm, termSess, name) {
   if (!app && !cmd && !vm && termSess === undefined) { newHostTerm(); return null; }
   const sess = termSess ? termSess.number : 0, restore = !!(termSess && termSess.restore);
   const agent = app ? AGENT_APPS[app] : null;
@@ -9703,7 +9704,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // reload restores the window before that fetch answers, so the note
   // and the layout say whether the window had a column (agentShared)
   const column = !!(agent && agentShared(app));
-  const tool = cmd ? cmd.trim().split(/\s+/)[0].split("/").pop() : "";
+  const tool = cmd ? name || cmd.trim().split(/\s+/)[0].split("/").pop() : "";
   const toolId = cmd && !agent && !vm ? "win-tool-" + encodeURIComponent(cmd.trim()) : "";
   if (toolId) {
     const old = document.getElementById(toolId);
