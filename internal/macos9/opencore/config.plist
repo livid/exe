@@ -26,6 +26,34 @@
 	     Penryn cache sizes 10.4 cannot read from CPUID. -->
 	<key>Kernel</key>
 	<dict>
+		<!-- One fix to Tiger's kernel (Darwin 8.11.1). OVMF, with S3 on as
+		     q35 has it, keeps pages 0x806-0x807 and 0x810-0x8ff as ACPI NVS,
+		     and the kexts boot.efi loads lie across them. When the kernel
+		     frees the booter's memory, ml_static_mfree gives those pages to
+		     the VM although the pmap does not manage them, so their mappings
+		     are never torn down: a page freed and reused as a page table is
+		     written through a stale one, and Tiger panics in pmap within
+		     minutes ("pmap_remove: null pv_list!"). The patch frees only the
+		     pages pmap_valid_page() accepts and leaves those 1 MB out. -->
+		<key>Patch</key>
+		<array>
+			<dict>
+				<key>Arch</key><string>i386</string>
+				<key>Base</key><string></string>
+				<key>Comment</key><string>ml_static_mfree: free only pages the pmap manages</string>
+				<key>Count</key><integer>1</integer>
+				<key>Enabled</key><true/>
+				<key>Find</key><data>63aJXeDHReQAAAAAi0Xgi1XkiUQkBIlUJAihoDZLAIkEJOgWR///icaFwHUIgcMAEAAA60OBwwAQAACJXCQMx0QkEAAAAACLReCLVeSJRCQEiVQkCKGgNksAiQQk6Hhc//+NRgGJRCQEiTQk6JMd/v+DLTDdSwABOftyhg==</data>
+				<key>Identifier</key><string>kernel</string>
+				<key>Limit</key><integer>0</integer>
+				<key>Mask</key><data></data>
+				<key>MaxKernel</key><string>8.11.99</string>
+				<key>MinKernel</key><string>8.0.0</string>
+				<key>Replace</key><data>63KJXCQEx0QkCAAAAAChoDZLAIkEJOgiR///icaFwHRNiQQk6Oqu//+FwHRBjYMAEAAAiUQkDMdEJBAAAAAAiVwkBMdEJAgAAAAAoaA2SwCJBCToglz//41GAYlEJASJNCTonR3+/4MtMN1LAAGBwwAQAAA5+3KKkJCQkA==</data>
+				<key>ReplaceMask</key><data></data>
+				<key>Skip</key><integer>0</integer>
+			</dict>
+		</array>
 		<key>Emulate</key>
 		<dict>
 			<key>DummyPowerManagement</key><true/>

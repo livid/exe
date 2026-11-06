@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -222,6 +224,47 @@ func TestOpenCoreConfigBootsTiger(t *testing.T) {
 	for _, f := range openCoreFiles {
 		if strings.HasPrefix(f, "EFI/OC/Drivers/") && !strings.Contains(c, "<string>"+filepath.Base(f)+"</string>") {
 			t.Errorf("config does not load %s", f)
+		}
+	}
+}
+
+// The config carries the one fix Tiger's kernel needs on OVMF: ml_static_mfree
+// rewritten to free only pages the pmap manages (config.plist says why). A
+// patch OpenCore cannot apply is skipped without a word, and Tiger then
+// panics in pmap within minutes, so its shape is checked here: the same
+// length found and replaced, for the i386 kernel of 10.4 only, and the new
+// loop asks pmap_valid_page (call rel32 0xffffaeea from 0x19e1a5 =
+// 0x199094) where the old one did not.
+func TestOpenCoreConfigPatchesTigersKernel(t *testing.T) {
+	c := string(openCoreConfig)
+	data := func(key string) []byte {
+		m := regexp.MustCompile(`<key>` + key + `</key><data>([^<]*)</data>`).FindStringSubmatch(c)
+		if m == nil {
+			t.Fatalf("config has no %s", key)
+		}
+		b, err := base64.StdEncoding.DecodeString(m[1])
+		if err != nil {
+			t.Fatalf("%s: %v", key, err)
+		}
+		return b
+	}
+	find, repl := data("Find"), data("Replace")
+	if len(find) != 124 || len(repl) != len(find) {
+		t.Fatalf("Find is %d bytes, Replace %d", len(find), len(repl))
+	}
+	validPage := []byte{0xe8, 0xea, 0xae, 0xff, 0xff}
+	if bytes.Contains(find, validPage) || !bytes.Contains(repl, validPage) {
+		t.Fatal("the patch does not add the pmap_valid_page check")
+	}
+	for _, want := range []string{
+		"<key>Arch</key><string>i386</string>",
+		"<key>Identifier</key><string>kernel</string>",
+		"<key>Enabled</key><true/>",
+		"<key>MinKernel</key><string>8.0.0</string>",
+		"<key>MaxKernel</key><string>8.11.99</string>",
+	} {
+		if !strings.Contains(c, want) {
+			t.Errorf("kernel patch lacks %s", want)
 		}
 	}
 }

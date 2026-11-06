@@ -2103,7 +2103,8 @@ same time.
 ### What it needs
 
 - **KVM**, and this account allowed to use it (`/dev/kvm`, the `kvm`
-  group). Tiger for Intel does not start under QEMU's software emulation.
+  group). exe does not fall back to QEMU's software emulation, under
+  which Tiger runs about five times slower.
 - **QEMU for x86 and OVMF's 32-bit firmware.** On Ubuntu 24.04 setup
   fetches them; elsewhere install them (`qemu-system-x86`, `ovmf-ia32`).
 - **Room on this node.** The install DVD is a 2.2 GiB download and
@@ -2145,6 +2146,13 @@ The Mac reports itself as a Mac Pro with one Core 2 processor. It has one
 core because Tiger 10.4.11 does not start on more than one virtual
 processor.
 
+OpenCore applies one fix to Tiger's kernel each time the Mac starts.
+Without it Tiger crashes within minutes on this machine's virtual firmware,
+with **You need to restart your computer** in four languages: the kernel
+reuses memory the firmware reserved without keeping track of it, and
+corrupts its own page tables. A Mac set up by an earlier exe gets the fix
+the next time it starts.
+
 ### A shell and screen sharing from this machine
 
 Remote Login and Apple Remote Desktop's VNC, once turned on in
@@ -2159,7 +2167,8 @@ time zone you choose. The installed Mac has an Intel PRO/1000 Ethernet
 adapter, which Tiger's own driver takes, with outbound NAT and DHCP over
 IPv4; networking is off while the Installer runs. Software Update still
 finds Apple's Tiger updates. They replace parts of the system OpenCore
-starts; installing them is untested.
+starts; installing them is untested, and an update that replaces the
+kernel leaves it without exe's fix.
 
 ### Where it is kept
 
