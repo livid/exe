@@ -1,0 +1,16 @@
+# Pull origin/main into /www/exe's main, run each hour by exe-pull.timer;
+# deploy/exe-pull says what it does and what it puts on the desk. Install
+# both files to ~/.config/systemd/user/, then
+# `systemctl --user daemon-reload && systemctl --user enable --now exe-pull.timer`.
+# Its log: `journalctl --user -u exe-pull`.
+[Unit]
+Description=Pull origin/main into the exe checkout
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/www/exe
+ExecStart=/www/exe/deploy/exe-pull
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=LANG=C.UTF-8
+TimeoutStartSec=10min

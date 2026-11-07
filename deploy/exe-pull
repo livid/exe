@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# exe-pull: bring origin/main into this checkout's main, once an hour
+# (deploy/systemd/exe-pull.timer), and say so on the desk with a notice,
+# the toast that stays until it is closed (internal/server/notices.go).
+#
+#   - nothing new on origin: nothing happens
+#   - a fast-forward, or a merge git can make without a conflict: it is
+#     made, and the notice exe-pull says what came in. One that is still
+#     up when the next pull lands is said again, counting both
+#   - a conflict: the shared working tree is left as it is and a Claude
+#     Code session opens on the desk to make the merge in a worktree of
+#     its own; the notice exe-pull-conflict names that session
+#   - uncommitted work in files the pull changes blocks a clean pull: it
+#     is tried again each hour, and after EXE_PULL_WAIT tries (3) for the
+#     same origin/main it goes to a Claude session too
+#   - git fetch failing twice in a row: the notice exe-pull-fetch
+#
+# Two agents share this working tree (CLAUDE.md), so it never stashes,
+# resets or cleans, and never leaves a conflicted merge behind: a merge
+# that git says would conflict (merge-tree) is not started here at all.
+# One Claude session per origin/main tip, and none while the last one is
+# still open. State (and the lock) is in .git/exe-pull/.
+#
+# EXE_PULL_REPO, EXE_PULL_DAEMON and EXE_PULL_CONFIG point it at another
+# checkout, daemon and config (deploy/exe-pull-test does).
+set -uo pipefail
+
+REPO=${EXE_PULL_REPO:-/www/exe}
+DAEMON=${EXE_PULL_DAEMON:-http://127.0.0.1:7777}
+CONFIG=${EXE_PULL_CONFIG:-$HOME/.exe/config.json} # read for api_token only
+WAIT=${EXE_PULL_WAIT:-3}
+
+log() { printf 'exe-pull: %s\n' "$*" >&2; }
+
+cd "$REPO" || exit 1
+GITDIR=$(git rev-parse --absolute-git-dir) || exit 1
+STATE=$GITDIR/exe-pull
+mkdir -p "$STATE" || exit 1
+exec 9>"$STATE/lock"
+flock -n 9 || { log "another run holds the lock"; exit 0; }
+
+# ---- the daemon ----
+
+# api METHOD PATH [JSON]: one call; the token goes in a header read from
+# a pipe, so it is never on a command line
+api() {
+	local t args=(-sS -f -m 30 -X "$1" -H 'Content-Type: application/json')
+	t=$(jq -r '.api_token // empty' "$CONFIG" 2>/dev/null)
+	[ $# -ge 3 ] && args+=(--data-binary "$3")
+	if [ -n "$t" ]; then
+		curl "${args[@]}" -H @<(printf 'Authorization: Bearer %s\n' "$t") "$DAEMON$2"
+	else
+		curl "${args[@]}" "$DAEMON$2"
+	fi
+}
+
+# notice ID TITLE BODY: put it up, or say it again in place
+notice() {
+	local body
+	# the daemon takes 120 bytes of title and 1000 of body
+	body=$(jq -nc --arg id "$1" --arg t "$2" --arg b "$3" --argjson at "$(($(date +%s) * 1000))" '
+		def cut($n): if utf8bytelength <= $n then . else .[0:length - 1] | cut($n) end;
+		def fit($n): if utf8bytelength <= $n then . else cut($n - 3) + "…" end;
+		{id: $id, title: ($t | fit(120)), body: ($b | fit(1000)), at: $at}')
+	api POST /v1/notices "$body" >/dev/null || log "could not put up the notice $1"
+	log "notice $1: $2"
+}
+
+notice_up() { api GET /v1/notices 2>/dev/null | jq -e --arg id "$1" 'any(.notices[]?; .id == $id)' >/dev/null; }
+
+session_open() { api GET /v1/agents/claude/sessions 2>/dev/null | jq -e --arg n "$1" 'any(.sessions[]?; .name == $n)' >/dev/null; }
+
+# ---- state ----
+
+get() { cat "$STATE/$1" 2>/dev/null; }
+put() { printf '%s\n' "$2" >"$STATE/$1"; }
+
+plural() { [ "$1" -eq 1 ] && echo "$1 $2" || echo "$1 ${2}s"; }
+
+# the files both the pull and the uncommitted work touch
+overlap() {
+	comm -12 <(git diff --name-only HEAD "$theirs" | sort -u) \
+		<({ git diff --name-only; git diff --name-only --cached; } | sort -u) | paste -sd, - | sed 's/,/, /g'
+}
+
+# ---- what happened ----
+
+pulled() { # HOW
+	local since n subjects more="" restart=""
+	since=$(get since)
+	if ! notice_up exe-pull || [ -z "$since" ] || ! git merge-base --is-ancestor "$since" HEAD 2>/dev/null; then
+		since=$old # the last notice was closed: count from here
+	fi
+	put since "$since"
+	n=$(git rev-list --count --no-merges "$since..$theirs")
+	subjects=$(git log --no-merges --format=%s -5 "$since..$theirs" | paste -sd';' - | sed 's/;/; /g')
+	[ "$n" -gt 5 ] && more="; and $((n - 5)) more"
+	git log --format= --name-only "$since..$theirs" -- cmd internal go.mod go.sum Makefile | grep -q . &&
+		restart=" The daemon runs its old build until you build and restart."
+	notice exe-pull "exe pulled $(plural "$n" commit) from origin/main" "$1.$restart $subjects$more"
+	put tries ""
+}
+
+resolve() { # WHY DETAIL
+	local last prompt name req
+	last=$(get resolver) # "<origin tip> <session>"
+	if [ -n "$last" ] && session_open "${last#* }"; then
+		log "the Claude session ${last#* } is still open on the last conflict; not starting another"
+		exit 0
+	fi
+	if [ "${last%% *}" = "$theirs" ]; then
+		log "Claude has had origin/main ${theirs:0:7} once already; waiting for a new tip"
+		exit 0
+	fi
+	prompt=$(cat <<EOF
+The hourly auto-pull of $REPO (deploy/exe-pull, run by exe-pull.timer) could not bring origin/main into main. Please make that merge.
+
+What it found:
+- main is at ${old:0:10}, with $(plural "$mine" commit) (not counting merges) that origin/main does not have.
+- origin/main is at ${theirs:0:10}, with $(plural "$behind" commit) that main does not have.
+- Why it stopped: $1
+$2
+
+How to do it:
+1. Read CLAUDE.md first. Two agents share this working tree. Run git status, and leave uncommitted files that are not yours alone: never stash, reset, check out over or clean them, and never force anything.
+2. Do not merge in $REPO itself, so the other agent never sees conflict markers. Make a worktree in your scratchpad (git worktree add --detach <dir> main), merge origin/main there (git merge origin/main; no rebase, since local commits may already be referenced), and settle each conflict so that both sides keep what they meant. Read the commits on both sides first (git log -p main...origin/main). First line of the merge commit: "Merge: origin/main into main". The body says what conflicted and how you settled it.
+3. In the worktree, build (export PATH=\$PATH:/usr/local/go/bin && make build) and run go test for the packages the conflicts touched.
+4. Bring it in with git -C $REPO merge --ff-only <merge commit>. If main moved meanwhile, merge again in the worktree. Then remove the worktree. Do not push, and do not restart the daemon.
+5. Put the result on the desk under the same notice: curl -s $DAEMON/v1/notices -d '{"id":"exe-pull-conflict","title":"…","body":"…"}'
+
+If a conflict needs a decision only Livid can make, or uncommitted work still blocks the fast-forward, stop: say what is needed here and in the notice, and leave main as it is.
+EOF
+)
+	req=$(jq -nc --arg p "$prompt" --arg d "$REPO" '{prompt: $p, permission_mode: "auto", name: "Merge origin/main into main", dir: $d}')
+	if name=$(api POST /v1/agents/claude/sessions "$req" 2>&1 | jq -er '.name' 2>/dev/null); then
+		put resolver "$theirs $name"
+		notice exe-pull-conflict "exe could not merge origin/main" "$1 Claude is merging it in the Claude Code session $name."
+	else
+		notice exe-pull-conflict "exe could not merge origin/main" "$1 Claude could not be started for it: open Claude Code and merge origin/main into main."
+	fi
+}
+
+blocked() { # GIT_OUTPUT: the pull is clean, uncommitted work is in its way
+	local files tries n=1
+	files=$(overlap)
+	tries=$(get tries) # "<origin tip> <count>"
+	[ "${tries%% *}" = "$theirs" ] && n=$((${tries#* } + 1))
+	put tries "$theirs $n"
+	if [ "$n" -lt "$WAIT" ]; then
+		log "uncommitted work blocks the pull (${files:-see git}); try $n of $WAIT"
+		exit 0
+	fi
+	resolve "Uncommitted work in ${files:-files the pull changes} has blocked a clean pull for $(plural "$n" hour)." \
+		"- git said: $(printf '%s' "$1" | tail -n 8)"
+}
+
+# ---- the pull ----
+
+branch=$(git symbolic-ref --short -q HEAD)
+if [ "$branch" != main ]; then
+	notice exe-pull-error "exe did not pull origin/main" "$REPO is on ${branch:-a detached HEAD}, not main."
+	exit 1
+fi
+for f in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply; do
+	if [ -e "$GITDIR/$f" ]; then
+		log "a ${f%_HEAD} is in progress in $REPO; next hour"
+		exit 0
+	fi
+done
+
+if ! out=$(GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=20" GIT_TERMINAL_PROMPT=0 timeout 180 git fetch --quiet origin 2>&1); then
+	n=$(($(get fetchfail || echo 0) + 1))
+	put fetchfail "$n"
+	log "git fetch failed ($n in a row): $out"
+	[ "$n" -ge 2 ] && notice exe-pull-fetch "exe could not fetch origin" "git fetch has failed $n times in a row. It said: $(printf '%s' "$out" | tail -n 3)"
+	exit 1
+fi
+put fetchfail 0
+
+old=$(git rev-parse HEAD)
+theirs=$(git rev-parse refs/remotes/origin/main) || exit 1
+behind=$(git rev-list --count "HEAD..$theirs")
+ahead=$(git rev-list --count "$theirs..HEAD")
+mine=$(git rev-list --count --no-merges "$theirs..HEAD") # the ones to name: earlier merges are not news
+if [ "$behind" -eq 0 ]; then
+	log "up to date (main is $ahead ahead of origin/main)"
+	put tries ""
+	exit 0
+fi
+
+if [ "$ahead" -eq 0 ]; then
+	if out=$(git merge --ff-only --quiet "$theirs" 2>&1); then
+		pulled "Fast-forwarded main"
+	else
+		blocked "$out"
+	fi
+	exit 0
+fi
+
+# a merge: only one git can make without a conflict is made here
+mt=$(git merge-tree --write-tree --name-only --no-messages HEAD "$theirs")
+case $? in
+0) ;;
+1)
+	resolve "origin/main ($(plural "$behind" "new commit")) conflicts with main ($(plural "$mine" "local commit"))." \
+		"- Files in conflict: $(printf '%s\n' "$mt" | tail -n +2 | sort -u | paste -sd, - | sed 's/,/, /g')"
+	exit 0
+	;;
+*)
+	notice exe-pull-error "exe did not pull origin/main" "git merge-tree failed: $(printf '%s' "$mt" | tail -n 3)"
+	exit 1
+	;;
+esac
+tree=$(printf '%s\n' "$mt" | head -n 1)
+if out=$(git merge --no-edit --quiet -m "Merge: origin/main into main ($(plural "$behind" commit))" "$theirs" 2>&1); then
+	if [ "$(git rev-parse 'HEAD^{tree}')" != "$tree" ] || [ "$(git rev-parse HEAD^2 2>/dev/null)" != "$theirs" ]; then
+		# something staged in the shared index between git's check and its commit
+		notice exe-pull-error "Check the merge of origin/main" "The merge commit $(git rev-parse --short HEAD) is not the merge git planned: something staged meanwhile may be in it."
+		exit 1
+	fi
+	pulled "Merged into main beside its $(plural "$mine" "local commit")"
+elif [ -e "$GITDIR/MERGE_HEAD" ]; then
+	resolve "git merge stopped partway, though merge-tree had found no conflict. The merge is in progress in $REPO itself: look at it there first." \
+		"- git said: $(printf '%s' "$out" | tail -n 8)"
+else
+	blocked "$out"
+fi

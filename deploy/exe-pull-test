@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# Tests deploy/exe-pull against a scratch origin, two scratch clones and a
+# stub daemon (notices and Claude sessions, in memory), so nothing reaches
+# this checkout, ~/.exe or the real daemon.
+#
+#   deploy/exe-pull-test        prints one line per check, exits 1 on a failure
+set -uo pipefail
+
+here=$(cd "$(dirname "$0")" && pwd -P)
+pull=$here/exe-pull
+T=$(mktemp -d "${TMPDIR:-/tmp}/exe-pull-test.XXXXXX")
+trap 'kill $stub 2>/dev/null; rm -rf "$T"' EXIT
+fails=0
+ok() { printf 'ok    %s\n' "$1"; }
+no() { printf 'FAIL  %s\n' "$1"; fails=$((fails + 1)); }
+check() { if eval "$2"; then ok "$1"; else no "$1"; [ $# -ge 3 ] && printf '      got: %s\n' "$(eval "$3")"; fi; }
+
+# ---- the stub daemon ----
+cat >"$T/stub.py" <<'EOF'
+import json, sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+notices, sessions, made = {}, [], []
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def reply(self, code, obj=None):
+        b = json.dumps(obj).encode() if obj is not None else b""
+        self.send_response(code); self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_GET(self):
+        if self.path == "/v1/notices": return self.reply(200, {"notices": list(notices.values())})
+        if self.path == "/v1/agents/claude/sessions": return self.reply(200, {"sessions": [{"name": n} for n in sessions]})
+        if self.path == "/made": return self.reply(200, made)
+        self.reply(404, {"error": "no"})
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        if self.path == "/v1/notices":  # the daemon's limits, in bytes (notices.go)
+            if len(body["title"].encode()) > 120 or len(body.get("body", "").encode()) > 1000:
+                return self.reply(400, {"error": "title or body too long"})
+            notices[body["id"]] = body; return self.reply(200, {"id": body["id"]})
+        if self.path == "/v1/agents/claude/sessions":
+            name = "exe-claude-%d" % (len(made) + 2); sessions.append(name); made.append(dict(body, name=name))
+            return self.reply(201, {"name": name})
+        self.reply(404, {"error": "no"})
+    def do_DELETE(self):
+        p = self.path.split("/")
+        if self.path.startswith("/v1/notices/") and notices.pop(p[-1], None): return self.reply(200, {})
+        if self.path.startswith("/v1/agents/claude/sessions/") and p[-1] in sessions:
+            sessions.remove(p[-1]); return self.reply(200, {})
+        self.reply(404, {"error": "no"})
+s = HTTPServer(("127.0.0.1", 0), H)
+open(sys.argv[1], "w").write(str(s.server_port))
+s.serve_forever()
+EOF
+python3 "$T/stub.py" "$T/port" &
+stub=$!
+for _ in $(seq 50); do [ -s "$T/port" ] && break; sleep 0.1; done
+D=http://127.0.0.1:$(cat "$T/port")
+echo '{}' >"$T/config.json"
+
+notice() { curl -s "$D/v1/notices" | jq -r --arg id "$1" '.notices[] | select(.id == $id) | "\(.title) | \(.body)"'; }
+closen() { curl -s -X DELETE "$D/v1/notices/$1" >/dev/null; }
+made() { curl -s "$D/made" | jq length; }
+
+# ---- the repos: origin, "spark" (the checkout pulled) and "away" (pushes) ----
+g() { git -C "$T/$1" "${@:2}"; }
+git init -q --bare -b main "$T/origin.git"
+for r in spark away; do
+	git clone -q "$T/origin.git" "$T/$r" 2>/dev/null
+	g $r config user.name Tester
+	g $r config user.email someone@example.com
+	g $r config core.hooksPath /dev/null
+done
+edit() { printf '%s\n' "$3" >"$T/$1/$2"; }
+commit() { g "$1" add -A && g "$1" commit -q -m "$2"; }
+push() { g away push -q origin main 2>/dev/null; }
+mkdir -p "$T/away/internal" "$T/away/docs"
+edit away internal/a.go "package a"
+edit away docs/x.md "one"
+commit away "Daemon: start"
+push
+g spark pull -q 2>/dev/null
+
+run() { EXE_PULL_REPO=$T/spark EXE_PULL_DAEMON=$D EXE_PULL_CONFIG=$T/config.json "$pull" 2>>"$T/log"; }
+
+# 1. nothing new
+run
+check "nothing new: no notice" '[ -z "$(curl -s $D/v1/notices | jq -r ".notices[].id")" ]'
+
+# 2. a fast-forward
+edit away internal/a.go "package a // two"
+commit away "Daemon: two"
+push
+run
+check "fast-forward lands" '[ "$(g spark rev-parse HEAD)" = "$(g away rev-parse HEAD)" ]'
+check "fast-forward notice" '[[ "$(notice exe-pull)" == "exe pulled 1 commit from origin/main | Fast-forwarded main. The daemon runs its old build"*"Daemon: two" ]]'
+
+# 3. a second pull while the notice is up counts both
+edit away docs/x.md "three"
+commit away "Docs: three"
+push
+run
+check "second pull while up: counts both" '[[ "$(notice exe-pull)" == "exe pulled 2 commits from origin/main"*"Docs: three; Daemon: two" ]]'
+closen exe-pull
+
+# 4. a merge beside a local commit, with someone's uncommitted work elsewhere
+edit spark docs/local.md "local"
+commit spark "Docs: local"
+edit spark internal/wip.go "package wip" # uncommitted, untouched by the pull
+edit away docs/x.md "four"
+commit away "Docs: four"
+push
+run
+check "clean merge lands" '[ "$(g spark rev-parse HEAD^2)" = "$(g away rev-parse HEAD)" ] && [ "$(g spark log -1 --format=%s)" = "Merge: origin/main into main (1 commit)" ]'
+check "clean merge notice, no restart line" '[ "$(notice exe-pull)" = "exe pulled 1 commit from origin/main | Merged into main beside its 1 local commit. Docs: four" ]' 'notice exe-pull'
+check "uncommitted work kept" '[ "$(cat $T/spark/internal/wip.go)" = "package wip" ] && g spark status --porcelain | grep -q "?? internal/wip.go"'
+closen exe-pull
+
+# 5. a conflict: the tree is left alone and Claude is called once
+edit spark docs/x.md "spark's"
+commit spark "Docs: spark's"
+edit away docs/x.md "away's"
+commit away "Docs: away's"
+push
+before=$(g spark rev-parse HEAD)
+run
+check "conflict: main and tree untouched" '[ "$(g spark rev-parse HEAD)" = "$before" ] && [ ! -e $T/spark/.git/MERGE_HEAD ] && [ "$(cat $T/spark/docs/x.md)" = "spark'"'"'s" ]'
+check "conflict: one Claude session, in the checkout" '[ "$(made)" = 1 ] && [ "$(curl -s $D/made | jq -r ".[0].dir")" = "$T/spark" ] && curl -s $D/made | jq -r ".[0].prompt" | grep -q "Files in conflict: docs/x.md"'
+check "conflict notice names the session" '[[ "$(notice exe-pull-conflict)" == *"origin/main (1 new commit) conflicts with main (2 local commits). Claude is merging it in the Claude Code session exe-claude-2." ]]' 'notice exe-pull-conflict'
+run
+check "conflict again, session open: no second session" '[ "$(made)" = 1 ]'
+curl -s -X DELETE "$D/v1/agents/claude/sessions/exe-claude-2" >/dev/null
+run
+check "conflict again, same tip, session gone: none" '[ "$(made)" = 1 ]'
+edit away docs/y.md "new tip"
+commit away "Docs: y"
+push
+run
+check "conflict on a new tip: a new session" '[ "$(made)" = 2 ]'
+# settle it as the session would, so the rest starts clean
+g spark merge -q -X theirs -m "Merge: by hand" origin/main >/dev/null
+curl -s -X DELETE "$D/v1/agents/claude/sessions/exe-claude-3" >/dev/null
+closen exe-pull-conflict
+
+# 6. uncommitted work in a file the pull changes: tried hourly, then Claude
+edit away internal/a.go "package a // six"
+commit away "Daemon: six"
+push
+edit spark internal/a.go "package a // mine, uncommitted"
+run; run
+check "blocked: two quiet tries" '[ "$(made)" = 2 ] && [ -z "$(notice exe-pull-conflict)" ]'
+run
+check "blocked: third try calls Claude" '[ "$(made)" = 3 ] && curl -s $D/made | jq -r ".[2].prompt" | grep -q "Uncommitted work in internal/a.go has blocked a clean pull for 3 hours"'
+check "blocked: the uncommitted edit is kept" '[ "$(cat $T/spark/internal/a.go)" = "package a // mine, uncommitted" ]'
+g spark checkout -q -- internal/a.go
+run
+check "unblocked: it lands on the next run" '[ "$(g spark rev-parse HEAD)" = "$(g away rev-parse HEAD)" ] || [ "$(g spark rev-parse HEAD^2)" = "$(g away rev-parse HEAD)" ]'
+
+# 7. long subjects in many bytes still fit the daemon's 1000
+closen exe-pull
+for i in 1 2 3 4 5 6; do
+	edit away docs/x.md "long $i"
+	commit away "Docs: $(printf '很长的提交说明%.0s' $(seq 20)) $i"
+done
+push
+run
+check "long subjects: the notice fits" '[ "$(notice exe-pull | head -c 40)" = "exe pulled 6 commits from origin/main | " ] && [[ "$(notice exe-pull)" == *"…" ]]' 'notice exe-pull'
+
+# 8. fetch failing: loud on the second hour in a row
+g spark remote set-url origin "$T/gone.git"
+run
+check "fetch fails once: quiet" '[ -z "$(notice exe-pull-fetch)" ]'
+run
+check "fetch fails twice: notice" '[[ "$(notice exe-pull-fetch)" == "exe could not fetch origin | git fetch has failed 2 times in a row."* ]]'
+g spark remote set-url origin "$T/origin.git"
+
+# 9. not on main
+g spark checkout -q -b side
+run
+check "not on main: notice" '[ "$(notice exe-pull-error)" = "exe did not pull origin/main | $T/spark is on side, not main." ]'
+
+echo
+if [ $fails -gt 0 ]; then
+	echo "$fails failed; exe-pull said:"
+	cat "$T/log"
+	exit 1
+fi
+echo "all passed"

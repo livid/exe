@@ -1,0 +1,10 @@
+[Unit]
+Description=Pull origin/main into the exe checkout each hour
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=exe-pull.service
+
+[Install]
+WantedBy=timers.target
