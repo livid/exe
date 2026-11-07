@@ -306,10 +306,6 @@ func (m *Manager) intelLaunchArgs(installer bool) []string {
 		"-device", "ide-hd,bus=ide.1,drive=disk",
 		// Mac OS X keeps universal time in the Mac's clock.
 		"-rtc", "base=utc,clock=host",
-		// No sleep: a Tiger that sleeps here stops, its clock and screen
-		// still, until a key or the mouse reaches it. Without S3 and S4 it
-		// keeps running when Energy Saver's time comes.
-		"-global", "ICH9-LPC.disable_s3=1", "-global", "ICH9-LPC.disable_s4=1",
 		"-display", "none", "-vnc", "unix:"+m.path("vnc.sock"), "-qmp", "unix:"+m.path("qmp.sock")+",server=on,wait=off",
 		"-monitor", "none", "-serial", "file:"+m.path("serial.log"), "-pidfile", m.path("qemu.pid"), "-daemonize")
 	if installer {

@@ -2142,9 +2142,7 @@ the same 1024×768 display, **Mac keys…**, **CD…** and **Full screen**. The
 pointer is where your browser's is, from the Installer on: Tiger 10.4.11
 leaves the edges of a tablet's range unused, and the window allows for it
 from the start. **Restart** and **Shut Down** in the Apple menu work as on
-the PowerPC Mac. **Sleep** does nothing: the Mac has no sleep to go into,
-because a Tiger that slept here stood still, clock and screen, until a key
-reached it. Energy Saver's timer leaves it running.
+the PowerPC Mac.
 
 The Mac reports itself as a Mac Pro with a Core 2 Duo processor: two
 cores, and Tiger uses both. Rarely, Tiger starts its login window before
