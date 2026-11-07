@@ -85,6 +85,11 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   takes it (786d9a1 took a whole change that way). It builds the commit
   in an index of its own and lands it by compare-and-swap; `--help` says
   the rest.
+- Each hour `exe-pull.timer` runs `deploy/exe-pull`, which brings
+  origin/main into main: a fast-forward or a clean merge lands by itself
+  with a notice on the desk, and a conflict opens a Claude Code session
+  that merges in a worktree of its own. So main can move under you
+  between two commands; agent-commit's compare-and-swap catches it.
 - Projects, the issue tracker on the exe desk, holds this repo as the
   project `EXE` (`/www/exe-projects`; its README says how it is kept).
   An issue id such as `EXE-12` or `PROJ-5` is read whole with
