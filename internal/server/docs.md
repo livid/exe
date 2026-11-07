@@ -941,9 +941,9 @@ On a machine with tmux, the column down the window's left lists the agent's
 sessions, one row for each tmux session. Each is a conversation of its own.
 
 - **Switch.** Click a row and the window moves to that session.
-- **Start another.** **New**, under the list, starts another conversation in
-  a session of its own, at the top of the list. In the Claude Code window
-  the button reads **New…** and first asks where to start (below).
+- **Start another.** **New…**, under the list, starts another conversation
+  in a session of its own, at the top of the list. It asks first where to
+  start (below).
 - **Start one in a project's folder.** In Projects, right-click a project
   and choose **Open in Claude Code**: the Claude Code window opens, or comes
   forward, and a new session starts in the project's working directory, at
@@ -963,11 +963,17 @@ sessions, one row for each tmux session. Each is a conversation of its own.
 
 ### Choose the folder for a new session
 
-In the Claude Code window, **New…** opens the New Session dialog. It lists
-the folders Claude Code has worked in on this machine, the latest first,
-with the day each was last used. The window's default folder is always on
-the list. Sessions run headless, such as `claude -p`, do not count, and a
-folder that is gone is left out.
+**New…** opens the New Session dialog. It lists the folders the agent has
+worked in on this machine, the latest first, with the day each was last
+used. The window's default folder is always on the list, and a folder that
+is gone is left out.
+
+- **Claude Code** reads its folders from its conversations. Sessions run
+  headless, such as `claude -p`, do not count.
+- **Codex** reads its folders from its threads, archived ones too. Threads
+  in its own terminal screen and from the ChatGPT app, the Codex app or VS
+  Code count. `codex exec` runs, sub-agents and the hub watcher's turns do
+  not.
 
 - **Pick a recent folder.** The latest is in the **Folder** field when the
   dialog opens. Click a row, or press the Up and Down Arrow keys, to put
@@ -979,12 +985,11 @@ folder that is gone is left out.
   on this machine, the dialog says so and stays open.
 
 **Escape** or **Cancel** closes the dialog without starting a session.
-**New Session…** on the column's menus opens the same dialog. In the
-Codex window, **New** starts a session in the default folder at once.
+**New Session…** on the column's menus opens the same dialog.
 
 In the Codex window, sessions are ordered by when you last sent a message,
 newest first. A session with no message yet uses its creation time, so
-**New** puts it at the top. Creation time breaks ties. Agent output and
+**New…** puts it at the top. Creation time breaks ties. Agent output and
 switching sessions do not change this order.
 
 In the Claude Code window, sessions run newest created first and are grouped
@@ -1053,7 +1058,7 @@ Right-click a row for its menu:
 | Item | What it does |
 | --- | --- |
 | When the session started, in grey | Says when; it is not a command. |
-| **New Session…** | Starts a new session, as **New…** does (**New Session** in the Codex window). |
+| **New Session…** | Starts a new session, as **New…** does. |
 | **Copy Title** | Copies the row's title. |
 | **Get Info** | Claude Code: a dialog about the conversation — its summary, turns, tokens and more (below). |
 | **Archive…** | Ends the session and its process, after a dialog. |
@@ -1193,7 +1198,7 @@ column's own sessions hold.
 
 ### Search for a conversation
 
-**Search**, beside **New** in the Claude Code window, opens a dialog over
+**Search**, beside **New…** in the Claude Code window, opens a dialog over
 the window that lists every conversation on this machine:
 
 - the window's sessions, as the column has them;
@@ -1357,7 +1362,7 @@ is set.
 | `GET /v1/agents/claude/sessions/<name>/info` | What **Get Info** shows for a session: `summary`, `prompt`, `last_prompt`, `turns`, `replies`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `models`, `created`, `activity`, `cwd`. Claude Code only. |
 | `GET /v1/agents/claude/threads/<id>` | The same for a conversation no session holds, by its session id. |
 | `GET /v1/agents/claude/sessions/<name>/prompts` | Every prompt of the session, whole and in order, as `prompts`: each with `text`, `at` (when it was given) and `cut` when it ran past 20,000 characters. What the prompt line's dialog lists. Claude Code only. |
-| `GET /v1/agents/claude/dirs` | The folders Claude Code worked in, latest first, as `dirs` (each a `path` and `at`, when it was last used), and the window's `default` folder. With `?path=<folder>`, whether a session can start there: the whole path as `path`, or an error that says why not. What the New Session dialog asks. Claude Code only. |
+| `GET /v1/agents/claude/dirs` | The folders the agent worked in, latest first, as `dirs` (each a `path` and `at`, when it was last used), and the window's `default` folder. With `?path=<folder>`, whether a session can start there: the whole path as `path`, or an error that says why not. What the New Session dialog asks. |
 | `GET /v1/agents/work` | Lists the sessions of both agents that are at work now: when each one's turn began (`since`, beside the daemon's own `now`) and the issue addresses, such as `EXE-12`, that its instructions named (`refs`). |
 
 A session's `<name>` is its tmux session's: `exe-claude` for the one the

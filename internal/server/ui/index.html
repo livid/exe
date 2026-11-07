@@ -9799,7 +9799,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
       <div class="win-body" style="padding:0">${column
-        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">${app === "claude" ? L("New…") : "New"}</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="${L`Search every ${agent.title} conversation on this machine`}">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
+        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">${L("New…")}</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="${L`Search every ${agent.title} conversation on this machine`}">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
         : `<div class="hostterm-box${sess ? " tmux" : ""}"></div>`}</div>
       <div class="keyrow">${keyRowButtons()}</div>
       <div class="held" hidden><span class="held-text"></span><button class="ghost held-copy">Copy</button><button class="ghost held-drop">Dismiss</button><button class="ghost held-insert">Insert</button></div>
@@ -10096,9 +10096,9 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       ...(findBtn ? [{ label: L("Get Info"), act: () => sessInfo(null, t) }] : []),
     ], () => term.focus());
   }
-  // New: in the Claude Code window the New Session dialog (newDlg, below)
-  // asks for the folder first; Codex's starts one in the project folder
-  // at once. The menus' item says which, with its ellipsis or without
+  // New: the New Session dialog (newDlg, below) asks for the folder
+  // first, in the Claude Code and the Codex window alike. A window with
+  // no column has no New, and its menus none of the column's items
   let newDlg = null;
   const sendNew = () => {
     if (newDlg) { newDlg(); return; }
@@ -10556,11 +10556,12 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       });
     };
   }
-  // New Session, from New in the Claude Code window and New Session… on
-  // the column's menus: a dialog of the window's own, like Search, that
-  // asks where the session starts. A field for the folder over the
-  // folders Claude Code worked in on this machine, the latest first
-  // (claudedirs.go; the window's default folder is always among them).
+  // New Session, from New… under the column and New Session… on the
+  // column's menus, in the Claude Code and the Codex window: a dialog of
+  // the window's own, like Search, that asks where the session starts. A
+  // field for the folder over the folders the agent worked in on this
+  // machine, the latest first (agentdirs.go: Claude Code's transcripts,
+  // Codex's rollouts; the window's default folder is always among them).
   // The latest is in the field when the list arrives, unless something
   // was typed meanwhile; a click on a row, or an arrow, puts its path
   // there, and a double click starts in it. Any other folder is typed in
@@ -10569,7 +10570,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
   // in the dialog rather than in a toast once it has gone; then the
   // session starts as Projects' Open in Claude Code starts one (_openIn)
   // and the window moves to it. Escape and Cancel put it away
-  if (findBtn && newBtn) {
+  if (newBtn) {
     let veil = null, q, box, tally, startBtn, cancelBtn;
     let dirs = null, failed = "", sel = -1, asked = 0, typed = false, busy = false;
     const close = () => { veil.hidden = true; asked++; busy = false; term.focus(); };

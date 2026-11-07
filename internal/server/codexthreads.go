@@ -56,6 +56,7 @@ func codexHome() string {
 // changes after the thread starts.
 type codexRollout struct {
 	id, originator, cwd string
+	source              string // where it runs: "cli" (the CLI's own screen), "exec", "vscode" (the app-server); "" for a sub-agent's
 	created             int64
 	user                bool   // a thread of the user's own, not a sub-agent's
 	prompt              string // the first prompt, the title when the index has no name
@@ -116,6 +117,7 @@ func readCodexRollout(path string) *codexRollout {
 	}
 	p := meta.Payload
 	r := &codexRollout{id: p.ID, originator: p.Originator, cwd: p.Cwd}
+	json.Unmarshal(p.Source, &r.source) // a string, or a sub-agent's object, which leaves it ""
 	if t, err := time.Parse(time.RFC3339Nano, p.Timestamp); err == nil {
 		r.created = t.Unix()
 	}
@@ -190,6 +192,46 @@ func readCodexIndex(home string) map[string]string {
 	return names
 }
 
+// codexRolloutFile is a rollout on disk and its last write.
+type codexRolloutFile struct {
+	path  string
+	mtime time.Time
+}
+
+// codexRolloutFiles is every rollout under the roots — sessions/ keeps
+// them by date, archived_sessions/ flat — latest write first.
+func codexRolloutFiles(roots ...string) []codexRolloutFile {
+	var files []codexRolloutFile
+	for _, root := range roots {
+		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if name := d.Name(); !strings.HasPrefix(name, "rollout-") || !strings.HasSuffix(name, ".jsonl") {
+				return nil
+			}
+			if info, err := d.Info(); err == nil {
+				files = append(files, codexRolloutFile{p, info.ModTime()})
+			}
+			return nil
+		})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].mtime.After(files[j].mtime) })
+	return files
+}
+
+// codexRolloutOf is a rollout's reading, from the cache once read.
+func codexRolloutOf(path string) *codexRollout {
+	if v, ok := codexMetaCache.Load(path); ok {
+		return v.(*codexRollout)
+	}
+	r := readCodexRollout(path)
+	if r != nil {
+		codexMetaCache.Store(path, r)
+	}
+	return r
+}
+
 // codexAppThreads lists the threads started elsewhere, latest activity
 // first, at most limit of them (0: all); live are thread ids the column's
 // sessions already carry, left out.
@@ -198,32 +240,9 @@ func codexAppThreads(home string, live map[string]bool, now time.Time, limit int
 	if home == "" {
 		return out
 	}
-	type file struct {
-		path  string
-		mtime time.Time
-	}
-	var files []file
-	filepath.WalkDir(filepath.Join(home, "sessions"), func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if name := d.Name(); !strings.HasPrefix(name, "rollout-") || !strings.HasSuffix(name, ".jsonl") {
-			return nil
-		}
-		if info, err := d.Info(); err == nil {
-			files = append(files, file{p, info.ModTime()})
-		}
-		return nil
-	})
-	sort.Slice(files, func(i, j int) bool { return files[i].mtime.After(files[j].mtime) })
 	names := readCodexIndex(home)
-	for _, f := range files {
-		var r *codexRollout
-		if v, ok := codexMetaCache.Load(f.path); ok {
-			r = v.(*codexRollout)
-		} else if r = readCodexRollout(f.path); r != nil {
-			codexMetaCache.Store(f.path, r)
-		}
+	for _, f := range codexRolloutFiles(filepath.Join(home, "sessions")) {
+		r := codexRolloutOf(f.path)
 		if r == nil || !r.user || codexOwnOriginator(r.originator) || live[r.id] {
 			continue
 		}
