@@ -80,10 +80,12 @@ var intelHost = runtime.GOOS == "linux" && runtime.GOARCH == "amd64"
 const appleSMCKey = "ourhardworkbythesewordsguardedpleasedontsteal(c)AppleComputerInc"
 
 // The CPU Tiger sees: a Penryn Core 2, with the TSC's frequency in the
-// hypervisor leaf for OpenCore. One of them: with two or more, Tiger 10.4.11
-// panics early in its boot (a page fault at 0x118 whatever the topology or
-// CPU model, tried 2026-11-05).
+// hypervisor leaf for OpenCore. Two of them (intelCPUs), which takes the
+// i386_vm_init fix in exe's OpenCore config: without it Tiger faults at
+// boot on more than one.
 const intelCPU = "Penryn,vendor=GenuineIntel,+invtsc,vmware-cpuid-freq=on"
+
+const intelCPUs = "2"
 
 // OpenCore, pinned: the release archive and the files of it the Mac boots.
 var openCore = struct {
@@ -292,7 +294,7 @@ func (m *Manager) intelLaunchArgs(installer bool) []string {
 		args = append(args, "-L", dir)
 	}
 	args = append(args, "-name", m.sys.process,
-		"-machine", "q35", "-accel", "kvm", "-cpu", intelCPU, "-smp", "1", "-m", "2048",
+		"-machine", "q35", "-accel", "kvm", "-cpu", intelCPU, "-smp", intelCPUs, "-m", "2048",
 		"-drive", "if=pflash,format=raw,readonly=on,file="+esc(m.ovmf(ovmfCode)),
 		"-drive", "if=pflash,format=raw,file="+esc(m.path("efivars.fd")),
 		"-device", "isa-applesmc,osk="+appleSMCKey,

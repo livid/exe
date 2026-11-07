@@ -28,7 +28,7 @@ func TestMacOSXIntelIsAKVMMacOfItsOwn(t *testing.T) {
 		args := m.launchArgs(installer)
 		pairs := argPairs(args)
 		for flag, want := range map[string]string{
-			"-machine": "q35", "-accel": "kvm", "-cpu": intelCPU, "-smp": "1", "-m": "2048",
+			"-machine": "q35", "-accel": "kvm", "-cpu": intelCPU, "-smp": "2", "-m": "2048",
 			"-name": "exe-mac-osx-intel", "-vga": "std", "-rtc": "base=utc,clock=host",
 			"-vnc": "unix:" + filepath.Join(root, "vnc.sock"),
 			"-qmp": "unix:" + filepath.Join(root, "qmp.sock") + ",server=on,wait=off",
@@ -237,10 +237,15 @@ func TestOpenCoreConfigBootsTiger(t *testing.T) {
 // 0x199094) where the old one did not.
 func TestOpenCoreConfigPatchesTigersKernel(t *testing.T) {
 	c := string(openCoreConfig)
-	data := func(key string) []byte {
-		m := regexp.MustCompile(`<key>` + key + `</key><data>([^<]*)</data>`).FindStringSubmatch(c)
+	start, end := strings.Index(c, "<key>Patch</key>"), strings.Index(c, "<key>Emulate</key>")
+	if start < 0 || end < start {
+		t.Fatal("config has no Kernel Patch array")
+	}
+	patches := strings.Split(c[start:end], "<dict>")[1:]
+	data := func(p, key string) []byte {
+		m := regexp.MustCompile(`<key>` + key + `</key><data>([^<]*)</data>`).FindStringSubmatch(p)
 		if m == nil {
-			t.Fatalf("config has no %s", key)
+			t.Fatalf("patch has no %s", key)
 		}
 		b, err := base64.StdEncoding.DecodeString(m[1])
 		if err != nil {
@@ -248,23 +253,49 @@ func TestOpenCoreConfigPatchesTigersKernel(t *testing.T) {
 		}
 		return b
 	}
-	find, repl := data("Find"), data("Replace")
-	if len(find) != 124 || len(repl) != len(find) {
-		t.Fatalf("Find is %d bytes, Replace %d", len(find), len(repl))
+	// Each patch, by its length and what its replacement adds or takes out.
+	want := []struct {
+		comment    string
+		size       int
+		added, cut []byte
+	}{
+		{"ml_static_mfree", 124, []byte{0xe8, 0xea, 0xae, 0xff, 0xff}, nil},            // call pmap_valid_page
+		{"i386_vm_init", 44, []byte{0x3b, 0x45, 0xc4, 0x72}, []byte{0x3b, 0x48, 0x08}}, // cmp fap, jb in; cmp alloc out
+		{"machine_idle_cstate", 37, []byte{0xfb, 0xf4}, nil},                           // sti; hlt
+		{"ml_init_lock_timeout", 28, []byte{0x00, 0x94, 0x35, 0x77}, nil},              // 2e9
+		{"lck_mtx_interlock_spin", 20, []byte{0xeb, 0x1b}, []byte{0x39, 0xd6}},         // jmp over the deadline
+		{"pmap_flush_tlbs", 18, []byte{0xeb, 0x22}, []byte{0x39, 0xd6}},                // jmp over the deadline
 	}
-	validPage := []byte{0xe8, 0xea, 0xae, 0xff, 0xff}
-	if bytes.Contains(find, validPage) || !bytes.Contains(repl, validPage) {
-		t.Fatal("the patch does not add the pmap_valid_page check")
+	if len(patches) != len(want) {
+		t.Fatalf("config has %d kernel patches, want %d", len(patches), len(want))
 	}
-	for _, want := range []string{
-		"<key>Arch</key><string>i386</string>",
-		"<key>Identifier</key><string>kernel</string>",
-		"<key>Enabled</key><true/>",
-		"<key>MinKernel</key><string>8.0.0</string>",
-		"<key>MaxKernel</key><string>8.11.99</string>",
-	} {
-		if !strings.Contains(c, want) {
-			t.Errorf("kernel patch lacks %s", want)
+	for i, w := range want {
+		p := patches[i]
+		if !strings.Contains(p, "<key>Comment</key><string>"+w.comment+":") {
+			t.Errorf("patch %d is not %s's", i, w.comment)
+			continue
+		}
+		find, repl := data(p, "Find"), data(p, "Replace")
+		if len(find) != w.size || len(repl) != len(find) {
+			t.Errorf("%s: Find is %d bytes, Replace %d", w.comment, len(find), len(repl))
+		}
+		if bytes.Contains(find, w.added) || !bytes.Contains(repl, w.added) {
+			t.Errorf("%s: the patch does not add % x", w.comment, w.added)
+		}
+		if w.cut != nil && (!bytes.Contains(find, w.cut) || bytes.Contains(repl, w.cut)) {
+			t.Errorf("%s: the patch does not take out % x", w.comment, w.cut)
+		}
+		for _, s := range []string{
+			"<key>Arch</key><string>i386</string>",
+			"<key>Identifier</key><string>kernel</string>",
+			"<key>Enabled</key><true/>",
+			"<key>Count</key><integer>1</integer>",
+			"<key>MinKernel</key><string>8.0.0</string>",
+			"<key>MaxKernel</key><string>8.11.99</string>",
+		} {
+			if !strings.Contains(p, s) {
+				t.Errorf("%s: patch lacks %s", w.comment, s)
+			}
 		}
 	}
 }

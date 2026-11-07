@@ -2090,8 +2090,9 @@ The **Mac OS X Intel** app is a third Mac, on a node that runs Linux on an
 x86-64 processor: Mac OS X 10.4.11 for Intel Macs, on this machine's own
 processor under KVM rather than emulated, with a 100 GB hard disk of its
 own. It is the [Mac OS X](https://exe.v2core.com/docs/using/mac-os-x) app's
-Tiger as Apple sold it on the first Intel Macs, and it runs at the speed of
-one core of this machine. On a node of another kind the app is not there.
+Tiger as Apple sold it on the first Intel Macs, and it runs on two of this
+machine's cores at their own speed. On a node of another kind the app is not
+there.
 
 What it gives up beside the PowerPC Mac: Classic, so no Mac OS 9 programs
 inside it; sound, Quartz Extreme and Core Image, which need drivers Tiger
@@ -2110,7 +2111,8 @@ same time.
 - **Room on this node.** The install DVD is a 2.2 GiB download and
   OpenCore, which starts Tiger on a machine that is not a Mac, 10 MB. The
   hard disk takes 3 to 5 GB after installation.
-- **Memory.** The Mac has 2 GB while it runs.
+- **Memory and processor.** The Mac has 2 GB and two cores while it runs;
+  an idle Mac leaves the cores to the rest of this machine.
 
 ### Set it up the first time
 
@@ -2142,16 +2144,24 @@ leaves the edges of a tablet's range unused, and the window allows for it
 from the start. **Restart** and **Shut Down** in the Apple menu work as on
 the PowerPC Mac.
 
-The Mac reports itself as a Mac Pro with one Core 2 processor. It has one
-core because Tiger 10.4.11 does not start on more than one virtual
-processor.
+The Mac reports itself as a Mac Pro with a Core 2 Duo processor: two
+cores, and Tiger uses both. Rarely, Tiger starts its login window before
+its security service is ready, and the Mac shows a black screen asking
+`login:` instead of your desktop. Type your short name and password there,
+then `sudo reboot`.
 
-OpenCore applies one fix to Tiger's kernel each time the Mac starts.
-Without it Tiger crashes within minutes on this machine's virtual firmware,
+OpenCore applies fixes to Tiger's kernel each time the Mac starts. Without
+the first, Tiger crashes within minutes on this machine's virtual firmware,
 with **You need to restart your computer** in four languages: the kernel
 reuses memory the firmware reserved without keeping track of it, and
-corrupts its own page tables. A Mac set up by an earlier exe gets the fix
-the next time it starts.
+corrupts its own page tables. Without the second it does not start on two
+cores: the firmware leaves a page of its own in low memory when it wakes the
+second core, and the kernel then gives one page to two owners. The third
+lets an idle core rest; without it each core of a Mac doing nothing keeps
+one of this machine's cores busy. The last ones let one core wait for the
+other as long as this machine keeps the Mac from running, where Tiger would
+crash after a quarter of a second. A Mac set up by an earlier exe gets the
+fixes and its second core the next time it starts.
 
 ### A shell and screen sharing from this machine
 
@@ -2168,7 +2178,7 @@ adapter, which Tiger's own driver takes, with outbound NAT and DHCP over
 IPv4; networking is off while the Installer runs. Software Update still
 finds Apple's Tiger updates. They replace parts of the system OpenCore
 starts; installing them is untested, and an update that replaces the
-kernel leaves it without exe's fix.
+kernel leaves it without exe's fixes.
 
 ### Where it is kept
 
