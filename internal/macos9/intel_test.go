@@ -47,6 +47,7 @@ func TestMacOSXIntelIsAKVMMacOfItsOwn(t *testing.T) {
 			" virtio-blk-pci,drive=opencore,bootindex=0 ",
 			" if=none,id=disk,format=qcow2,file=" + filepath.Join(root, "macosx-intel.qcow2") + " ",
 			" ide-cd,bus=ide.0,drive=cd ",
+			" -global ICH9-LPC.disable_s3=1 -global ICH9-LPC.disable_s4=1 ",
 		} {
 			if !strings.Contains(joined, want) {
 				t.Errorf("installer=%v: launch lacks %q", installer, want)
