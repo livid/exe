@@ -2106,8 +2106,10 @@ same time.
 - **KVM**, and this account allowed to use it (`/dev/kvm`, the `kvm`
   group). exe does not fall back to QEMU's software emulation, under
   which Tiger runs about five times slower.
-- **QEMU for x86 and OVMF's 32-bit firmware.** On Ubuntu 24.04 setup
-  fetches them; elsewhere install them (`qemu-system-x86`, `ovmf-ia32`).
+- **Linux with glibc 2.35 or later**, as from Ubuntu 22.04 and Debian 12
+  on. Setup downloads exe's own x86 emulator, QEMU with OVMF's 32-bit
+  firmware (8 MB), and checks it against its published checksum; nothing
+  needs installing.
 - **Room on this node.** The install DVD is a 2.2 GiB download and
   OpenCore, which starts Tiger on a machine that is not a Mac, 10 MB. The
   hard disk takes 3 to 5 GB after installation.

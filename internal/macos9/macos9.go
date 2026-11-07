@@ -593,14 +593,14 @@ func (m *Manager) activateRuntime(staging string) error {
 	return os.RemoveAll(previous)
 }
 
-// installEmulator fetches exe's own emulator, checks it and makes it the runtime
-func (m *Manager) installEmulator(ctx context.Context) error {
+// installEmulator fetches exe's own emulator, checks it with validate and makes it the runtime
+func (m *Manager) installEmulator(ctx context.Context, validate func(context.Context, string) error) error {
 	staging := m.runtimePath("runtime.staging")
 	defer os.RemoveAll(staging)
 	if err := m.fetchEmulator(ctx, staging); err != nil {
 		return err
 	}
-	if err := validateRuntime(ctx, staging); err != nil {
+	if err := validate(ctx, staging); err != nil {
 		return err
 	}
 	return m.activateRuntime(staging)
@@ -636,8 +636,8 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 	}
 	// exe's own emulator, where there is a build for this system. One that cannot be fetched
 	// leaves the runtime that works as it is.
-	if _, _, ok := emulatorBuildHere(); ok {
-		err := m.installEmulator(ctx)
+	if _, _, ok := m.emulatorBuildHere(); ok {
+		err := m.installEmulator(ctx, validateRuntime)
 		if err == nil || ctx.Err() != nil {
 			return err
 		}
