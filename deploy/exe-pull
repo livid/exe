@@ -95,7 +95,8 @@ pulled() { # HOW
 	n=$(git rev-list --count --no-merges "$since..$theirs")
 	subjects=$(git log --no-merges --format=%s -5 "$since..$theirs" | paste -sd';' - | sed 's/;/; /g')
 	[ "$n" -gt 5 ] && more="; and $((n - 5)) more"
-	git log --format= --name-only "$since..$theirs" -- cmd internal go.mod go.sum Makefile | grep -q . &&
+	# no grep -q in a pipe here: under pipefail its early exit fails git log (SIGPIPE)
+	[ -n "$(git log --format= --name-only "$since..$theirs" -- cmd internal go.mod go.sum Makefile)" ] &&
 		restart=" The daemon runs its old build until you build and restart."
 	notice exe-pull "exe pulled $(plural "$n" commit) from origin/main" "$1.$restart $subjects$more"
 	put tries ""

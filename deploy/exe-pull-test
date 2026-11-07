@@ -102,6 +102,16 @@ run
 check "second pull while up: counts both" '[[ "$(notice exe-pull)" == "exe pulled 2 commits from origin/main"*"Docs: three; Daemon: two" ]]'
 closen exe-pull
 
+# 3b. a pull whose Go files list runs past a pipe's 64 KiB still says to restart
+closen exe-pull
+mkdir -p "$T/away/internal/many"
+for i in $(seq 1500); do : >"$T/away/internal/many/file-$i-with-a-name-long-enough-to-fill-the-pipe.go"; done
+commit away "Daemon: many files"
+push
+run
+check "many Go files: the restart line" '[[ "$(notice exe-pull)" == *"The daemon runs its old build until you build and restart."* ]]' 'notice exe-pull'
+closen exe-pull
+
 # 4. a merge beside a local commit, with someone's uncommitted work elsewhere
 edit spark docs/local.md "local"
 commit spark "Docs: local"
