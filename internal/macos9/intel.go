@@ -57,6 +57,7 @@ var macOSXIntel = &system{
 	forwards:  []forward{{"ssh", 22}, {"vnc", 5900}},
 	ethernet:  "52:54:00:10:04:11",
 	trims:     []float64{0.15, 0},
+	gpu:       true,
 	x86:       true,
 	emulator:  "qemu-system-x86_64",
 	checking:  "Checking for KVM and an x86 emulator…",
@@ -319,6 +320,9 @@ func (m *Manager) intelLaunchArgs(installer bool) []string {
 	} else {
 		args = append(args, "-drive", "if=none,id=cd,media=cdrom", "-device", "ide-cd,bus=ide.0,drive=cd",
 			"-netdev", m.sys.network+m.hostForwards(), "-device", "e1000-82545em,netdev=net0,mac="+m.sys.ethernet+",romfile=")
+		if dev := m.qeglDevice(); dev != "" {
+			args = append(args, "-device", dev)
+		}
 	}
 	return args
 }

@@ -379,47 +379,63 @@ func (m *Manager) hasScreamer() bool {
 // once per emulator file.
 var qeglChecked struct {
 	sync.Mutex
-	key      string
-	has, log bool // the device, and its logfile property
+	files map[string]qeglOptions // emulator path -> what it said, by file
+}
+
+type qeglOptions struct {
+	key                 string // the file's size and time when asked
+	has, log, cursorOpt bool   // the device, its logfile and cursor properties
 }
 
 // qeglDevice is the -device argument for the Mac's GPU device, "" without
 // one. Its log goes to qegl.log in the Mac's folder: a daemonized emulator
-// writes its own messages nowhere.
+// writes its own messages nowhere. The Intel Mac's display driver hands the
+// arrow to the device when it can, which takes it out of the screen the
+// viewer gets and follows the browser's pointer by (pointerTrim): cursor=0
+// keeps it drawn in the screen.
 func (m *Manager) qeglDevice() string {
 	if !m.sys.gpu {
 		return ""
 	}
-	has, log := m.qeglSupport()
-	if !has {
+	o := m.qeglSupport()
+	if !o.has {
 		return ""
 	}
-	if !log {
-		return "qegl"
+	dev := "qegl"
+	if m.sys.x86 && o.cursorOpt {
+		dev += ",cursor=0"
 	}
-	return "qegl,logfile=" + strings.ReplaceAll(m.path("qegl.log"), ",", ",,")
+	if o.log {
+		dev += ",logfile=" + strings.ReplaceAll(m.path("qegl.log"), ",", ",,")
+	}
+	return dev
 }
 
-func (m *Manager) qeglSupport() (has, log bool) {
-	bin := m.binary("qemu-system-ppc")
+func (m *Manager) qeglSupport() qeglOptions {
+	bin := m.binary(m.sys.emulator)
 	info, err := os.Stat(bin)
 	if err != nil || !info.Mode().IsRegular() {
-		return false, false
+		return qeglOptions{}
 	}
-	key := fmt.Sprintf("%s %d %d", bin, info.Size(), info.ModTime().UnixNano())
+	key := fmt.Sprintf("%d %d", info.Size(), info.ModTime().UnixNano())
 	qeglChecked.Lock()
 	defer qeglChecked.Unlock()
-	if qeglChecked.key != key {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, bin, "-device", "qegl,help")
-		cmd.Env = m.env()
-		out, err := cmd.CombinedOutput()
-		qeglChecked.key = key
-		qeglChecked.has = err == nil && strings.Contains(string(out), "qegl options")
-		qeglChecked.log = qeglChecked.has && strings.Contains(string(out), "logfile=")
+	if o, ok := qeglChecked.files[bin]; ok && o.key == key {
+		return o
 	}
-	return qeglChecked.has, qeglChecked.log
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "-device", "qegl,help")
+	cmd.Env = m.env()
+	out, err := cmd.CombinedOutput()
+	o := qeglOptions{key: key, has: err == nil && strings.Contains(string(out), "qegl options")}
+	o.log = o.has && strings.Contains(string(out), "logfile=")
+	o.cursorOpt = o.has && strings.Contains(string(out), "cursor=")
+	if qeglChecked.files == nil {
+		qeglChecked.files = map[string]qeglOptions{}
+	}
+	qeglChecked.files[bin] = o
+	return o
 }
 
 func (m *Manager) env() []string { return runtimeEnv(m.runtimePath("runtime")) }
