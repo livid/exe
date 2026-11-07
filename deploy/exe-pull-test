@@ -92,14 +92,14 @@ commit away "Daemon: two"
 push
 run
 check "fast-forward lands" '[ "$(g spark rev-parse HEAD)" = "$(g away rev-parse HEAD)" ]'
-check "fast-forward notice" '[[ "$(notice exe-pull)" == "exe pulled 1 commit from origin/main | Fast-forwarded main. The daemon runs its old build"*"Daemon: two" ]]'
+check "fast-forward notice, a line each" '[ "$(notice exe-pull)" = "exe pulled 1 commit from origin/main | Fast-forwarded main."$'"'"'\n'"'"'"Build and restart the daemon to run them."$'"'"'\n'"'"'"• Daemon: two" ]' 'notice exe-pull'
 
 # 3. a second pull while the notice is up counts both
 edit away docs/x.md "three"
 commit away "Docs: three"
 push
 run
-check "second pull while up: counts both" '[[ "$(notice exe-pull)" == "exe pulled 2 commits from origin/main"*"Docs: three; Daemon: two" ]]'
+check "second pull while up: counts both" '[[ "$(notice exe-pull)" == "exe pulled 2 commits from origin/main"*$'"'"'\n'"'"'"• Docs: three"$'"'"'\n'"'"'"• Daemon: two" ]]' 'notice exe-pull'
 closen exe-pull
 
 # 3b. a pull whose Go files list runs past a pipe's 64 KiB still says to restart
@@ -109,7 +109,7 @@ for i in $(seq 1500); do : >"$T/away/internal/many/file-$i-with-a-name-long-enou
 commit away "Daemon: many files"
 push
 run
-check "many Go files: the restart line" '[[ "$(notice exe-pull)" == *"The daemon runs its old build until you build and restart."* ]]' 'notice exe-pull'
+check "many Go files: the restart line" '[[ "$(notice exe-pull)" == *$'"'"'\n'"'"'"Build and restart the daemon to run them."$'"'"'\n'"'"'* ]]' 'notice exe-pull'
 closen exe-pull
 
 # 4. a merge beside a local commit, with someone's uncommitted work elsewhere
@@ -121,7 +121,7 @@ commit away "Docs: four"
 push
 run
 check "clean merge lands" '[ "$(g spark rev-parse HEAD^2)" = "$(g away rev-parse HEAD)" ] && [ "$(g spark log -1 --format=%s)" = "Merge: origin/main into main (1 commit)" ]'
-check "clean merge notice, no restart line" '[ "$(notice exe-pull)" = "exe pulled 1 commit from origin/main | Merged into main beside its 1 local commit. Docs: four" ]' 'notice exe-pull'
+check "clean merge notice, no restart line" '[ "$(notice exe-pull)" = "exe pulled 1 commit from origin/main | Merged into main beside its 1 local commit."$'"'"'\n'"'"'"• Docs: four" ]' 'notice exe-pull'
 check "uncommitted work kept" '[ "$(cat $T/spark/internal/wip.go)" = "package wip" ] && g spark status --porcelain | grep -q "?? internal/wip.go"'
 closen exe-pull
 
@@ -135,7 +135,7 @@ before=$(g spark rev-parse HEAD)
 run
 check "conflict: main and tree untouched" '[ "$(g spark rev-parse HEAD)" = "$before" ] && [ ! -e $T/spark/.git/MERGE_HEAD ] && [ "$(cat $T/spark/docs/x.md)" = "spark'"'"'s" ]'
 check "conflict: one Claude session, in the checkout" '[ "$(made)" = 1 ] && [ "$(curl -s $D/made | jq -r ".[0].dir")" = "$T/spark" ] && curl -s $D/made | jq -r ".[0].prompt" | grep -q "Files in conflict: docs/x.md"'
-check "conflict notice names the session" '[[ "$(notice exe-pull-conflict)" == *"origin/main (1 new commit) conflicts with main (2 local commits). Claude is merging it in the Claude Code session exe-claude-2." ]]' 'notice exe-pull-conflict'
+check "conflict notice names the session" '[[ "$(notice exe-pull-conflict)" == *"origin/main (1 new commit) conflicts with main (2 local commits)."$'"'"'\n'"'"'"Claude is merging it in the Claude Code session exe-claude-2." ]]' 'notice exe-pull-conflict'
 run
 check "conflict again, session open: no second session" '[ "$(made)" = 1 ]'
 curl -s -X DELETE "$D/v1/agents/claude/sessions/exe-claude-2" >/dev/null
@@ -173,6 +173,7 @@ for i in 1 2 3 4 5 6; do
 done
 push
 run
+check "six commits: three lines and a count" '[ "$(notice exe-pull | grep -c "^• ")" = 3 ] || [[ "$(notice exe-pull)" == *"…" ]]' 'notice exe-pull'
 check "long subjects: the notice fits" '[ "$(notice exe-pull | head -c 40)" = "exe pulled 6 commits from origin/main | " ] && [[ "$(notice exe-pull)" == *"…" ]]' 'notice exe-pull'
 
 # 8. fetch failing: loud on the second hour in a row
@@ -180,7 +181,7 @@ g spark remote set-url origin "$T/gone.git"
 run
 check "fetch fails once: quiet" '[ -z "$(notice exe-pull-fetch)" ]'
 run
-check "fetch fails twice: notice" '[[ "$(notice exe-pull-fetch)" == "exe could not fetch origin | git fetch has failed 2 times in a row."* ]]'
+check "fetch fails twice: notice" '[[ "$(notice exe-pull-fetch)" == "exe could not fetch origin | git fetch has failed 2 times in a row. It said:"$'"'"'\n'"'"'"fatal: "* ]]' 'notice exe-pull-fetch'
 g spark remote set-url origin "$T/origin.git"
 
 # 9. not on main
