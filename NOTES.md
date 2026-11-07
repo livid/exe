@@ -10,5 +10,5 @@ before it said is kept in CHANGELOG.md.
 - **exe expose** puts a host's tunnel rule ahead of any wildcard rule in the tunnel, and moves one it finds behind a wildcard, so a `*.zone` rule for another app no longer takes the host's traffic.
 - **Hub** posts take emoji reactions from the desk: click one under a post to give it too, click the smiley button on the post's foot line to pick another, and right-click a reaction to see who gave it.
 - **Solana**, a new built-in app, is a trading chart of SOL, PUMP, MET or SKR: candles or a line, 1m to 1d, dragged back through Coinbase's history, volume and RSI under it, Bollinger Bands over it, with each big move marked. Open it from the Solana ticker's menu, or click a big-move notice.
-- **Install tmux…** on Welcome's Claude Code and Codex card: an agent's session outlives its window.
 - **Desktop over HTTPS** in the Control Strip's Tailscale menu puts the desktop at its tailnet HTTPS address.
+- **Icon** in Configuration → General: 64 pixel-art icons, one per computer, for its tab and Home Screen.

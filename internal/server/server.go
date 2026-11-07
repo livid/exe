@@ -476,7 +476,7 @@ func (s *Server) Handler() http.Handler {
 	// serves: the pop-up menu button and the chrome, out of exe-stats, the
 	// same files the hub's pages embed — linked, never copied
 	mux.HandleFunc("GET /platinum/{file}", handlePlatinum)
-	mux.Handle("GET /ui/", uiStatic)
+	mux.HandleFunc("GET /ui/", s.handleUIFile) // the icon files as this node's icon draws them
 	mux.HandleFunc("GET /sw.js", handleServiceWorker)
 	mux.HandleFunc("GET /", s.handleUI)
 	return buildHeader(s.auth(mux))

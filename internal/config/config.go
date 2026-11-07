@@ -113,6 +113,11 @@ type Config struct {
 	// Language is the desk's language, one of Languages: its menus,
 	// windows and messages. Empty is English.
 	Language string `json:"language,omitempty"`
+	// Icon names this node's icon, one of the set the desktop offers
+	// (ui/node-icons.json): the browser tab and a phone's Home Screen
+	// show it, so the person running exe on several machines tells them
+	// apart. Empty is exe's own computer.
+	Icon string `json:"icon,omitempty"`
 
 	// VMDir is where the VMs' disks and the base images are kept: its
 	// vms/ and images/ folders. Empty means the state folder itself
@@ -325,6 +330,7 @@ func (c *Config) Normalize() {
 	} else {
 		c.Language = strings.TrimSpace(c.Language)
 	}
+	c.Icon = strings.ToLower(strings.TrimSpace(c.Icon))
 	c.Listen = NormalizeListen(c.Listen)
 	c.ProxyListen = NormalizeListen(c.ProxyListen)
 	c.SSHListen = NormalizeListen(c.SSHListen)

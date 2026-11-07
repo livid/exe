@@ -6,12 +6,14 @@
 <meta name="theme-color" content="#dddddd">
 <title>exe</title>
 <link rel="manifest" href="/ui/manifest.json">
-<link rel="apple-touch-icon" href="/ui/icon-192.png">
+<!-- this node's icon (Configuration → General, nodeicon.go): the touch icon
+     sits on its tile, the tab shows the art -->
+<link rel="apple-touch-icon" href="/ui/apple-touch-icon.png">
 <!-- installed on an iPhone the status bar keeps its own light field and dark
      text above the menu bar; black-translucent would set white text over the
      grey bar -->
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="6.5" y="1.5" width="19" height="24" fill="%23DAD5CA" stroke="%23000"/><rect x="10.5" y="5.5" width="11" height="8" fill="%237FD67F" stroke="%23000"/><rect x="12" y="18" width="8" height="2" fill="%2355524B"/><rect x="9.5" y="25.5" width="13" height="3" fill="%23C8C3B8" stroke="%23000"/></svg>'>
+<link rel="icon" href="/ui/icon.svg">
 <link rel="stylesheet" href="/ui/vendor/xterm.css">
 <link rel="stylesheet" href="/platinum/popup.css">
 <!-- the desk's language: the daemon names it on the html element and puts
@@ -1008,6 +1010,23 @@ select { padding: 2px 4px; }
 .field input { width: 100%; }
 .field .hint { font-size: 10.5px; color: #7a4b00; margin-top: 2px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+/* Configuration → General's icon: the set in a sunken white well, 36px
+   cells (the 32px art, a 1px frame that only the picked one draws, 1px
+   air), and beside it the picked one as a phone's Home Screen shows it —
+   the art at 2x on its tile, its name under it */
+.field.ni { grid-column: 1 / -1; }
+.ni-row { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.ni-well.listbox { max-height: none; overflow: visible; padding: 3px; flex: 0 1 auto;
+  display: grid; grid-template-columns: repeat(13, 36px); }
+body.mobile .ni-well.listbox { grid-template-columns: repeat(auto-fill, 36px); flex: 1 1 100%; }
+.ni-well:focus { outline: none; }
+.ni-cell { box-sizing: border-box; width: 36px; height: 36px; padding: 1px; border: 1px solid transparent; }
+.ni-cell svg { display: block; }
+.ni-cell.sel { background: var(--lav); border-color: var(--hl); }
+.ni-preview { width: 104px; flex: none; display: flex; flex-direction: column; align-items: center; }
+.ni-tile { box-sizing: border-box; width: 90px; height: 90px; border-radius: 20px;
+  display: flex; align-items: center; justify-content: center; }
+.ni-name { margin-top: 6px; width: 104px; text-align: center; overflow-wrap: anywhere; }
 
 /* ---------- finder-ish list ---------- */
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -12265,6 +12284,7 @@ const LANGUAGES = [["en", "English"], ["zh-Hans", "简体中文"], ["ja", "日�
 const CONFIG_FIELDS = [
   { group: "General", fields: [
     { path: "language", label: "Language", languages: true, hint: "the menus, windows and messages of every desk on this node — they load again in it on Save" },
+    { path: "icon", label: "Icon", nodeIcons: true, hint: "this node's icon in the browser tab and on a phone's Home Screen — a phone keeps the icon it was added with, so add the desk to the Home Screen again to see a new one" },
   ]},
   { group: "Daemon", fields: [
     { path: "listen", hint: "rebinds live on Save — bind a Tailscale IP for remote access" },
@@ -12310,6 +12330,70 @@ const CONFIG_FIELDS = [
   // checks each against Cloudflare as it goes. The tab says what is set
   { group: "Cloudflare", section: "cloudflare", fields: [] },
 ];
+// This node's icon (nodeicon.go draws the touch icon, the manifest's icons
+// and the tab's from it). The set comes with the configuration (loadConfig
+// waits for both), so the pane is drawn whole the first time; asked once.
+let nodeIconsAsked = null;
+const nodeIconsOnce = () => nodeIconsAsked || (nodeIconsAsked = j("/ui/node-icons.json").then(s => s.icons).catch(e => { nodeIconsAsked = null; throw e; }));
+// the art as the daemon's svg(): one path of one-pixel-high runs per colour
+function nodeIconSvg(ic, size = 32) {
+  const runs = new Map();
+  ic.rows.forEach((row, y) => {
+    for (let x = 0; x < 32;) {
+      let n = 1;
+      while (x + n < 32 && row[x + n] === row[x]) n++;
+      if (row[x] !== ".") { const c = ic.palette[row[x]]; runs.set(c, (runs.get(c) || "") + `M${x} ${y}h${n}v1H${x}z`); }
+      x += n;
+    }
+  });
+  return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" shape-rendering="crispEdges">` +
+    [...runs].map(([c, d]) => `<path fill="${c}" d="${d}"/>`).join("") + "</svg>";
+}
+// The picker: a click (or an arrow key in the well) picks; the hidden
+// input is what Save reads. The set's first icon, exe's computer, is the
+// default and saves as no icon. An icon this exe does not have (one a newer
+// exe wrote) stays the value until another is picked; the default stands
+// in for it on screen.
+function nodeIconPicker(set, val) {
+  const input = el("input", { id: "cfg-icon", type: "hidden", value: val || "" });
+  if (!set.length) return input; // the set did not come: Save keeps the icon as it is
+  const well = el("div", { class: "ni-well listbox", tabindex: "0" });
+  const tile = el("div", { class: "ni-tile" }), name = el("div", { class: "ni-name" });
+  const show = ic => {
+    for (const c of well.children) c.classList.toggle("sel", c._ic === ic);
+    tile.style.background = ic.tile;
+    tile.innerHTML = nodeIconSvg(ic, 64);
+    name.textContent = L(ic.name);
+  };
+  const pick = ic => { input.value = ic.id === set[0].id ? "" : ic.id; show(ic); };
+  for (const ic of set) {
+    const c = el("div", { class: "ni-cell", title: L(ic.name) });
+    c._ic = ic;
+    c.innerHTML = nodeIconSvg(ic);
+    c.onmousedown = () => { pick(ic); well.focus(); };
+    well.append(c);
+  }
+  well.onkeydown = e => {
+    const cells = [...well.children], at = cells.findIndex(c => c.classList.contains("sel"));
+    const cols = Math.max(1, cells.findIndex(c => c.offsetTop > cells[0].offsetTop));
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const to = cells[Math.min(cells.length - 1, Math.max(0, (at < 0 ? 0 : at) + step))];
+    pick(to._ic);
+  };
+  show(set.find(ic => ic.id === (val || set[0].id)) || set[0]);
+  return el("div", { class: "ni-row" }, well, el("div", { class: "ni-preview" }, tile, name), input);
+}
+// After a Save that picked another icon, this desk's tab and links show it
+// at once; the query is only there so no cache hands back the old one.
+function nodeIconLinks(id) {
+  const q = "?icon=" + encodeURIComponent(id || "exe");
+  for (const [sel, href] of [['link[rel="icon"]', "/ui/icon.svg"], ['link[rel="apple-touch-icon"]', "/ui/apple-touch-icon.png"], ['link[rel="manifest"]', "/ui/manifest.json"]]) {
+    const l = document.querySelector(sel);
+    if (l) l.href = href + q;
+  }
+}
 // modelSelect is a dropdown of a backend's live model list (Ollama's
 // /api/tags or the ChatGPT catalog via /v1/chat/models). Until the list
 // arrives it holds only the configured value; when the list can't be
@@ -12356,7 +12440,7 @@ function showCfgPane(name) {
   document.querySelectorAll("#cfg-form .pane").forEach(p => { p.hidden = p.dataset.group !== name; });
 }
 async function loadConfig() {
-  const [cfg, backend] = await Promise.all([j("/v1/config"), hostOnce().then(h => h.vm_backend || "", () => "")]);
+  const [cfg, backend, icons] = await Promise.all([j("/v1/config"), hostOnce().then(h => h.vm_backend || "", () => ""), nodeIconsOnce().catch(() => [])]);
   loadedConfig = cfg;
   cfgGroups = CONFIG_FIELDS.filter(g => !g.backend || g.backend === backend);
   if (!cfgGroups.some(g => g.group === cfgActiveTab)) cfgActiveTab = cfgGroups[0].group;
@@ -12399,6 +12483,8 @@ async function loadConfig() {
       let input;
       if (f.models) {
         input = modelSelect(f, val == null ? "" : String(val));
+      } else if (f.nodeIcons) {
+        input = nodeIconPicker(icons, val || "");
       } else if (f.languages) {
         const sel = el("select", { id: "cfg-" + f.path }, ...LANGUAGES.map(([tag, name]) => el("option", { value: tag }, name + " (" + tag + ")")));
         sel.value = LANGUAGES.some(([tag]) => tag === val) ? val : "en";
@@ -12416,7 +12502,7 @@ async function loadConfig() {
       }
       // inside a group tab the "ollama." / "cloudflare." prefix is redundant
       const label = f.label ? L(f.label) : f.path.includes(".") ? f.path.split(".").pop() : f.path;
-      const field = el("div", { class: "field" },
+      const field = el("div", { class: f.nodeIcons ? "field ni" : "field" },
         el("label", { for: "cfg-" + f.path }, label + (f.restart ? " *" : "")), input);
       if (f.hint) field.append(el("div", { class: "hint" }, L(f.hint)));
       grid.append(field);
@@ -12509,6 +12595,7 @@ $("#cfg-save").onclick = async () => {
     const body = { ...nc };
     for (const g of cfgGroups) if (g.section) delete body[g.section];
     const res = await j("/v1/config", { method: "PUT", json: body });
+    if ((nc.icon || "") !== (loadedConfig.icon || "")) nodeIconLinks(nc.icon);
     loadedConfig = nc;
     // a new language: this desk loads again into it at once, and the others
     // hear it from the daemon. Unsaved work holds that, as for a new build

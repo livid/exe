@@ -1061,6 +1061,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
   run-length form the editor writes) and Revert to Factory. The editor
   rasterises an SVG one to one onto its grid, so it faithfully keeps
   whatever grid it is given.
+- A node's icon (Configuration → General → Icon) comes from a set of its
+  own, `ui/node-icons.json`: exe's computer, the default, then 64 retro
+  computing objects, each 32 rows of palette keys and a Home Screen tile
+  colour. The daemon draws the PWA's files from the picked one
+  (`nodeicon.go`: the touch icon 4x on its 180px tile, the maskable icon
+  9x, inside the safe circle), the picker draws the same rows as SVG. They
+  are not in the Icon Editor: a repaint there could not reach the PNGs the
+  daemon draws. The kit that made them (palette, rules, a checker and a
+  preview sheet) is `~/tools/exe-node-icons`.
 - Art that changes with state keeps a reserved colour the code repaints
   at draw time: the VM screen-green, the Cloudflare lamp's two greens; the
   phone clock draws its hands live over registered face art.

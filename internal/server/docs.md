@@ -693,6 +693,18 @@ Over HTTPS (a Tailscale Serve address, say) the desktop installs as an app:
 It then opens in a window of its own, with the menu bar right under the
 status bar.
 
+Running exe on more than one computer? Give each its own icon, so you can
+tell them apart on the Home Screen and in the browser's tabs:
+
+1. Choose **Windows → Configuration**, and click the **General** tab.
+2. Under **Icon**, click one of the 64 pictures. The tile beside them shows
+   how it will look on a phone.
+3. Click **Save**.
+
+The browser tab shows the new icon at once. A phone keeps the icon a
+desktop had when it was added, so remove the desktop from the Home Screen
+and add it again.
+
 When the daemon is not answering, because it is restarting or the device is
 offline, the desktop shows an alert in place of the browser's error page and
 comes back by itself once the daemon does.

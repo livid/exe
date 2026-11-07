@@ -521,6 +521,15 @@ func (s *Server) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("language %q: not one of %s", nc.Language, strings.Join(config.Languages, ", ")))
 		return
 	}
+	// the default is no icon named; a node keeps an icon a newer exe
+	// wrote (it draws the default for it) but cannot pick one it lacks
+	if nc.Icon == defaultNodeIcon {
+		nc.Icon = ""
+	}
+	if nc.Icon != old.Icon && nc.Icon != "" && nodeIconIDs[nc.Icon] == nil {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf("icon %q: not one of this node's icons", nc.Icon))
+		return
+	}
 	if err := s.storeConfig(&nc); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
