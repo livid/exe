@@ -26,6 +26,138 @@
 	     Penryn cache sizes 10.4 cannot read from CPUID. -->
 	<key>Kernel</key>
 	<dict>
+		<!-- Fixes to Tiger's kernel (Darwin 8.11.1).
+		     ml_static_mfree: OVMF, with S3 on as q35 has it, keeps pages
+		     0x806-0x807 and 0x810-0x8ff as ACPI NVS, and the kexts boot.efi
+		     loads lie across them. When the kernel frees the booter's memory,
+		     ml_static_mfree gives those pages to the VM although the pmap
+		     does not manage them, so their mappings are never torn down: a
+		     page freed and reused as a page table is written through a stale
+		     one, and Tiger panics in pmap within minutes ("pmap_remove: null
+		     pv_list!"). The patch frees only the pages pmap_valid_page()
+		     accepts and leaves those 1 MB out.
+		     i386_vm_init: with two processors OVMF leaves one page of boot
+		     services data at 0x87000, between low memory's two halves. The
+		     kernel keeps low memory as one region marked used, to free once
+		     the VM is up, and its merge test takes the lone page for a free
+		     range and joins it on: the region's end moves past its last
+		     used page, pmap_next_page hands out page 0x86, which also holds
+		     kernel_map and zone_map, and x86_lowmem_free frees it again.
+		     Another allocation overwrites the maps, and Tiger faults in
+		     thread_select before its first thread runs. The patch merges a
+		     range only into a region above first_avail.
+		     machine_idle_cstate: with no power management kext
+		     (DummyPowerManagement) it only enables interrupts, and an idle
+		     processor spins a host core. The patch halts there, as later
+		     kernels do.
+		     ml_init_lock_timeout, lck_mtx_interlock_spin, pmap_flush_tlbs:
+		     with two processors one waits for the other, and Tiger panics
+		     when the wait passes LockTimeOut, 250 ms; a VM the host stops
+		     that long trips it ("interlock timeout for mutex",
+		     "pmap_flush_tlbs() timeout"). LockTimeOut becomes 2 s (2e9: it
+		     is also a signed counter in clear_wait_internal, and doubled for
+		     wait queue locks), and the two waits that panicked under host
+		     stalls keep waiting instead. Spinlocks (hw_lock_to) keep their
+		     timeout. -->
+		<key>Patch</key>
+		<array>
+			<dict>
+				<key>Arch</key><string>i386</string>
+				<key>Base</key><string></string>
+				<key>Comment</key><string>ml_static_mfree: free only pages the pmap manages</string>
+				<key>Count</key><integer>1</integer>
+				<key>Enabled</key><true/>
+				<key>Find</key><data>63aJXeDHReQAAAAAi0Xgi1XkiUQkBIlUJAihoDZLAIkEJOgWR///icaFwHUIgcMAEAAA60OBwwAQAACJXCQMx0QkEAAAAACLReCLVeSJRCQEiVQkCKGgNksAiQQk6Hhc//+NRgGJRCQEiTQk6JMd/v+DLTDdSwABOftyhg==</data>
+				<key>Identifier</key><string>kernel</string>
+				<key>Limit</key><integer>0</integer>
+				<key>Mask</key><data></data>
+				<key>MaxKernel</key><string>8.11.99</string>
+				<key>MinKernel</key><string>8.0.0</string>
+				<key>Replace</key><data>63KJXCQEx0QkCAAAAAChoDZLAIkEJOgiR///icaFwHRNiQQk6Oqu//+FwHRBjYMAEAAAiUQkDMdEJBAAAAAAiVwkBMdEJAgAAAAAoaA2SwCJBCToglz//41GAYlEJASJNCTonR3+/4MtMN1LAAGBwwAQAAA5+3KKkJCQkA==</data>
+				<key>ReplaceMask</key><data></data>
+				<key>Skip</key><integer>0</integer>
+			</dict>
+			<dict>
+				<key>Arch</key><string>i386</string>
+				<key>Base</key><string></string>
+				<key>Comment</key><string>i386_vm_init: merge memory ranges only above first_avail</string>
+				<key>Count</key><integer>1</integer>
+				<key>Enabled</key><true/>
+				<key>Find</key><data>i0XAhcB0JYtVvItCDItVwDtCDHUXi0W8O0gIdQ+LQgSDwAE5wXUFiVoE6x4=</data>
+				<key>Identifier</key><string>kernel</string>
+				<key>Limit</key><integer>0</integer>
+				<key>Mask</key><data></data>
+				<key>MaxKernel</key><string>8.11.99</string>
+				<key>MinKernel</key><string>8.0.0</string>
+				<key>Replace</key><data>i0XAhcB0JYtVvItCDItVwDtCDHUXiwI7RcRyEJCLQgSDwAE5wXUFiVoE6x4=</data>
+				<key>ReplaceMask</key><data></data>
+				<key>Skip</key><integer>0</integer>
+			</dict>
+			<dict>
+				<key>Arch</key><string>i386</string>
+				<key>Base</key><string></string>
+				<key>Comment</key><string>machine_idle_cstate: sti; hlt with no power management kext</string>
+				<key>Count</key><integer>1</integer>
+				<key>Enabled</key><true/>
+				<key>Find</key><data>VYnlg+wYodjiQwCFwHQTi1AwhdJ0DKHU4kMAiQQk/9LrAfvJww==</data>
+				<key>Identifier</key><string>kernel</string>
+				<key>Limit</key><integer>0</integer>
+				<key>Mask</key><data></data>
+				<key>MaxKernel</key><string>8.11.99</string>
+				<key>MinKernel</key><string>8.0.0</string>
+				<key>Replace</key><data>VYnlg+wYodjiQwCFwHQRi1AwhdJ0CqHU4kMAUP/SycP79MnDkA==</data>
+				<key>ReplaceMask</key><data></data>
+				<key>Skip</key><integer>0</integer>
+			</dict>
+			<dict>
+				<key>Arch</key><string>i386</string>
+				<key>Base</key><string></string>
+				<key>Comment</key><string>ml_init_lock_timeout: LockTimeOut 2 s, not 250 ms</string>
+				<key>Count</key><integer>1</integer>
+				<key>Enabled</key><true/>
+				<key>Find</key><data>xwQkgLLmDsdEJAQAAAAA6JNKAACLReijJOBDAA==</data>
+				<key>Identifier</key><string>kernel</string>
+				<key>Limit</key><integer>0</integer>
+				<key>Mask</key><data></data>
+				<key>MaxKernel</key><string>8.11.99</string>
+				<key>MinKernel</key><string>8.0.0</string>
+				<key>Replace</key><data>xwQkAJQ1d8dEJAQAAAAA6JNKAACLReijJOBDAA==</data>
+				<key>ReplaceMask</key><data></data>
+				<key>Skip</key><integer>0</integer>
+			</dict>
+			<dict>
+				<key>Arch</key><string>i386</string>
+				<key>Base</key><string></string>
+				<key>Comment</key><string>lck_mtx_interlock_spin: no interlock timeout panic</string>
+				<key>Count</key><integer>1</integer>
+				<key>Enabled</key><true/>
+				<key>Find</key><data>85DofoMAADnWdxlyBDnDcxOLRQg=</data>
+				<key>Identifier</key><string>kernel</string>
+				<key>Limit</key><integer>0</integer>
+				<key>Mask</key><data></data>
+				<key>MaxKernel</key><string>8.11.99</string>
+				<key>MinKernel</key><string>8.0.0</string>
+				<key>Replace</key><data>85DofoMAAOsbdxlyBDnDcxOLRQg=</data>
+				<key>ReplaceMask</key><data></data>
+				<key>Skip</key><integer>0</integer>
+			</dict>
+			<dict>
+				<key>Arch</key><string>i386</string>
+				<key>Base</key><string></string>
+				<key>Comment</key><string>pmap_flush_tlbs: no shootdown timeout panic</string>
+				<key>Count</key><integer>1</integer>
+				<key>Enabled</key><true/>
+				<key>Find</key><data>6FQVAQA51ncgcgQ5w3Mai0Xk</data>
+				<key>Identifier</key><string>kernel</string>
+				<key>Limit</key><integer>0</integer>
+				<key>Mask</key><data></data>
+				<key>MaxKernel</key><string>8.11.99</string>
+				<key>MinKernel</key><string>8.0.0</string>
+				<key>Replace</key><data>6FQVAQDrIncgcgQ5w3Mai0Xk</data>
+				<key>ReplaceMask</key><data></data>
+				<key>Skip</key><integer>0</integer>
+			</dict>
+		</array>
 		<key>Emulate</key>
 		<dict>
 			<key>DummyPowerManagement</key><true/>

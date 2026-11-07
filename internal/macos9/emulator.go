@@ -41,9 +41,27 @@ var emulatorBuilds = map[string]emulatorBuild{
 	"windows-amd64": {"a60744dac254cba5f26306830ae781b2dda42af59f9b4e90eb5995d31b93ef51", 6741796},
 }
 
+// exe's x86 emulator, for the Intel Mac (intel.go): the same QEMU tree as the PowerPC one, its
+// qemu-system-x86_64 built for KVM with the block drivers that Mac reads (vvfat, dmg) and OVMF's
+// 32-bit firmware beside it. Built for Linux on x86-64 only, where the Intel Mac runs, and
+// published beside the PowerPC builds (docs/emulator.md).
+const intelEmulatorVersion = "9.1.0-exe.2"
+
+// intelEmulatorBase is where its builds are; "" turns them off (tests, EXE_EMULATOR_URL="")
+var intelEmulatorBase = "https://exe-assets.v2core.com/qemu-x86/"
+
+// qemu-x86-VERSION-linux-amd64.tar.gz
+var intelEmulatorBuild = emulatorBuild{"8b5c8b0df0ce548ac9254e3a328e4e6f015a94ea0e5292cb687ae397dc7455a7", 7972968}
+
 func init() {
 	if u, ok := os.LookupEnv("EXE_EMULATOR_URL"); ok {
 		emulatorBase = u
+		if u == "" {
+			intelEmulatorBase = ""
+		}
+	}
+	if u, ok := os.LookupEnv("EXE_EMULATOR_X86_URL"); ok {
+		intelEmulatorBase = u
 	}
 }
 
@@ -78,8 +96,14 @@ func (e *exeEmulator) has(feature string) bool {
 	return false
 }
 
-// emulatorBuildHere is this system's build, if there is one
-func emulatorBuildHere() (url string, b emulatorBuild, ok bool) {
+// emulatorBuildHere is this system's build of the Mac's emulator, if there is one
+func (m *Manager) emulatorBuildHere() (url string, b emulatorBuild, ok bool) {
+	if m.sys.x86 {
+		if intelEmulatorBase == "" || !intelHost || intelEmulatorBuild.sha256 == "" {
+			return "", b, false
+		}
+		return intelEmulatorBase + intelEmulatorVersion + "/qemu-x86-" + intelEmulatorVersion + "-linux-amd64.tar.gz", intelEmulatorBuild, true
+	}
 	if emulatorBase == "" {
 		return "", b, false
 	}
@@ -94,11 +118,15 @@ func emulatorBuildHere() (url string, b emulatorBuild, ok bool) {
 // fetchEmulator downloads this system's build, checks it against its pinned checksum and
 // unpacks it into staging.
 func (m *Manager) fetchEmulator(ctx context.Context, staging string) error {
-	url, want, ok := emulatorBuildHere()
+	url, want, ok := m.emulatorBuildHere()
 	if !ok {
 		return errors.New("no emulator build for this system")
 	}
-	m.step(0, "working", "Downloading exe's PowerPC emulator…")
+	if m.sys.x86 {
+		m.step(0, "working", "Downloading exe's x86 emulator…")
+	} else {
+		m.step(0, "working", "Downloading exe's PowerPC emulator…")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err

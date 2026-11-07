@@ -1,4 +1,4 @@
-# exe's PowerPC emulator
+# exe's emulators
 
 The Mac OS 9 and Mac OS X apps run on an emulator of exe's own: QEMU 9.1.0 with
 
@@ -54,3 +54,48 @@ relayed its screen.
    archives in IPFS, and add the version's table here.
 3. Set `emulatorVersion` and `emulatorBuilds` in `internal/macos9/emulator.go`. A published
    version never changes: Cloudflare and browsers keep its files for a year.
+
+## exe's x86 emulator
+
+The Mac OS X Intel app runs one of exe's own too: the same QEMU tree built as
+`qemu-system-x86_64` for KVM, with the block drivers that Mac reads besides qcow2 (vvfat, for the
+folder OpenCore is served from, and dmg, for Apple's install DVD as it is), the qegl device, and
+OVMF's 32-bit firmware beside it (Ubuntu 24.04's `ovmf-ia32` 2024.02-2ubuntu0.10, unchanged).
+It is built for Linux on x86-64 only, where the Intel Mac runs.
+
+The daemon fetches it as it does the PowerPC builds (`intelEmulatorVersion` and
+`intelEmulatorBuild` in `internal/macos9/emulator.go`), in place of a runtime of Ubuntu's
+packages, of the system's QEMU or of an older build, so the Intel Mac needs no QEMU on the
+computer. Where it cannot be had, the Intel Mac takes Ubuntu's packages as before.
+`EXE_EMULATOR_X86_URL` points the daemon elsewhere (a mirror, ending in `/`), and
+`EXE_EMULATOR_URL=""` turns it off with the PowerPC builds.
+
+### 9.1.0-exe.2
+
+Published on https://exe-assets.v2core.com/qemu-x86/9.1.0-exe.2/ with its README, `SHA256SUMS`
+and the source (`qemu-9.1.0-exe.2-source.tar.xz`, 31.7 MB, its build scripts in `exe-release/`).
+Linux x86-64 with KVM, glibc 2.35 or later.
+
+| System | Archive | SHA-256 | IPFS |
+|---|---|---|---|
+| Linux x86-64 | [`qemu-x86-9.1.0-exe.2-linux-amd64.tar.gz`](https://exe-assets.v2core.com/qemu-x86/9.1.0-exe.2/qemu-x86-9.1.0-exe.2-linux-amd64.tar.gz) | `8b5c8b0df0ce548ac9254e3a328e4e6f015a94ea0e5292cb687ae397dc7455a7` | `bafybeiakcc44h4gl2tdwxt4rn7hfxulzkqfponlb446ebft7yuqqxpv3ui` |
+
+New in its source, 9.1.0-exe.2: the qegl device stops its render thread before QEMU exits. A
+QEMU quit in the moment after it started, while that thread was still in the GPU driver's first
+EGL call, hung at exit with NVIDIA's driver and never ended. The PowerPC builds are still
+9.1.0-exe.1, with that hang on Linux; their next version takes the fix.
+
+Tested before publishing on precision (NVIDIA RTX 6000 Ada), through a scratch daemon that
+fetched it: a fresh setup with no QEMU on the computer, through to the Installer; an installed
+Tiger whose runtime of Ubuntu's packages it replaced, through 20 Remote Login toggles; Tiger
+with QEGL's drivers, Quartz Extreme supported and Core Image hardware accelerated; the arrow
+within a pixel of the browser's pointer on the installer boot and on an installed system; and
+80 quits at the moment of starting with the qegl device, all of which exited.
+
+### A new version
+
+In exe-qegl: change `release/VERSION`, run `release/prepare-source.sh`, then
+`release/build-linux-x86.sh` in the `exe-qemu-linux` image and `release/package-x86.sh`. Copy
+`build/release/dist/qemu-x86/VERSION/` to `/www/exe-assets/public/qemu-x86/VERSION/`, pin the
+archive in IPFS, add the version's table here, and set `intelEmulatorVersion` and
+`intelEmulatorBuild`.

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -57,6 +58,7 @@ var macOSXIntel = &system{
 	forwards:  []forward{{"ssh", 22}, {"vnc", 5900}},
 	ethernet:  "52:54:00:10:04:11",
 	trims:     []float64{0.15, 0},
+	gpu:       true,
 	x86:       true,
 	emulator:  "qemu-system-x86_64",
 	checking:  "Checking for KVM and an x86 emulator…",
@@ -66,7 +68,8 @@ var macOSXIntel = &system{
 }
 
 // NewMacOSXIntel is the Mac that runs Mac OS X for Intel. Its runtime is
-// its own, in its root: exe's emulator is a PowerPC one.
+// its own, in its root: exe's x86 emulator, where the others share the
+// PowerPC one.
 func NewMacOSXIntel(root string) *Manager { return newManager(macOSXIntel, root, root) }
 
 // IntelMacHere says whether this computer can run the Intel Mac: Linux on
@@ -80,10 +83,12 @@ var intelHost = runtime.GOOS == "linux" && runtime.GOARCH == "amd64"
 const appleSMCKey = "ourhardworkbythesewordsguardedpleasedontsteal(c)AppleComputerInc"
 
 // The CPU Tiger sees: a Penryn Core 2, with the TSC's frequency in the
-// hypervisor leaf for OpenCore. One of them: with two or more, Tiger 10.4.11
-// panics early in its boot (a page fault at 0x118 whatever the topology or
-// CPU model, tried 2026-11-05).
+// hypervisor leaf for OpenCore. Two of them (intelCPUs), which takes the
+// i386_vm_init fix in exe's OpenCore config: without it Tiger faults at
+// boot on more than one.
 const intelCPU = "Penryn,vendor=GenuineIntel,+invtsc,vmware-cpuid-freq=on"
+
+const intelCPUs = "2"
 
 // OpenCore, pinned: the release archive and the files of it the Mac boots.
 var openCore = struct {
@@ -103,8 +108,9 @@ var openCoreFiles = []string{
 //go:embed opencore/config.plist
 var openCoreConfig []byte
 
-// The Intel Mac's runtime, from Ubuntu's packages: QEMU for x86 and OVMF's
-// 32-bit firmware, with the libraries QEMU needs that a desktop may lack.
+// The Intel Mac's runtime where exe's x86 emulator cannot be had, from
+// Ubuntu's packages: QEMU for x86 and OVMF's 32-bit firmware, with the
+// libraries QEMU needs that a desktop may lack.
 var intelPackages = []string{"qemu-system-x86", "qemu-system-common", "qemu-system-data", "qemu-utils", "ovmf-ia32", "seabios",
 	"libfdt1", "libslirp0", "liburing2", "libpmem1", "libndctl6", "libdaxctl1", "librdmacm1t64", "libibverbs1"}
 
@@ -128,21 +134,43 @@ func (m *Manager) ovmf(name string) string {
 	return filepath.Join("/usr/share/OVMF", name)
 }
 
-// ensureIntelRuntime: a runtime of this Mac's that starts, else the
-// system's QEMU and firmware, else Ubuntu's packages unpacked.
+// ensureIntelRuntime: exe's x86 emulator (emulator.go), fetched in place of
+// a runtime of Ubuntu's packages, of the system's QEMU or of an older build;
+// one that cannot be fetched leaves a runtime that works as it is. Without
+// a build, the runtime here, else the system's QEMU and firmware, else
+// Ubuntu's packages unpacked.
 func (m *Manager) ensureIntelRuntime(ctx context.Context) error {
 	dir := m.runtimePath("runtime")
+	have := false
 	if _, err := os.Stat(dir); err == nil {
-		if repairRuntimeFirmware(dir) == nil && validateIntelRuntime(ctx, dir) == nil {
-			return nil
+		if e := emulatorInfo(dir); e != nil && e.Version == intelEmulatorVersion {
+			if validateIntelRuntime(ctx, dir) == nil {
+				return nil
+			}
+		} else if repairRuntimeFirmware(dir) == nil && validateIntelRuntime(ctx, dir) == nil {
+			have = true
 		}
 	} else if os.IsNotExist(err) && m.command(ctx, m.sys.emulator, "--version") == nil && m.command(ctx, "qemu-img", "--version") == nil {
 		if _, err := os.Stat(m.ovmf(ovmfCode)); err == nil {
-			return nil
+			have = true
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if _, _, ok := m.emulatorBuildHere(); ok {
+		err := m.installEmulator(ctx, validateIntelRuntime)
+		if err == nil || ctx.Err() != nil {
+			return err
+		}
+		if have {
+			log.Printf("%s Intel: exe's x86 emulator %s not installed, using the one here: %v", m.sys.name, intelEmulatorVersion, err)
+			return nil
+		}
+		return err
+	}
+	if have {
+		return nil
 	}
 	release, _ := os.ReadFile("/etc/os-release")
 	if !strings.Contains(string(release), "ID=ubuntu") || !strings.Contains(string(release), "VERSION_ID=\"24.04\"") {
@@ -292,7 +320,7 @@ func (m *Manager) intelLaunchArgs(installer bool) []string {
 		args = append(args, "-L", dir)
 	}
 	args = append(args, "-name", m.sys.process,
-		"-machine", "q35", "-accel", "kvm", "-cpu", intelCPU, "-smp", "1", "-m", "2048",
+		"-machine", "q35", "-accel", "kvm", "-cpu", intelCPU, "-smp", intelCPUs, "-m", "2048",
 		"-drive", "if=pflash,format=raw,readonly=on,file="+esc(m.ovmf(ovmfCode)),
 		"-drive", "if=pflash,format=raw,file="+esc(m.path("efivars.fd")),
 		"-device", "isa-applesmc,osk="+appleSMCKey,
@@ -313,6 +341,9 @@ func (m *Manager) intelLaunchArgs(installer bool) []string {
 	} else {
 		args = append(args, "-drive", "if=none,id=cd,media=cdrom", "-device", "ide-cd,bus=ide.0,drive=cd",
 			"-netdev", m.sys.network+m.hostForwards(), "-device", "e1000-82545em,netdev=net0,mac="+m.sys.ethernet+",romfile=")
+		if dev := m.qeglDevice(); dev != "" {
+			args = append(args, "-device", dev)
+		}
 	}
 	return args
 }

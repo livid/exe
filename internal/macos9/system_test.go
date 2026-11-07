@@ -153,9 +153,34 @@ func TestTheMacsGetTheGPUDeviceWhenTheEmulatorHasIt(t *testing.T) {
 		t.Fatal("Mac OS 9's install boot has the GPU device")
 	}
 	// an emulator whose device can log: to the Mac's folder
-	writeFixture(t, filepath.Join(shared, "audio/qemu-system-ppc"), "#!/bin/sh\n[ \"$2\" = qegl,help ] && echo 'qegl options:' && echo '  logfile=<str>'\n", 0700)
+	// (a size of its own: a file asked about is known by its size and time)
+	writeFixture(t, filepath.Join(shared, "audio/qemu-system-ppc"), "#!/bin/sh\n[ \"$2\" = qegl,help ] && echo 'qegl options:' && echo '  logfile=<str>' && echo '  cursor=<uint32> (1)'\n", 0700)
 	if want := " -device qegl,logfile=" + filepath.Join(root, "qegl.log") + " "; !strings.Contains(" "+strings.Join(m.launchArgs(false), " ")+" ", want) {
 		t.Fatalf("the GPU device does not log to the Mac's folder: %q", m.launchArgs(false))
+	}
+}
+
+// The Intel Mac gets the device from an x86 emulator that has it, with the
+// arrow left in the screen (cursor=0): its display driver would otherwise
+// hand the arrow to the device, out of the picture the viewer gets.
+func TestTheIntelMacGetsTheGPUDeviceWhenItsEmulatorHasIt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX emulator fixture")
+	}
+	root := t.TempDir()
+	m := NewMacOSXIntel(root)
+	bin := filepath.Join(root, "runtime/usr/bin/qemu-system-x86_64")
+	writeFixture(t, bin, "#!/bin/sh\necho 'QEMU emulator version 8.2.2'\n", 0700)
+	if strings.Contains(strings.Join(m.launchArgs(false), " "), "qegl") {
+		t.Fatal("the GPU device from an emulator without it")
+	}
+	writeFixture(t, bin, "#!/bin/sh\n[ \"$2\" = qegl,help ] && echo 'qegl options:' && echo '  cursor=<uint32> (1)' && echo '  logfile=<str>'\n", 0700)
+	want := " -device qegl,cursor=0,logfile=" + filepath.Join(root, "qegl.log") + " "
+	if !strings.Contains(" "+strings.Join(m.launchArgs(false), " ")+" ", want) {
+		t.Fatalf("the installed Intel Mac lacks %q: %q", want, m.launchArgs(false))
+	}
+	if strings.Contains(strings.Join(m.launchArgs(true), " "), "qegl") {
+		t.Fatal("the install boot has the GPU device")
 	}
 }
 
