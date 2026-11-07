@@ -165,7 +165,15 @@ g spark checkout -q -- internal/a.go
 run
 check "unblocked: it lands on the next run" '[ "$(g spark rev-parse HEAD)" = "$(g away rev-parse HEAD)" ] || [ "$(g spark rev-parse HEAD^2)" = "$(g away rev-parse HEAD)" ]'
 
-# 7. long subjects in many bytes still fit the daemon's 1000
+# 7. every commit gets its line; past the daemon's 1000 bytes, a count
+closen exe-pull
+for i in 1 2 3 4 5 6; do
+	edit away docs/x.md "short $i"
+	commit away "Docs: short $i"
+done
+push
+run
+check "six commits: six lines, no count" '[ "$(notice exe-pull | grep -c "^• Docs: short")" = 6 ] && ! notice exe-pull | grep -q "more$"' 'notice exe-pull'
 closen exe-pull
 for i in 1 2 3 4 5 6; do
 	edit away docs/x.md "long $i"
@@ -173,8 +181,7 @@ for i in 1 2 3 4 5 6; do
 done
 push
 run
-check "six commits: three lines and a count" '[ "$(notice exe-pull | grep -c "^• ")" = 3 ] || [[ "$(notice exe-pull)" == *"…" ]]' 'notice exe-pull'
-check "long subjects: the notice fits" '[ "$(notice exe-pull | head -c 40)" = "exe pulled 6 commits from origin/main | " ] && [[ "$(notice exe-pull)" == *"…" ]]' 'notice exe-pull'
+check "long subjects: whole lines that fit, then a count" '[ "$(notice exe-pull | grep -c "^• ")" = 2 ] && [ "$(notice exe-pull | tail -n 1)" = "and 4 more" ]' 'notice exe-pull'
 
 # 8. fetch failing: loud on the second hour in a row
 g spark remote set-url origin "$T/gone.git"

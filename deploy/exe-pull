@@ -86,20 +86,27 @@ overlap() {
 # ---- what happened ----
 
 pulled() { # HOW
-	local since n subjects more="" restart=""
+	local since n body line shown=0 restart=""
 	since=$(get since)
 	if ! notice_up exe-pull || [ -z "$since" ] || ! git merge-base --is-ancestor "$since" HEAD 2>/dev/null; then
 		since=$old # the last notice was closed: count from here
 	fi
 	put since "$since"
 	n=$(git rev-list --count --no-merges "$since..$theirs")
-	# the desk keeps a notice's line breaks (white-space: pre-line): one commit a line
-	subjects=$(git log --no-merges --format='• %s' -3 "$since..$theirs")
-	[ "$n" -gt 3 ] && more=$'\n'"and $((n - 3)) more"
 	# no grep -q in a pipe here: under pipefail its early exit fails git log (SIGPIPE)
 	[ -n "$(git log --format= --name-only "$since..$theirs" -- cmd internal go.mod go.sum Makefile)" ] &&
 		restart=$'\n'"Build and restart the daemon to run them."
-	notice exe-pull "exe pulled $(plural "$n" commit) from origin/main" "$1.$restart"$'\n'"$subjects$more"
+	# the desk keeps a notice's line breaks (white-space: pre-line): every
+	# commit on a line of its own, as many as the daemon's 1000 bytes hold,
+	# with room left for a count of the rest
+	body="$1.$restart"
+	while IFS= read -r line; do
+		[ "$(printf '%s\n%s' "$body" "$line" | wc -c)" -gt 980 ] && break
+		body+=$'\n'"$line"
+		shown=$((shown + 1))
+	done < <(git log --no-merges --format='• %s' "$since..$theirs")
+	[ "$shown" -lt "$n" ] && body+=$'\n'"and $((n - shown)) more"
+	notice exe-pull "exe pulled $(plural "$n" commit) from origin/main" "$body"
 	put tries ""
 }
 
