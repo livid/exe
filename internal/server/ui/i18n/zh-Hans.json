@@ -1002,5 +1002,16 @@
 "VR Headset": "VR 眼镜",
 "Brick Phone": "大哥大",
 "Internet": "互联网",
-"Abacus": "算盘"
+"Abacus": "算盘",
+"New…": "新建…",
+"New Session…": "新会话…",
+"recent folder": "个最近的文件夹",
+"recent folders": "个最近的文件夹",
+"\nlast used {0}": "\n上次使用于 {0}",
+"\nwhere a new session starts unless you choose another": "\n新会话默认在这里开始，除非你另选一个",
+"Looking for folders…": "正在查找文件夹…",
+"No recent folders.": "没有最近的文件夹。",
+"A folder on this machine": "这台机器上的一个文件夹",
+"Folder:": "文件夹：",
+"Couldn't list the folders: {0}": "无法列出文件夹：{0}"
 }

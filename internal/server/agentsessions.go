@@ -540,13 +540,20 @@ func (c *agentColumn) openTask(dir, task string) error {
 
 // agentSessionDir checks a folder a session was asked to open in: "" is
 // no wish (the project folder), anything else is a whole path to a folder
-// that exists. The message names the path the way a person would read it.
+// that exists — "~" and "~/…" being the home folder's, as a person types
+// one into the New Session dialog. The message names the path the way a
+// person would read it.
 func agentSessionDir(dir string) (string, error) {
 	if dir == "" {
 		return "", nil
 	}
+	if dir == "~" || strings.HasPrefix(dir, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			dir = filepath.Join(home, dir[1:])
+		}
+	}
 	if !filepath.IsAbs(dir) {
-		return "", fmt.Errorf("dir: %q is not a whole path", dir)
+		return "", fmt.Errorf("%s is not a whole path: start it with / or ~", dir)
 	}
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		return "", fmt.Errorf("%s is not a folder on this machine", dir)

@@ -1002,5 +1002,16 @@
 "VR Headset": "VRゴーグル",
 "Brick Phone": "携帯電話",
 "Internet": "インターネット",
-"Abacus": "そろばん"
+"Abacus": "そろばん",
+"New…": "新規…",
+"New Session…": "新規セッション…",
+"recent folder": "件の最近のフォルダ",
+"recent folders": "件の最近のフォルダ",
+"\nlast used {0}": "\n最後に使用：{0}",
+"\nwhere a new session starts unless you choose another": "\n別のフォルダを選ばない限り、新しいセッションはここで始まります",
+"Looking for folders…": "フォルダを探しています…",
+"No recent folders.": "最近のフォルダはありません。",
+"A folder on this machine": "このマシン上のフォルダ",
+"Folder:": "フォルダ：",
+"Couldn't list the folders: {0}": "フォルダを一覧できません：{0}"
 }

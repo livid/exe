@@ -38,6 +38,8 @@ import (
 //	GET    /v1/agents/{app}/threads/{id}             the same for a conversation no session holds, by its id
 //	GET    /v1/agents/{app}/sessions/{name}/prompts  every prompt of the session, whole, with when each was given: what the
 //	                                                 line over the window's terminal opens (claudeprompts.go; Claude Code only)
+//	GET    /v1/agents/{app}/dirs                     the folders Claude Code worked in, latest first, and with ?path= whether a
+//	                                                 session can start in one: what the window's New Session dialog asks (claudedirs.go)
 
 var agentIDPattern = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
 

@@ -366,6 +366,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/agents/{app}/sessions/{name}/info", s.handleAgentSessionInfo)
 	mux.HandleFunc("GET /v1/agents/{app}/sessions/{name}/prompts", s.handleAgentSessionPrompts)
 	mux.HandleFunc("GET /v1/agents/{app}/threads/{id}", s.handleAgentThreadInfo)
+	mux.HandleFunc("GET /v1/agents/{app}/dirs", s.handleAgentDirs)
 	mux.HandleFunc("GET /v1/workspace", s.handleWorkspaceList)
 	mux.HandleFunc("GET /v1/workspace/{path...}", s.handleWorkspaceGet)
 	mux.HandleFunc("PUT /v1/workspace/{path...}", s.handleWorkspacePut)

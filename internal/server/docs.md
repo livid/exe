@@ -942,7 +942,8 @@ sessions, one row for each tmux session. Each is a conversation of its own.
 
 - **Switch.** Click a row and the window moves to that session.
 - **Start another.** **New**, under the list, starts another conversation in
-  a session of its own, at the top of the list.
+  a session of its own, at the top of the list. In the Claude Code window
+  the button reads **New…** and first asks where to start (below).
 - **Start one in a project's folder.** In Projects, right-click a project
   and choose **Open in Claude Code**: the Claude Code window opens, or comes
   forward, and a new session starts in the project's working directory, at
@@ -959,6 +960,27 @@ sessions, one row for each tmux session. Each is a conversation of its own.
   and report come back to the issue.
 - **Resize the column.** Drag the line between the list and the terminal.
   The width is kept with the window's layout.
+
+### Choose the folder for a new session
+
+In the Claude Code window, **New…** opens the New Session dialog. It lists
+the folders Claude Code has worked in on this machine, the latest first,
+with the day each was last used. The window's default folder is always on
+the list. Sessions run headless, such as `claude -p`, do not count, and a
+folder that is gone is left out.
+
+- **Pick a recent folder.** The latest is in the **Folder** field when the
+  dialog opens. Click a row, or press the Up and Down Arrow keys, to put
+  another in the field. Double-click a row to start there at once.
+- **Type any other.** Type the folder's whole path in the field. `~` is
+  your home folder, so `~/src/app` works.
+- **Start.** Press **Start** or Return. The session opens in that folder,
+  at the top of the list, and the window moves to it. If the folder is not
+  on this machine, the dialog says so and stays open.
+
+**Escape** or **Cancel** closes the dialog without starting a session.
+**New Session…** on the column's menus opens the same dialog. In the
+Codex window, **New** starts a session in the default folder at once.
 
 In the Codex window, sessions are ordered by when you last sent a message,
 newest first. A session with no message yet uses its creation time, so
@@ -1031,7 +1053,7 @@ Right-click a row for its menu:
 | Item | What it does |
 | --- | --- |
 | When the session started, in grey | Says when; it is not a command. |
-| **New Session** | Starts a new session, as **New** does. |
+| **New Session…** | Starts a new session, as **New…** does (**New Session** in the Codex window). |
 | **Copy Title** | Copies the row's title. |
 | **Get Info** | Claude Code: a dialog about the conversation — its summary, turns, tokens and more (below). |
 | **Archive…** | Ends the session and its process, after a dialog. |
@@ -1335,6 +1357,7 @@ is set.
 | `GET /v1/agents/claude/sessions/<name>/info` | What **Get Info** shows for a session: `summary`, `prompt`, `last_prompt`, `turns`, `replies`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `models`, `created`, `activity`, `cwd`. Claude Code only. |
 | `GET /v1/agents/claude/threads/<id>` | The same for a conversation no session holds, by its session id. |
 | `GET /v1/agents/claude/sessions/<name>/prompts` | Every prompt of the session, whole and in order, as `prompts`: each with `text`, `at` (when it was given) and `cut` when it ran past 20,000 characters. What the prompt line's dialog lists. Claude Code only. |
+| `GET /v1/agents/claude/dirs` | The folders Claude Code worked in, latest first, as `dirs` (each a `path` and `at`, when it was last used), and the window's `default` folder. With `?path=<folder>`, whether a session can start there: the whole path as `path`, or an error that says why not. What the New Session dialog asks. Claude Code only. |
 | `GET /v1/agents/work` | Lists the sessions of both agents that are at work now: when each one's turn began (`since`, beside the daemon's own `now`) and the issue addresses, such as `EXE-12`, that its instructions named (`refs`). |
 
 A session's `<name>` is its tmux session's: `exe-claude` for the one the
@@ -1353,7 +1376,7 @@ A new session takes these fields, all optional. Codex takes `prompt` and
 | `permission_mode` | One of `default`, `acceptEdits`, `plan` and `auto`. |
 | `model` | The model, by alias or full name. |
 | `name` | The session's title in the column: one line of up to 80 characters. |
-| `dir` | The folder the session opens in, as a whole path to a folder on this machine; without it, exe's project folder. |
+| `dir` | The folder the session opens in, as a whole path to a folder on this machine (`~` is the home folder); without it, exe's project folder. |
 
 A Codex thread resumed this way opens in the folder it was started in, as a
 click on its row does.

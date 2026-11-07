@@ -1447,6 +1447,18 @@ a.svc:hover { text-decoration: underline; }
   background: #fff; border: 1px solid var(--black); white-space: pre-wrap; word-break: break-word; user-select: text;
   box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
     1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+/* New Session, from New in the Claude Code window: the Search dialog's
+   box, its query bar a field for the folder with its label at the left,
+   over a white list of the folders Claude Code worked in, the latest
+   first — the path, and at the right in 10px #777 the day it was last
+   used — fourteen rows from the first paint, so the dialog keeps its
+   height whatever arrives. The button row keeps the count at its left,
+   or why a folder will not do in the dark red of a Search that failed;
+   Cancel and Start are 58px, Start wearing the ring */
+.sn-bar { display: flex; align-items: center; gap: 6px; }
+.sn-bar .sn-label { flex: none; }
+.sn-bar input { flex: 1; min-width: 0; width: auto; }
+.sf-count.bad { color: #7a1010; }
 /* Text inset lives on .xterm, not the box: FitAddon subtracts element padding
    when sizing rows, but the absolutely-positioned viewport anchors to the
    padding box — so the scrollbar runs flush to the frame, OS 9 style. */
@@ -9787,7 +9799,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
       <div class="win-body" style="padding:0">${column
-        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="${L`Search every ${agent.title} conversation on this machine`}">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
+        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">${app === "claude" ? L("New…") : "New"}</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="${L`Search every ${agent.title} conversation on this machine`}">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
         : `<div class="hostterm-box${sess ? " tmux" : ""}"></div>`}</div>
       <div class="keyrow">${keyRowButtons()}</div>
       <div class="held" hidden><span class="held-text"></span><button class="ghost held-copy">Copy</button><button class="ghost held-drop">Dismiss</button><button class="ghost held-insert">Insert</button></div>
@@ -9940,7 +9952,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       { label: L("Expand All"), dis: dayKeys.every(dayOpen), act: () => turnDays(dayKeys, true) },
       { label: L("Collapse All"), dis: !dayKeys.some(dayOpen), act: () => turnDays(dayKeys, false) },
       "-",
-      { label: L("New Session"), act: sendNew },
+      newItem(),
       ...wakeAllItems(),
     ], () => term.focus());
   }
@@ -10084,8 +10096,17 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       ...(findBtn ? [{ label: L("Get Info"), act: () => sessInfo(null, t) }] : []),
     ], () => term.focus());
   }
-  const sendNew = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
-  if (newBtn) newBtn.onclick = sendNew;
+  // New: in the Claude Code window the New Session dialog (newDlg, below)
+  // asks for the folder first; Codex's starts one in the project folder
+  // at once. The menus' item says which, with its ellipsis or without
+  let newDlg = null;
+  const sendNew = () => {
+    if (newDlg) { newDlg(); return; }
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true }));
+    term.focus();
+  };
+  const newItem = () => ({ label: newDlg ? L("New Session…") : L("New Session"), act: sendNew });
+  if (newBtn) newBtn.onclick = () => sendNew();
   // a session in a folder of the asker's — an app over the bridge
   // ({exe:"agent"}: Projects' Open in Claude Code, with the project's
   // working directory). It goes on the window's own link, and the daemon
@@ -10125,7 +10146,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     const items = s && s.created ? [{ label: L`Started ${sessWhen(s.created)}`, dis: true }, "-"] : [];
     // a stopped row's click continues it: the menu says so in words
     if (s && s.stopped && s.name !== current) items.push({ label: L("Continue Here"), act: () => switchSession(s.name) });
-    items.push({ label: L("New Session"), act: sendNew });
+    items.push(newItem());
     if (s) {
       items.push("-", { label: L("Copy Title"), act: () => copyText(sessTitle(s), L("title")) });
       if (s.resumable && findBtn) items.push({ label: L("Get Info"), act: () => sessInfo(s) });
@@ -10396,18 +10417,26 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
   // click on its row in the column does. The list is the daemon's answer
   // from when the dialog opened; Escape and Cancel put it away
   let colRO = null;
+  // a day in a dialog's row: "today", "Oct 20", the year once it differs
+  const sessDay = unix => {
+    const d = new Date(unix * 1000), now = new Date();
+    return d.toDateString() === now.toDateString() ? L("today")
+      : d.toLocaleDateString(UI_LOCALE, d.getFullYear() === now.getFullYear()
+        ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
+  };
   if (findBtn) {
-    // the glyph alone where the column cannot hold both words
-    const colTight = () => col.classList.toggle("tight", col.offsetWidth < 153);
+    // the glyph alone where the column cannot hold both words; and New…
+    // without its ellipsis where its button cannot hold that (a column
+    // near its 100px least), its word whole
+    const newLabel = newBtn.textContent;
+    const colTight = () => {
+      col.classList.toggle("tight", col.offsetWidth < 153);
+      newBtn.textContent = newLabel;
+      if (newBtn.scrollWidth > newBtn.clientWidth) newBtn.textContent = newLabel.replace(/…$/, "");
+    };
     colTight();
     colRO = new ResizeObserver(colTight);
     colRO.observe(col);
-    const sessDay = unix => {
-      const d = new Date(unix * 1000), now = new Date();
-      return d.toDateString() === now.toDateString() ? L("today")
-        : d.toLocaleDateString(UI_LOCALE, d.getFullYear() === now.getFullYear()
-          ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
-    };
     let veil = null, q, box, count, openBtn, cancelBtn;
     let data = null, failed = "", found = [], sel = 0, asked = 0;
     const close = () => { veil.hidden = true; asked++; term.focus(); };
@@ -10523,6 +10552,147 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       }).catch(e => {
         if (mine !== asked) return;
         failed = L`Couldn't list the conversations: ${e.message}`;
+        render();
+      });
+    };
+  }
+  // New Session, from New in the Claude Code window and New Session… on
+  // the column's menus: a dialog of the window's own, like Search, that
+  // asks where the session starts. A field for the folder over the
+  // folders Claude Code worked in on this machine, the latest first
+  // (claudedirs.go; the window's default folder is always among them).
+  // The latest is in the field when the list arrives, unless something
+  // was typed meanwhile; a click on a row, or an arrow, puts its path
+  // there, and a double click starts in it. Any other folder is typed in
+  // whole, "~" for the home folder. Start — Return — asks the daemon
+  // whether a session can start there first, so a mistyped path is said
+  // in the dialog rather than in a toast once it has gone; then the
+  // session starts as Projects' Open in Claude Code starts one (_openIn)
+  // and the window moves to it. Escape and Cancel put it away
+  if (findBtn && newBtn) {
+    let veil = null, q, box, tally, startBtn, cancelBtn;
+    let dirs = null, failed = "", sel = -1, asked = 0, typed = false, busy = false;
+    const close = () => { veil.hidden = true; asked++; busy = false; term.focus(); };
+    const say = (text, bad) => { tally.textContent = text; tally.classList.toggle("bad", !!bad); };
+    const sayCount = () => say(dirs && dirs.length ? count(dirs.length, L("recent folder"), L("recent folders")) : "");
+    const ready = () => { startBtn.disabled = busy || !q.value.trim(); };
+    // the row that is the folder typed, a slash at its end or not; -1 for none
+    const matchTyped = () => {
+      const p = q.value.trim().replace(/(.)\/+$/, "$1");
+      sel = dirs ? dirs.findIndex(d => d.path === p) : -1;
+    };
+    // the selected row, brought into view; fill puts its path in the field,
+    // all of it selected, so what is typed next takes its place
+    const select = fill => {
+      const rows = box.querySelectorAll(".sf-row");
+      rows.forEach((d, i) => d.classList.toggle("sel", i === sel));
+      if (rows[sel]) revealRow(box, rows[sel]);
+      if (fill && dirs && dirs[sel]) {
+        q.value = dirs[sel].path;
+        if (document.activeElement === q) q.select();
+        sayCount();
+      }
+      ready();
+    };
+    const start = async () => {
+      const path = q.value.trim();
+      if (!path || busy) return;
+      busy = true;
+      ready();
+      const mine = asked;
+      let r;
+      try {
+        r = await j("/v1/agents/" + app + "/dirs?path=" + encodeURIComponent(path));
+      } catch (e) {
+        if (mine !== asked) return; // put away meanwhile
+        busy = false;
+        ready();
+        say(e.message || String(e), true);
+        if (!IS_MOBILE) q.focus();
+        return;
+      }
+      if (mine !== asked) return;
+      close();
+      w._openIn(r.path);
+    };
+    const rowOf = (d, i) => {
+      const r = el("div", { class: "sf-row", title: d.path + (d.at ? L`\nlast used ${new Date(d.at * 1000).toLocaleString(UI_LOCALE)}` : L("\nwhere a new session starts unless you choose another")) });
+      r.append(el("span", { class: "t" }, d.path), el("span", { class: "s" }, d.at ? sessDay(d.at) : ""));
+      r.onclick = () => { sel = i; select(true); };
+      r.ondblclick = () => { sel = i; select(true); start(); };
+      return r;
+    };
+    const render = () => {
+      if (!dirs) box.replaceChildren(el("div", { class: "muted sf-hint" + (failed ? " bad" : "") }, failed || L("Looking for folders…")));
+      else box.replaceChildren(...(dirs.length ? dirs.map(rowOf) : [el("div", { class: "muted sf-hint" }, L("No recent folders."))]));
+      select(false);
+    };
+    const build = () => {
+      q = el("input", { class: "sn-q", placeholder: L("A folder on this machine"), autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false" });
+      box = el("div", { class: "sf-list vflush" });
+      tally = el("span", { class: "sf-count" });
+      cancelBtn = el("button", { class: "ghost" }, L("Cancel"));
+      startBtn = el("button", { class: "ghost sf-open" }, L("Start"));
+      const bar = el("div", { class: "titlebar" });
+      bar.append(el("div", { class: "stripe" }), el("div", { class: "title" }, L("New Session")), el("div", { class: "stripe" }));
+      veil = el("div", { class: "sess-veil sn-veil", hidden: "" }, el("div", { class: "sf-dlg sn-dlg" }, bar,
+        el("div", { class: "sf-frame" }, el("div", { class: "sf-bar sn-bar" }, el("span", { class: "sn-label" }, L("Folder:")), q), box,
+          el("div", { class: "sf-btns" }, tally, cancelBtn, startBtn))));
+      w.querySelector(".win-frame").append(veil);
+      // a path typed by hand: the row that is that folder is selected,
+      // none otherwise, and a word about the last one tried goes
+      q.addEventListener("input", () => {
+        typed = true;
+        matchTyped();
+        select(false);
+        sayCount();
+      });
+      cancelBtn.onclick = close;
+      startBtn.onclick = start;
+      // the field keeps the keyboard, as in Search
+      veil.addEventListener("mousedown", e => { if (e.target !== q) e.preventDefault(); });
+      veil.addEventListener("keydown", e => {
+        if (e.isComposing) return; // a Return or an arrow that is the input method's
+        const page = Math.max(1, Math.floor(box.clientHeight / 18) - 1);
+        const step = { ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page }[e.key];
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+        else if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); start(); }
+        else if (step) {
+          e.preventDefault();
+          if (dirs && dirs.length) {
+            sel = sel < 0 ? (step > 0 ? 0 : dirs.length - 1) : Math.max(0, Math.min(dirs.length - 1, sel + step));
+            select(true);
+          }
+        } else if (e.key === "Tab") {
+          e.preventDefault();
+          const stops = [q, cancelBtn, startBtn].filter(b => !b.disabled);
+          const at = stops.indexOf(document.activeElement);
+          stops[(at + (e.shiftKey ? stops.length - 1 : 1) + stops.length) % stops.length].focus();
+        }
+      });
+    };
+    newDlg = () => {
+      if (!veil) build();
+      if (!veil.hidden) return;
+      const mine = ++asked;
+      dirs = null; failed = ""; sel = -1; typed = false; busy = false; q.value = "";
+      say("");
+      veil.hidden = false;
+      render();
+      term.blur();
+      // a phone's keyboard would cover the list: the field takes it on a tap
+      if (IS_MOBILE) cancelBtn.focus(); else q.focus();
+      j("/v1/agents/" + app + "/dirs").then(r => {
+        if (mine !== asked) return;
+        dirs = r.dirs || [];
+        if (typed) matchTyped();
+        else if (dirs.length) sel = 0;
+        render();
+        if (!typed) select(true);
+        sayCount();
+      }).catch(e => {
+        if (mine !== asked) return;
+        failed = L`Couldn't list the folders: ${e.message}`;
         render();
       });
     };
